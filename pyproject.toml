@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "chancy"
+version = "0.1.0"
+description = ""
+authors = ["Tyler Kennedy <tk@tkte.ch>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pytest = "^8.2.0"
+psycopg = {extras = ["pool"], version = "^3.1.19"}
+rich = "^13.7.1"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.4.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
