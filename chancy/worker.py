@@ -1,9 +1,11 @@
+import functools
 import json
 import asyncio
+import uuid
 from asyncio import TaskGroup
 
-from psycopg import AsyncConnection
 from psycopg import sql
+from psycopg_pool import AsyncConnectionPool
 
 from chancy.app import Chancy
 from chancy.logger import logger, PrefixAdapter
@@ -23,8 +25,16 @@ class Worker:
     tasks.
     """
 
-    def __init__(self, app: Chancy):
+    def __init__(self, app: Chancy, worker_id: str = None):
         self.app = app
+        self.pool = AsyncConnectionPool(
+            self.app.dsn,
+            open=False,
+            check=AsyncConnectionPool.check_connection,
+            min_size=2,
+            max_size=3,
+        )
+        self.worker_id = worker_id or str(uuid.uuid4())
 
     async def start(self):
         """
@@ -32,22 +42,34 @@ class Worker:
 
         The worker will immediately begin pulling jobs from the queue, and
         make itself available as a possible leader in the cluster.
+
+        Each worker requires two connections to Postgres; one for polling for
+        jobs, and one for listening for events.
+
+        In some cases, workers running plugins may require additional
+        connections.
         """
         core_logger = PrefixAdapter(logger, {"prefix": "CORE"})
 
-        mig = Migrator(self.app)
+        mig = Migrator(
+            self.app.dsn,
+            "chancy",
+            "chancy.migrations",
+            prefix=self.app.prefix,
+        )
 
-        conn = await AsyncConnection.connect(self.app.postgres, autocommit=True)
-        if await mig.is_migration_required(conn):
-            core_logger.error(
-                f"The database is out of date and requires a migration before"
-                f" the worker can start."
-            )
-            return
+        async with self.pool.connection() as conn:
+            if await mig.is_migration_required(conn):
+                core_logger.error(
+                    f"The database is out of date and requires a migration"
+                    f" before the worker can start."
+                )
+                return
 
         async with TaskGroup() as tg:
             tg.create_task(self.poll_available_tasks())
-            tg.create_task(self.listen_for_events())
+            if not self.app.disable_events:
+                tg.create_task(self.listen_for_events())
 
     async def poll_available_tasks(self):
         """
@@ -68,21 +90,29 @@ class Worker:
         event_logger = PrefixAdapter(logger, {"prefix": "EVENTS"})
 
         event_logger.info("Starting event listener...")
-        conn = await AsyncConnection.connect(self.app.postgres, autocommit=True)
-        await conn.execute(
-            sql.SQL("LISTEN {}").format(
-                sql.Identifier(f"{self.app.prefix}events")
-            )
-        )
-
-        event_logger.info("Now listening for events.")
-        async for notice in conn.notifies():
-            try:
-                j = json.loads(notice.payload)
-            except json.JSONDecodeError:
-                event_logger.error(
-                    f"Received invalid JSON payload: {notice.payload}"
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                sql.SQL("LISTEN {}").format(
+                    sql.Identifier(f"{self.app.prefix}events")
                 )
-                continue
+            )
 
-            event_logger.debug(f"Received event: {j}")
+            event_logger.info("Now listening for events.")
+            async for notice in conn.notifies():
+                try:
+                    j = json.loads(notice.payload)
+                except json.JSONDecodeError:
+                    event_logger.error(
+                        f"Received invalid JSON payload: {notice.payload}"
+                    )
+                    continue
+
+                event_logger.debug(f"Received event: {j}")
+
+    async def __aenter__(self):
+        await self.pool.open()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.pool.close()
+        return False
