@@ -14,9 +14,13 @@ class V1Migration(Migration):
                 sql.SQL(
                     """
                     CREATE TABLE {jobs} (
-                        id SERIAL PRIMARY KEY,
+                        id BIGSERIAL PRIMARY KEY,
                         queue TEXT NOT NULL,
-                        payload JSONB NOT NULL,
+                        payload JSON NOT NULL,
+                        state VARCHAR (25) NOT NULL DEFAULT 'pending',
+                        priority INTEGER DEFAULT 0,
+                        attempts INTEGER DEFAULT 0,
+                        max_attempts INTEGER DEFAULT 20,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         started_at TIMESTAMPTZ,
                         completed_at TIMESTAMPTZ
@@ -29,7 +33,7 @@ class V1Migration(Migration):
                 sql.SQL(
                     """
                     CREATE TABLE {leaders} (
-                        id SERIAL PRIMARY KEY,
+                        id BIGSERIAL PRIMARY KEY,
                         worker_id TEXT NOT NULL,
                         last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     )

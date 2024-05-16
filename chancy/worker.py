@@ -1,13 +1,14 @@
-import functools
 import json
 import asyncio
 import uuid
 from asyncio import TaskGroup
 
 from psycopg import sql
+from psycopg import AsyncConnection
+from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from chancy.app import Chancy
+from chancy.app import Chancy, Queue
 from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
 
@@ -78,9 +79,62 @@ class Worker:
         poll_logger = PrefixAdapter(logger, {"prefix": "POLLER"})
 
         poll_logger.info("Started periodic polling for tasks.")
-        while True:
-            poll_logger.debug("Completed a polling cycle.")
-            await asyncio.sleep(self.app.poller_delay)
+
+        async with self.pool.connection() as conn:
+            while True:
+                poll_logger.debug("Polling for tasks...")
+
+                for queue in self.app.queues:
+                    jobs = await self.fetch_available_jobs(conn, queue)
+
+                poll_logger.debug("Completed a polling cycle.")
+                await asyncio.sleep(self.app.poller_delay)
+
+    async def fetch_available_jobs(self, conn: AsyncConnection, queue: Queue):
+        """
+        Fetches available jobs from the queue.
+
+        Pulls jobs from the queue that are ready to be processed, locking the
+        jobs to prevent other workers from processing them.
+        """
+        jobs_table = sql.Identifier(f"{self.app.prefix}jobs")
+
+        async with conn.cursor(row_factory=dict_row) as cur:
+            async with conn.transaction():
+                await cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            id
+                        FROM
+                            {jobs}
+                        WHERE
+                            queue = {queue}
+                        AND
+                            state = 'pending'
+                        AND
+                            attempts < max_attempts
+                        ORDER BY
+                            priority ASC,
+                            created_at ASC,
+                            id ASC
+                        FOR UPDATE SKIP LOCKED
+                        """
+                    ).format(jobs=jobs_table, queue=queue.name),
+                )
+
+                await cur.execute(
+                    sql.SQL(
+                        """
+                        UPDATE
+                            {jobs}
+                        SET
+                            started_at = NOW(),
+                            attempts = attempts + 1,
+                            state = 'running'
+                        """
+                    ).format(jobs=jobs_table)
+                )
 
     async def listen_for_events(self):
         """
