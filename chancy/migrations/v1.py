@@ -23,7 +23,8 @@ class V1Migration(Migration):
                         max_attempts INTEGER DEFAULT 1,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         started_at TIMESTAMPTZ,
-                        completed_at TIMESTAMPTZ
+                        completed_at TIMESTAMPTZ,
+                        scheduled_at TIMESTAMPTZ
                     )
                     """
                 ).format(jobs=sql.Identifier(f"{migrator.prefix}jobs"))

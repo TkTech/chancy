@@ -2,6 +2,7 @@ import re
 import enum
 import dataclasses
 from dataclasses import dataclass
+from datetime import datetime
 from functools import cached_property
 from typing import Optional, Callable
 
@@ -78,11 +79,13 @@ class Job:
     #: The state of the job.
     state: Optional[str] = None
     #: The time the job was created.
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
     #: The time the job was started.
-    started_at: Optional[str] = None
+    started_at: Optional[datetime] = None
     #: The time the job was completed.
-    completed_at: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    #: The time the job is scheduled to run.
+    scheduled_at: Optional[datetime] = None
 
     @classmethod
     def deserialize(cls, data: dict):
@@ -99,6 +102,7 @@ class Job:
             created_at=data["created_at"],
             started_at=data["started_at"],
             completed_at=data["completed_at"],
+            scheduled_at=data["scheduled_at"],
         )
 
     def serialize(self) -> dict:
@@ -116,6 +120,7 @@ class Job:
             "created_at": self.created_at,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
+            "scheduled_at": self.scheduled_at,
         }
 
 
@@ -141,6 +146,13 @@ class Queue:
     concurrency: int = 1
     #: The state of the queue.
     state: State = State.ACTIVE
+    #: The maximum number of jobs to process before a worker on this queue
+    #: should be restarted. Can help with memory leaks.
+    maximum_jobs_per_worker: Optional[int] = None
+    #: A function to call when a worker process for this queue is first started.
+    #: This can be used to do expensive setup operations once per worker, like
+    #: setting up django.
+    on_setup: Optional[Callable[[], None]] = None
 
 
 @dataclasses.dataclass
@@ -161,8 +173,6 @@ class Chancy:
     poller_delay: int = 5
     #: Disable events, relying on polling only.
     disable_events: bool = False
-    #: The maximum number of jobs a worker can process before restarting.
-    maximum_jobs_per_worker: int = 100
 
     #: The minimum number of connections to keep in the pool.
     min_pool_size: int = 1
@@ -244,13 +254,15 @@ class Chancy:
                     queue,
                     priority,
                     max_attempts,
-                    payload
+                    payload,
+                    scheduled_at
                 )
                 VALUES (
                     %(name)s,
                     %(priority)s,
                     %(max_attempts)s,
-                    %(payload)s
+                    %(payload)s,
+                    %(scheduled_at)s
                 )
                 """
             ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
@@ -259,6 +271,7 @@ class Chancy:
                 "payload": Json(job.serialize()["payload"]),
                 "priority": job.priority,
                 "max_attempts": job.max_attempts,
+                "scheduled_at": job.scheduled_at,
             },
         )
         await cursor.execute(

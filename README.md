@@ -15,7 +15,8 @@ as needed by the author's projects, so it may not be suitable for all use cases.
 This project is designed to be simple and easy to use.
 
 - asyncio-first design with a synchronous API for convenience.
-- Fully-featured Jobs, with retries, timeouts, memory limits and more.
+- Fully-featured Jobs, with priorities, retries, timeouts, memory limits, future
+  scheduling, and more.
 - Transactional job queueing. Jobs are only inserted into the database if the
   transaction they were created in is committed.
 - Completed jobs stick around in the database for easy debugging and job

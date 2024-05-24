@@ -86,6 +86,10 @@ def _job_wrapper(job: Job):
                     )
                 )
             case Limit.Type.TIME:
+                # Use a thread to raise a signal after the timeout has elapsed.
+                # This emulates SIGALRM on platforms which don't support it,
+                # like NT, and allows us to cancel the alarm if the job
+                # completes before the timeout.
                 signal.signal(signal.SIGALRM, _job_signal_handler)
                 cancel = threading.Event()
                 timeout_thread = TimeoutThread(limit.value, cancel)
@@ -129,7 +133,8 @@ class Nanny:
         self.processes = {}
         self.pool = ProcessPoolExecutor(
             max_workers=queue.concurrency,
-            max_tasks_per_child=app.maximum_jobs_per_worker,
+            max_tasks_per_child=queue.maximum_jobs_per_worker,
+            initializer=queue.on_setup,
         )
 
     def submit(self, job: Job) -> Future:
@@ -229,6 +234,12 @@ class Worker:
             while True:
                 with timed_block() as timer:
                     for queue in self.app.queues:
+                        if queue.state == Queue.State.PAUSED:
+                            poll_logger.debug(
+                                f"Queue {queue.name} is paused, skipping."
+                            )
+                            continue
+
                         jobs = await self._fetch_available_jobs(conn, queue)
                         poll_logger.debug(
                             f"Found {len(jobs)} job(s) in queue {queue.name}."
@@ -316,6 +327,8 @@ class Worker:
                                 state = 'pending'
                             AND
                                 attempts < max_attempts
+                            AND
+                                (scheduled_at IS NULL OR scheduled_at <= NOW())
                             ORDER BY
                                 priority ASC,
                                 created_at ASC,
