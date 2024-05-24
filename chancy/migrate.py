@@ -1,11 +1,17 @@
+import re
 import abc
 import importlib.resources
 
 from psycopg import AsyncConnection
 from psycopg import sql
-from psycopg_pool import AsyncConnectionPool
 
-from chancy.logger import logger, PrefixAdapter
+VERSION_R = re.compile(r"v(\d+)\.py")
+
+
+class MigrationError(Exception):
+    """
+    An error occurred while migrating the database schema.
+    """
 
 
 class Migration(abc.ABC):
@@ -25,31 +31,18 @@ class Migration(abc.ABC):
 
 class Migrator:
     """
-    The migrator is responsible for applying or reverting migrations to the
-    database.
+    A migrator is responsible for managing the database schema version and
+    applying migrations to the database.
 
-    Migrations can't fork - they're a simple linear progression from one
-    version to the next.
-
-    :param dsn: The database connection string.
     :param key: A unique identifier for the application.
     :param migrations_package: The package where migrations are stored.
     :param prefix: A prefix to apply to all tables.
     """
 
-    def __init__(
-        self, dsn: str, key: str, migrations_package: str, *, prefix: str = ""
-    ):
+    def __init__(self, key: str, migrations_package: str, *, prefix: str = ""):
         self.prefix = prefix
         self.key = key
         self.migrations_package = migrations_package
-        self.pool = AsyncConnectionPool(
-            dsn,
-            open=False,
-            check=AsyncConnectionPool.check_connection,
-            min_size=1,
-            max_size=1,
-        )
 
     def discover_all_migrations(self) -> list[Migration]:
         """
@@ -75,7 +68,7 @@ class Migrator:
         )
 
         for migration in all_migrations:
-            if migration.name == "__init__.py":
+            if not VERSION_R.match(migration.name):
                 continue
 
             module = importlib.import_module(
@@ -91,7 +84,7 @@ class Migrator:
                 ):
                     if found_migration:
                         raise ValueError(
-                            f"Multiple migrations found in {migration.name}"
+                            f"Multiple migrations found in {migration.name!r}"
                         )
 
                     migrations.append((int(migration.name[1:-3]), obj()))
@@ -99,7 +92,9 @@ class Migrator:
 
         return [migration for _, migration in sorted(migrations)]
 
-    async def migrate(self, to_version: int | None = None):
+    async def migrate(
+        self, conn: AsyncConnection, to_version: int | None = None
+    ) -> bool:
         """
         Migrate the database schema to the given version.
 
@@ -110,80 +105,30 @@ class Migrator:
 
         If `to_version` is not provided, the database will be migrated to the
         highest available version.
-
-        If the database schema is already at the given version, no migration
-        will be performed.
         """
-        mig_logger = PrefixAdapter(logger, {"prefix": f"MIGRATOR:{self.key}"})
+        current_version = await self.get_current_version(conn)
+        migrations = self.discover_all_migrations()
+        to_version = len(migrations) if to_version is None else to_version
 
-        async with self.pool.connection() as conn:
-            current_version = await self.get_current_version(conn)
-            migrations = self.discover_all_migrations()
-            to_version = len(migrations) if to_version is None else to_version
+        if current_version == to_version:
+            return False
 
-            mig_logger.info(
-                f"Current database schema version is {current_version}."
-                f" Requested version is {to_version}."
-                f" Highest available version is {len(migrations)}."
+        if to_version > len(migrations):
+            raise MigrationError(
+                f"Migration {to_version} does not exist for {self.key}"
             )
 
-            if current_version == to_version:
-                mig_logger.info(
-                    "Database schema is already at the requested version."
-                )
-                return
+        while current_version != to_version:
+            if current_version < to_version:
+                current_version += 1
+                await migrations[current_version - 1].up(self, conn)
+                await self.set_current_version(conn, current_version)
+            else:
+                await migrations[current_version - 1].down(self, conn)
+                await self.set_current_version(conn, current_version - 1)
+                current_version -= 1
 
-            if to_version > len(migrations):
-                mig_logger.error(
-                    "The requested migration version is higher than the "
-                    "highest available version."
-                )
-                return
-
-            mig_logger.info(
-                f"Migrating database schema from {current_version} to"
-                f" {to_version}."
-            )
-
-            while current_version != to_version:
-                if current_version < to_version:
-                    current_version += 1
-                    mig_logger.info(f"Applying migration {current_version}.")
-                    await migrations[current_version - 1].up(self, conn)
-                    await conn.execute(
-                        sql.SQL(
-                            """
-                            INSERT INTO {prefix} (version_of, version) VALUES
-                            (%s, %s) ON CONFLICT (version_of) DO UPDATE SET
-                            version = EXCLUDED.version
-                            """
-                        ).format(
-                            prefix=sql.Identifier(
-                                f"{self.prefix}schema_version"
-                            )
-                        ),
-                        [self.key, current_version],
-                    )
-                else:
-                    mig_logger.info(f"Reverting migration {current_version}.")
-                    await migrations[current_version - 1].down(self, conn)
-                    await conn.execute(
-                        sql.SQL(
-                            """
-                            INSERT INTO {prefix} (version_of, version) VALUES
-                            (%s, %s) ON CONFLICT (version_of) DO UPDATE SET
-                            version = EXCLUDED.version
-                            """
-                        ).format(
-                            prefix=sql.Identifier(
-                                f"{self.prefix}schema_version"
-                            )
-                        ),
-                        [self.key, current_version - 1],
-                    )
-                    current_version -= 1
-
-            mig_logger.info("Migration complete.")
+        return True
 
     async def is_migration_required(self, conn: AsyncConnection) -> bool:
         """
@@ -224,10 +169,23 @@ class Migrator:
             result = await cursor.fetchone()
             return 0 if result is None else result[0]
 
-    async def __aenter__(self):
-        await self.pool.open()
-        return self
+    async def set_current_version(self, conn: AsyncConnection, version: int):
+        """
+        Set the current schema version in the database.
 
-    async def __aexit__(self, exc_type, exc, tb):
-        await self.pool.close()
-        return False
+        .. note::
+
+            This does not perform any sanity checks nor does it run any
+            migrations. It simply sets the version in the database.
+        """
+        await self.upsert_version_table(conn)
+        await conn.execute(
+            sql.SQL(
+                """
+                INSERT INTO {prefix} (version_of, version) VALUES
+                (%s, %s) ON CONFLICT (version_of) DO UPDATE SET
+                version = EXCLUDED.version
+                """
+            ).format(prefix=sql.Identifier(f"{self.prefix}schema_version")),
+            [self.key, version],
+        )

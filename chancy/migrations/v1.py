@@ -20,7 +20,7 @@ class V1Migration(Migration):
                         state VARCHAR (25) NOT NULL DEFAULT 'pending',
                         priority INTEGER DEFAULT 0,
                         attempts INTEGER DEFAULT 0,
-                        max_attempts INTEGER DEFAULT 20,
+                        max_attempts INTEGER DEFAULT 1,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         started_at TIMESTAMPTZ,
                         completed_at TIMESTAMPTZ

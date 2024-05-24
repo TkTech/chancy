@@ -1,14 +1,15 @@
 import logging
-from rich.logging import RichHandler
-from rich.markup import escape
 
 
 logger = logging.getLogger("chancy")
 logger.setLevel(logging.DEBUG)
-logger.addHandler(RichHandler(markup=True))
+logger.addHandler(logging.StreamHandler())
 
 
 class PrefixAdapter(logging.LoggerAdapter):
+    """
+    A logging adapter that prefixes log messages with a custom string.
+    """
+
     def process(self, msg, kwargs):
-        prefix = f"[{self.extra["prefix"]}]"
-        return f"[blue]{escape(prefix)}[/blue] {msg}", kwargs
+        return f"[{self.extra['prefix']}] {msg}", kwargs

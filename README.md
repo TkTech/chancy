@@ -7,7 +7,8 @@ risk. It's guaranteed to be buggy and incomplete.
 
 The goal is to provide a simple, easy-to-use task queue that can be used in a
 wide variety of projects where the only infrastructure requirement is a postgres
-database.
+database that you're probably already using anyway. Its features are developed
+when needed for personal projects.
 
 ## TODO
 
@@ -27,3 +28,18 @@ docker-compose up -d
 poetry install
 poetry run pytest
 ```
+
+## Similar Work
+
+Many similar projects exist. Some of them are:
+
+- https://worker.graphile.org/ (Node.js)
+- https://riverqueue.com/ (Go)
+- https://github.com/acaloiaro/neoq (Go)
+- https://github.com/contribsys/faktory (Go)
+- https://github.com/sorentwo/oban (Elixir)
+- https://github.com/procrastinate-org/procrastinate (Python)
+
+In particular, the blogs of the Oban authors and their excellent documentation
+have been a good source of inspiration. Highly recommended for anyone that
+needs a commercial-grade library.

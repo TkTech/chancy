@@ -1,14 +1,17 @@
 import re
 import enum
 import dataclasses
+from functools import cached_property
+
+from psycopg_pool import AsyncConnectionPool
 
 from chancy.migrate import Migrator
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class Queue:
     """
-    A Queue object defines a single named queue.
+    Defines a named queue for processing jobs in Chancy.
     """
 
     class State(enum.IntEnum):
@@ -23,7 +26,7 @@ class Queue:
 
     #: A name for the queue, must only be a-z and underscore.
     name: str
-    #: Maximum number of jobs to process concurrently.
+    #: Maximum number of jobs to process concurrently (per-worker).
     concurrency: int = 1
     #: The state of the queue.
     state: State = State.ACTIVE
@@ -32,8 +35,7 @@ class Queue:
 @dataclasses.dataclass
 class Chancy:
     """
-    A Chancy application provides the interface for defining the Chancy queues,
-    and various other configuration.
+    The main application object for Chancy.
     """
 
     #: A valid engine connection string.
@@ -48,6 +50,13 @@ class Chancy:
     poller_delay: int = 5
     #: Disable events, relying on polling only.
     disable_events: bool = False
+    #: The maximum number of jobs a worker can process before restarting.
+    maximum_jobs_per_worker: int = 100
+
+    #: The minimum number of connections to keep in the pool.
+    min_pool_size: int = 2
+    #: The maximum number of connections to keep in the pool.
+    max_pool_size: int = 3
 
     def __post_init__(self):
         # Ensure all defined queues have distinct names.
@@ -63,9 +72,32 @@ class Chancy:
     async def migrate(self):
         """
         Migrate the database to the latest schema version.
+
+        This method will apply any pending migrations to the database to bring
+        it up to the latest schema version. If the database is already up-to-
+        date, this method will do nothing.
         """
-        migrator = Migrator(
-            self.dsn, "chancy", "chancy.migrations", prefix=self.prefix
+        migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
+        async with self.pool.connection() as conn:
+            await migrator.migrate(conn)
+
+    @cached_property
+    def pool(self):
+        """
+        A connection pool for the Chancy application.
+        """
+        return AsyncConnectionPool(
+            self.dsn,
+            open=False,
+            check=AsyncConnectionPool.check_connection,
+            min_size=self.min_pool_size,
+            max_size=self.max_pool_size,
         )
-        async with migrator:
-            await migrator.migrate()
+
+    async def __aenter__(self):
+        await self.pool.open()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.pool.close()
+        return False

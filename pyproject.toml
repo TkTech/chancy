@@ -8,8 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 pytest = "^8.2.0"
-psycopg = {extras = ["pool"], version = "^3.1.19"}
-rich = "^13.7.1"
+psycopg = {extras = ["pool", "binary"], version = "^3.1.19"}
 
 
 [tool.poetry.group.dev.dependencies]

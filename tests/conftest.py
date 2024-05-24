@@ -2,13 +2,18 @@ from pytest_postgresql import factories
 
 
 def run_chancy_migrations(host, port, user, dbname, password):
+    """
+    Bootstraps the database with the required Chancy migrations.
+    """
     import asyncio
 
     from chancy.app import Chancy
 
     async def main():
-        app = Chancy(f"postgresql://{user}:{password}@{host}:{port}/{dbname}")
-        await app.migrate()
+        async with Chancy(
+            f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+        ) as app:
+            await app.migrate()
 
     asyncio.run(main())
 

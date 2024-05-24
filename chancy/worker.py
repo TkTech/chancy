@@ -1,41 +1,184 @@
+import os
 import json
-import asyncio
 import uuid
+import signal
+import asyncio
+import resource
+import threading
+import dataclasses
 from asyncio import TaskGroup
+from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, Future
+from datetime import datetime, timezone
+from functools import partial
+from typing import Optional
 
 from psycopg import sql
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
 
 from chancy.app import Chancy, Queue
 from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
+from chancy.job import Job
+
+
+class TimeoutThread(threading.Thread):
+    """
+    A thread that will raise a TimeoutError after a specified number of
+    seconds.
+    """
+
+    def __init__(self, timeout: int, cancel: threading.Event):
+        super().__init__()
+        self.timeout = timeout
+        self.cancel = cancel
+
+    def run(self):
+        if self.cancel.wait(self.timeout) is True:
+            # Our call to wait() returning True means that the flag was set
+            # before the timeout elapsed, so we should cancel our alarm.
+            return
+
+        # If we reach this point, the timeout has elapsed, and we should raise
+        # a TimeoutError back in the main process thread.
+        os.kill(os.getpid(), signal.SIGALRM)
+
+
+def _job_signal_handler(signum, frame):
+    """
+    A signal handler for the job wrapper process.
+    """
+    if signum == signal.SIGALRM:
+        raise TimeoutError("Job timed out.")
+
+
+def _job_wrapper(job: Job):
+    """
+    Wraps the job execution in a function that can be run in a separate
+    process.
+    """
+    cleanup = []
+
+    # Set the memory limit for the job, if one is provided.
+    if job.memory_limit:
+        previous_soft, _ = resource.getrlimit(resource.RLIMIT_AS)
+
+        resource.setrlimit(
+            resource.RLIMIT_AS,
+            (job.memory_limit, -1),
+        )
+
+        # Ensure we reset the memory limit after the job has completed, since
+        # our process will be reused by a task that may not have an explicit
+        # memory limit.
+        cleanup.append(
+            lambda: resource.setrlimit(
+                resource.RLIMIT_AS,
+                (previous_soft, -1),
+            )
+        )
+
+    signal.signal(signal.SIGALRM, _job_signal_handler)
+
+    # If a timeout was provided for the job, we need to use a separate thread
+    # to enforce it. Unlike using signal.alarm(), this approach allows us to
+    # cancel the alarm if the job completes before the timeout or if we're
+    # running on Windows, where signal.alarm() is not available.
+    if job.timeout:
+        cancel = threading.Event()
+        timeout_thread = TimeoutThread(job.timeout, cancel)
+        timeout_thread.start()
+        cleanup.append(lambda: cancel.set())
+
+    mod_name, func_name = job.name.rsplit(".", 1)
+    mod = __import__(mod_name, fromlist=[func_name])
+    func = getattr(mod, func_name)
+
+    try:
+        func(**job.kwargs or {})
+    finally:
+        for clean in cleanup:
+            clean()
+
+
+@dataclasses.dataclass(frozen=True)
+class StateChange:
+    """
+    A change to the state of a job.
+    """
+
+    job: Job
+    state: str
+    completed_at: Optional[datetime] = None
+
+
+class Nanny:
+    """
+    A shim around a ProcessPoolExecutor.
+
+    This class is responsible for submitting jobs to the pool and associating
+    them with their futures for later retrieval.
+    """
+
+    def __init__(self, app: Chancy, queue: Queue):
+        self.app = app
+        self.processes = {}
+        self.pool = ProcessPoolExecutor(
+            max_workers=queue.concurrency,
+            max_tasks_per_child=app.maximum_jobs_per_worker,
+        )
+
+    def submit(self, job: Job) -> Future:
+        """
+        Submit a job to the pool for execution, returning the future of the
+        task.
+        """
+        future: Future = self.pool.submit(_job_wrapper, job=job)
+        self.processes[future] = job
+        return future
+
+    def pop(self, future: Future) -> Job:
+        """
+        Retrieve a job from the pool by its future, removing it from the pool.
+
+        Raises a KeyError if the future is not found.
+        """
+        return self.processes.pop(future)
+
+    def __len__(self):
+        return len(self.processes)
+
+    def __iter__(self):
+        return iter(self.processes)
+
+    def __getitem__(self, key):
+        return self.processes[key]
 
 
 class Worker:
     """
-    A Chancy job worker.
+    A Chancy worker.
 
-    Any number of workers may be started to process jobs from the queue, on
-    any number of machines. The workers will automatically detect and process
-    jobs as they are added to the queue.
+    This class is responsible for polling the queue for available jobs,
+    submitting them to the process pool for execution, and handling the
+    results.
 
-    One worker will be elected as the leader, and will be responsible for
-    running plugins that are marked as leader-only, such as database maintenance
-    tasks.
+    The worker will also listen for events in the cluster, such as job
+    enqueueing and leader retirement.
     """
 
     def __init__(self, app: Chancy, worker_id: str = None):
         self.app = app
-        self.pool = AsyncConnectionPool(
-            self.app.dsn,
-            open=False,
-            check=AsyncConnectionPool.check_connection,
-            min_size=2,
-            max_size=3,
-        )
         self.worker_id = worker_id or str(uuid.uuid4())
+        self.queues: dict[Queue, Nanny] = {
+            queue: Nanny(app, queue) for queue in app.queues
+        }
+        # This queue contains changes to the Job's table that we should batch
+        # up and apply in a single transaction.
+        self.pending_changes: dict[Queue, asyncio.Queue] = defaultdict(
+            asyncio.Queue
+        )
 
     async def start(self):
         """
@@ -53,13 +196,12 @@ class Worker:
         core_logger = PrefixAdapter(logger, {"prefix": "CORE"})
 
         mig = Migrator(
-            self.app.dsn,
             "chancy",
             "chancy.migrations",
             prefix=self.app.prefix,
         )
 
-        async with self.pool.connection() as conn:
+        async with self.app.pool.connection() as conn:
             if await mig.is_migration_required(conn):
                 core_logger.error(
                     f"The database is out of date and requires a migration"
@@ -68,75 +210,138 @@ class Worker:
                 return
 
         async with TaskGroup() as tg:
-            tg.create_task(self.poll_available_tasks())
+            tg.create_task(self._poll_available_tasks())
             if not self.app.disable_events:
-                tg.create_task(self.listen_for_events())
+                tg.create_task(self._listen_for_events())
 
-    async def poll_available_tasks(self):
+    async def _poll_available_tasks(self):
         """
         Periodically pulls tasks from the queue.
         """
         poll_logger = PrefixAdapter(logger, {"prefix": "POLLER"})
-
         poll_logger.info("Started periodic polling for tasks.")
 
-        async with self.pool.connection() as conn:
+        async with self.app.pool.connection() as conn:
             while True:
                 poll_logger.debug("Polling for tasks...")
 
                 for queue in self.app.queues:
-                    jobs = await self.fetch_available_jobs(conn, queue)
+                    jobs = await self._fetch_available_jobs(conn, queue)
+                    poll_logger.debug(
+                        f"Found {len(jobs)} job(s) in queue {queue.name}."
+                    )
+                    for job in jobs:
+                        future = self.queues[queue].submit(job)
+                        future.add_done_callback(
+                            partial(self.handle_job_result, queue=queue)
+                        )
 
                 poll_logger.debug("Completed a polling cycle.")
+
                 await asyncio.sleep(self.app.poller_delay)
 
-    async def fetch_available_jobs(self, conn: AsyncConnection, queue: Queue):
+    async def _fetch_available_jobs(
+        self, conn: AsyncConnection, queue: Queue
+    ) -> list[Job]:
         """
         Fetches available jobs from the queue.
 
         Pulls jobs from the queue that are ready to be processed, locking the
         jobs to prevent other workers from processing them.
+
+        If there are pending changes to the job state, they will be applied
+        before fetching new jobs.
         """
         jobs_table = sql.Identifier(f"{self.app.prefix}jobs")
 
+        maximum_jobs_to_fetch = queue.concurrency - len(self.queues[queue])
+
+        # If we have no jobs to fetch and no pending changes, we can skip
+        # the query.
+        if not maximum_jobs_to_fetch and self.pending_changes[queue].empty():
+            return []
+
         async with conn.cursor(row_factory=dict_row) as cur:
             async with conn.transaction():
-                await cur.execute(
-                    sql.SQL(
-                        """
-                        SELECT
-                            id
-                        FROM
-                            {jobs}
-                        WHERE
-                            queue = {queue}
-                        AND
-                            state = 'pending'
-                        AND
-                            attempts < max_attempts
-                        ORDER BY
-                            priority ASC,
-                            created_at ASC,
-                            id ASC
-                        FOR UPDATE SKIP LOCKED
-                        """
-                    ).format(jobs=jobs_table, queue=queue.name),
-                )
+                # To reduce the number of transactions we need to make, we'll
+                # batch up any pending changes to the job state and apply them
+                # in a single transaction.
+                if not self.pending_changes[queue].empty():
+                    all_pending_changes = []
+                    while not self.pending_changes[queue].empty():
+                        all_pending_changes.append(
+                            await self.pending_changes[queue].get()
+                        )
+
+                    await cur.executemany(
+                        sql.SQL(
+                            """
+                            UPDATE {jobs}
+                            SET
+                                state = %s,
+                                completed_at = %s
+                            WHERE
+                                id = %s
+                            """
+                        ).format(jobs=jobs_table),
+                        [
+                            (
+                                change.state,
+                                change.completed_at,
+                                change.job.id,
+                            )
+                            for change in all_pending_changes
+                        ],
+                    )
+
+                if maximum_jobs_to_fetch <= 0:
+                    return []
 
                 await cur.execute(
                     sql.SQL(
                         """
+                        WITH selected_jobs AS (
+                            SELECT
+                                id
+                            FROM
+                                {jobs}
+                            WHERE
+                                queue = %(queue)s
+                            AND
+                                state = 'pending'
+                            AND
+                                attempts < max_attempts
+                            ORDER BY
+                                priority ASC,
+                                created_at ASC,
+                                id ASC
+                            LIMIT
+                                %(maximum_jobs_to_fetch)s
+                            FOR UPDATE OF {jobs} SKIP LOCKED
+                        )
                         UPDATE
                             {jobs}
                         SET
                             started_at = NOW(),
                             attempts = attempts + 1,
                             state = 'running'
+                        FROM
+                            selected_jobs
+                        WHERE
+                            {jobs}.id = selected_jobs.id
+                        RETURNING {jobs}.*
                         """
-                    ).format(jobs=jobs_table)
+                    ).format(
+                        jobs=jobs_table,
+                    ),
+                    {
+                        "queue": queue.name,
+                        "maximum_jobs_to_fetch": maximum_jobs_to_fetch,
+                    },
                 )
+                return [Job.deserialize(row) for row in await cur.fetchall()]
 
-    async def listen_for_events(self):
+    async def _listen_for_events(self):
         """
         Listens for events in the cluster using the Postgres LISTEN/NOTIFY
         mechanism.
@@ -144,7 +349,7 @@ class Worker:
         event_logger = PrefixAdapter(logger, {"prefix": "EVENTS"})
 
         event_logger.info("Starting event listener...")
-        async with self.pool.connection() as conn:
+        async with self.app.pool.connection() as conn:
             await conn.execute(
                 sql.SQL("LISTEN {}").format(
                     sql.Identifier(f"{self.app.prefix}events")
@@ -163,10 +368,51 @@ class Worker:
 
                 event_logger.debug(f"Received event: {j}")
 
-    async def __aenter__(self):
-        await self.pool.open()
-        return self
+    def handle_job_result(self, future: Future, queue: Queue):
+        """
+        Handles the result of a job execution.
+        """
+        job_logger = PrefixAdapter(logger, {"prefix": "WORKER"})
 
-    async def __aexit__(self, exc_type, exc, tb):
-        await self.pool.close()
-        return False
+        job = self.queues[queue].pop(future)
+
+        # Check to see if something went wrong with the job.
+        exc = future.exception()
+        if exc is not None:
+            # If the job has a maximum number of attempts, and we haven't
+            # exceeded that number, we'll put the job back into the pending
+            # state.
+            if job.max_attempts and job.attempts < job.max_attempts:
+                self.pending_changes[queue].put_nowait(
+                    StateChange(
+                        job=job,
+                        state="pending",
+                    )
+                )
+                job_logger.error(
+                    f"Job {job.id} failed with an exception ({type(exc)}), "
+                    f" retry attempt {job.attempts}/{job.max_attempts}."
+                )
+                return
+
+            self.pending_changes[queue].put_nowait(
+                StateChange(
+                    job=job,
+                    state="failed",
+                    completed_at=datetime.now(tz=timezone.utc),
+                )
+            )
+            job_logger.error(
+                f"Job {job.id} failed with an exception and has no free retry"
+                f" attempts, marking as failed."
+            )
+            return
+
+        self.pending_changes[queue].put_nowait(
+            StateChange(
+                job=job,
+                state="completed",
+                completed_at=datetime.now(tz=timezone.utc),
+            )
+        )
+        job_logger.info(f"Job {job.id} completed successfully.")
