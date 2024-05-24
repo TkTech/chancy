@@ -1,5 +1,7 @@
 # Chancy
 
+![Chancy Logo](misc/logo_small.png)
+
 A postgres-backed task queue for Python.
 
 This project is currently in the early stages of development. Use at your own
@@ -14,7 +16,6 @@ as needed by the author's projects, so it may not be suitable for all use cases.
 
 This project is designed to be simple and easy to use.
 
-- asyncio-first design with a synchronous API for convenience.
 - Fully-featured Jobs, with priorities, retries, timeouts, memory limits, future
   scheduling, and more.
 - Transactional job queueing. Jobs are only inserted into the database if the
@@ -22,8 +23,8 @@ This project is designed to be simple and easy to use.
 - Completed jobs stick around in the database for easy debugging and job
   tracking, with configurable retention policies.
 - Under 1k lines of code, easily grokkable in a single sitting.
-- Dependency-free except for psycopg3 (which can be used simultaneously with
-  psycopg2 in the same project).
+- Dependency-free except for psycopg3.
+- Multi-tenant support with prefixes for all database tables.
 
 ## Installation
 

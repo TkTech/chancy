@@ -16,6 +16,11 @@ from chancy.utils import importable_name
 
 
 @dataclass
+class JobContext:
+    job: "Job"
+
+
+@dataclass
 class Limit:
     """
     Defines a resource limit for the execution of a job.
@@ -189,6 +194,12 @@ class Chancy:
         for queue_name in queue_names:
             if not re.match(r"^[a-z_]+$", queue_name):
                 raise ValueError("Queue names must only contain a-z, and _.")
+
+        if self.poller_delay < 1:
+            raise ValueError("poller_delay must be greater than 0.")
+
+        if self.min_pool_size < 1:
+            raise ValueError("min_pool_size must be greater than 0.")
 
     async def migrate(self):
         """

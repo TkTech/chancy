@@ -1,3 +1,4 @@
+import inspect
 import os
 import json
 import uuid
@@ -17,7 +18,7 @@ from psycopg import sql
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
-from chancy.app import Chancy, Queue, Job, Limit
+from chancy.app import Chancy, Queue, Job, Limit, JobContext
 from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
 from chancy.utils import timed_block
@@ -102,8 +103,14 @@ def _job_wrapper(job: Job):
     mod = __import__(mod_name, fromlist=[func_name])
     func = getattr(mod, func_name)
 
+    kwargs = job.kwargs or {}
+
+    sig = inspect.signature(func)
+    if "job_context" in sig.parameters:
+        kwargs["job_context"] = JobContext(job=job)
+
     try:
-        func(**job.kwargs or {})
+        func(**kwargs)
     finally:
         for clean in cleanup:
             clean()
