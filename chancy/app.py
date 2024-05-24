@@ -14,6 +14,41 @@ from chancy.migrate import Migrator
 from chancy.utils import importable_name
 
 
+@dataclass
+class Limit:
+    """
+    Defines a resource limit for the execution of a job.
+    """
+
+    class Type(enum.Enum):
+        """
+        The type of resource limit.
+        """
+
+        #: The maximum amount of memory (in bytes) the job can use.
+        MEMORY = "memory"
+        #: The maximum amount of time (in seconds) the job can run.
+        TIME = "time"
+
+    #: The type of limit.
+    type: Type
+    #: The value of the limit.
+    value: int
+
+    @classmethod
+    def deserialize(cls, data: dict):
+        return cls(
+            type=cls.Type(data["type"]),
+            value=data["value"],
+        )
+
+    def serialize(self) -> dict:
+        return {
+            "type": self.type.value,
+            "value": self.value,
+        }
+
+
 @dataclass(frozen=True, kw_only=True)
 class Job:
     """
@@ -27,12 +62,10 @@ class Job:
     func: str | Callable[..., None]
     #: The keyword arguments to pass to the job.
     kwargs: Optional[dict] = None
-    #: The maximum runtime of this job in seconds.
-    timeout: Optional[int] = None
-    #: The maximum memory usage of this job in bytes.
-    memory_limit: Optional[int] = None
     #: The priority of the job.
     priority: int = 0
+    #: Optional resource limits to apply to the job.
+    limits: list[Limit] = dataclasses.field(default_factory=list)
 
     # The following fields exist as columns in the database.
 
@@ -56,8 +89,9 @@ class Job:
         return cls(
             func=data["payload"]["name"],
             kwargs=data["payload"]["kwargs"],
-            timeout=data["payload"]["timeout"],
-            memory_limit=data["payload"]["memory_limit"],
+            limits=[
+                Limit.deserialize(limit) for limit in data["payload"]["limits"]
+            ],
             id=data["id"],
             attempts=data["attempts"],
             max_attempts=data["max_attempts"],
@@ -74,8 +108,7 @@ class Job:
             "payload": {
                 "name": func,
                 "kwargs": self.kwargs,
-                "timeout": self.timeout,
-                "memory_limit": self.memory_limit,
+                "limits": [limit.serialize() for limit in self.limits],
             },
             "attempts": self.attempts,
             "max_attempts": self.max_attempts,

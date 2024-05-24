@@ -16,9 +16,13 @@ This project is designed to be simple and easy to use.
 
 - asyncio-first design with a synchronous API for convenience.
 - Fully-featured Jobs, with retries, timeouts, memory limits and more.
-- Dependency-free except for psycopg3.
 - Transactional job queueing. Jobs are only inserted into the database if the
   transaction they were created in is committed.
+- Completed jobs stick around in the database for easy debugging and job
+  tracking, with configurable retention policies.
+- Under 1k lines of code, easily grokkable in a single sitting.
+- Dependency-free except for psycopg3 (which can be used simultaneously with
+  psycopg2 in the same project).
 
 ## Installation
 
@@ -39,7 +43,7 @@ from the "default" queue, running at most 1 at a time.
 
 ```python
 import asyncio
-from chancy.app import Chancy, Queue, Job
+from chancy.app import Chancy, Queue, Job, Limit
 from chancy.worker import Worker
 
 
@@ -59,13 +63,15 @@ async def main():
         await app.migrate()
         
         # Submit a job to the "default" queue. This job will run at most 3
-        # times, with a timeout of 15 seconds and a memory limit of 1 GiB.
+        # times, with a timeout of 60 seconds and a memory limit of 1 GiB.
         await app.submit(
           Job(
             func=my_long_running_job,
             max_attempts=3,
-            timeout=15,
-            memory_limit=1024 ** 3,
+            limits=[
+              Limit(Limit.Type.MEMORY, 1 * 1024 ** 3),
+              Limit(Limit.Type.TIME, 60),
+            ],
           ),
           "default"
         )

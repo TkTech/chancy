@@ -17,7 +17,7 @@ from psycopg import sql
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
-from chancy.app import Chancy, Queue, Job
+from chancy.app import Chancy, Queue, Job, Limit
 from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
 from chancy.utils import timed_block
@@ -68,37 +68,32 @@ def _job_wrapper(job: Job):
     """
     cleanup = []
 
-    # Set the memory limit for the job, if one is provided.
-    if job.memory_limit:
-        previous_soft, _ = resource.getrlimit(resource.RLIMIT_AS)
+    for limit in job.limits:
+        match limit.type:
+            case Limit.Type.MEMORY:
+                previous_soft, _ = resource.getrlimit(resource.RLIMIT_AS)
+                resource.setrlimit(
+                    resource.RLIMIT_AS,
+                    (limit.value, -1),
+                )
+                # Ensure we reset the memory limit after the job has completed,
+                # since our process will be reused by a task that may not have
+                # an explicit memory limit.
+                cleanup.append(
+                    lambda: resource.setrlimit(
+                        resource.RLIMIT_AS,
+                        (previous_soft, -1),
+                    )
+                )
+            case Limit.Type.TIME:
+                signal.signal(signal.SIGALRM, _job_signal_handler)
+                cancel = threading.Event()
+                timeout_thread = TimeoutThread(limit.value, cancel)
+                timeout_thread.start()
+                cleanup.append(lambda: cancel.set())
 
-        resource.setrlimit(
-            resource.RLIMIT_AS,
-            (job.memory_limit, -1),
-        )
-
-        # Ensure we reset the memory limit after the job has completed, since
-        # our process will be reused by a task that may not have an explicit
-        # memory limit.
-        cleanup.append(
-            lambda: resource.setrlimit(
-                resource.RLIMIT_AS,
-                (previous_soft, -1),
-            )
-        )
-
-    signal.signal(signal.SIGALRM, _job_signal_handler)
-
-    # If a timeout was provided for the job, we need to use a separate thread
-    # to enforce it. Unlike using signal.alarm(), this approach allows us to
-    # cancel the alarm if the job completes before the timeout or if we're
-    # running on Windows, where signal.alarm() is not available.
-    if job.timeout:
-        cancel = threading.Event()
-        timeout_thread = TimeoutThread(job.timeout, cancel)
-        timeout_thread.start()
-        cleanup.append(lambda: cancel.set())
-
+    # Each job stores the function that should be called as a string in the
+    # format "module.path.to.function".
     mod_name, func_name = job.func.rsplit(".", 1)
     mod = __import__(mod_name, fromlist=[func_name])
     func = getattr(mod, func_name)
@@ -398,9 +393,10 @@ class Worker:
                         state="pending",
                     )
                 )
-                job_logger.error(
+                job_logger.exception(
                     f"Job {job.id} failed with an exception ({type(exc)}), "
-                    f" retry attempt {job.attempts}/{job.max_attempts}."
+                    f" retry attempt {job.attempts}/{job.max_attempts}.",
+                    exc_info=exc,
                 )
                 return
 
