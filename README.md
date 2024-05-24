@@ -89,7 +89,3 @@ Many similar projects exist. Some of them are:
 - https://github.com/contribsys/faktory (Go)
 - https://github.com/sorentwo/oban (Elixir)
 - https://github.com/procrastinate-org/procrastinate (Python)
-
-In particular, the blogs of the Oban authors and their excellent documentation
-have been a good source of inspiration. Highly recommended for anyone that
-needs a commercial-grade library.
