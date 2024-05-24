@@ -1,11 +1,89 @@
 import re
 import enum
 import dataclasses
+from dataclasses import dataclass
 from functools import cached_property
+from typing import Optional, Callable
 
+from psycopg import sql
+from psycopg import AsyncCursor, Cursor
+from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool
 
 from chancy.migrate import Migrator
+from chancy.utils import importable_name
+
+
+@dataclass(frozen=True, kw_only=True)
+class Job:
+    """
+    Defines a job to be executed by Chancy.
+    """
+
+    # The following fields exist only inside the `payload` field in the
+    # database.
+
+    #: The import path of the job to execute.
+    func: str | Callable[..., None]
+    #: The keyword arguments to pass to the job.
+    kwargs: Optional[dict] = None
+    #: The maximum runtime of this job in seconds.
+    timeout: Optional[int] = None
+    #: The maximum memory usage of this job in bytes.
+    memory_limit: Optional[int] = None
+    #: The priority of the job.
+    priority: int = 0
+
+    # The following fields exist as columns in the database.
+
+    #: The ID of the job, if it has been created in the database.
+    id: Optional[int] = None
+    #: The number of times this job has been attempted.
+    attempts: Optional[int] = None
+    #: The maximum number of times this job should be attempted.
+    max_attempts: int = 1
+    #: The state of the job.
+    state: Optional[str] = None
+    #: The time the job was created.
+    created_at: Optional[str] = None
+    #: The time the job was started.
+    started_at: Optional[str] = None
+    #: The time the job was completed.
+    completed_at: Optional[str] = None
+
+    @classmethod
+    def deserialize(cls, data: dict):
+        return cls(
+            func=data["payload"]["name"],
+            kwargs=data["payload"]["kwargs"],
+            timeout=data["payload"]["timeout"],
+            memory_limit=data["payload"]["memory_limit"],
+            id=data["id"],
+            attempts=data["attempts"],
+            max_attempts=data["max_attempts"],
+            state=data["state"],
+            created_at=data["created_at"],
+            started_at=data["started_at"],
+            completed_at=data["completed_at"],
+        )
+
+    def serialize(self) -> dict:
+        func = importable_name(self.func) if callable(self.func) else self.func
+        return {
+            "id": self.id,
+            "payload": {
+                "name": func,
+                "kwargs": self.kwargs,
+                "timeout": self.timeout,
+                "memory_limit": self.memory_limit,
+            },
+            "attempts": self.attempts,
+            "max_attempts": self.max_attempts,
+            "state": self.state,
+            "created_at": self.created_at,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+        }
 
 
 @dataclasses.dataclass(frozen=True)
@@ -54,7 +132,7 @@ class Chancy:
     maximum_jobs_per_worker: int = 100
 
     #: The minimum number of connections to keep in the pool.
-    min_pool_size: int = 2
+    min_pool_size: int = 1
     #: The maximum number of connections to keep in the pool.
     max_pool_size: int = 3
 
@@ -101,3 +179,118 @@ class Chancy:
     async def __aexit__(self, exc_type, exc, tb):
         await self.pool.close()
         return False
+
+    async def submit(self, job: Job, queue: Queue):
+        """
+        Submit a job to the specified queue.
+
+        This method will insert the job into the database and notify any
+        listening workers that a new job is available. It will be submitted
+        immediately using a new connection and transaction. To submit multiple
+        jobs in a single transaction, use `submit_to_cursor`.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                async with conn.transaction():
+                    await self.submit_to_cursor(cur, job, queue)
+
+    async def submit_to_cursor(
+        self, cursor: AsyncCursor, job: Job, queue: Queue | str
+    ):
+        """
+        Submit a job to the specified queue using the provided cursor.
+
+        This method is useful for submitting multiple jobs in a single
+        transaction or for ensuring your job is only inserted when a
+        transaction the caller is managing is successful.
+        """
+        await cursor.execute(
+            sql.SQL(
+                """
+                INSERT INTO {jobs} (
+                    queue,
+                    priority,
+                    max_attempts,
+                    payload
+                )
+                VALUES (
+                    %(name)s,
+                    %(priority)s,
+                    %(max_attempts)s,
+                    %(payload)s
+                )
+                """
+            ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
+            {
+                "name": queue.name if isinstance(queue, Queue) else queue,
+                "payload": Json(job.serialize()["payload"]),
+                "priority": job.priority,
+                "max_attempts": job.max_attempts,
+            },
+        )
+        await cursor.execute(
+            "SELECT pg_notify(%s, %s::text)",
+            [
+                f"{self.prefix}events",
+                Json(
+                    {
+                        "event": "job_submitted",
+                        "job": job.id,
+                        "queue": (
+                            queue.name if isinstance(queue, Queue) else queue
+                        ),
+                    }
+                ),
+            ],
+        )
+
+    def sync_submit_to_cursor(
+        self, cursor: Cursor, job: Job, queue: Queue | str
+    ):
+        """
+        Submit a job to the specified queue using the provided (synchronous)
+        cursor.
+
+        This method is useful for submitting multiple jobs in a single
+        transaction or for ensuring your job is only inserted when a
+        transaction the caller is managing is successful.
+        """
+        cursor.execute(
+            sql.SQL(
+                """
+                INSERT INTO {jobs} (
+                    queue,
+                    priority,
+                    max_attempts,
+                    payload
+                )
+                VALUES (
+                    %(name)s,
+                    %(priority)s,
+                    %(max_attempts)s,
+                    %(payload)s
+                )
+                """
+            ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
+            {
+                "name": queue.name if isinstance(queue, Queue) else queue,
+                "payload": Json(job.serialize()["payload"]),
+                "priority": job.priority,
+                "max_attempts": job.max_attempts,
+            },
+        )
+        cursor.execute(
+            "SELECT pg_notify(%s, %s::text)",
+            [
+                f"{self.prefix}events",
+                Json(
+                    {
+                        "event": "job_submitted",
+                        "job": job.id,
+                        "queue": (
+                            queue.name if isinstance(queue, Queue) else queue
+                        ),
+                    }
+                ),
+            ],
+        )

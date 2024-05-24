@@ -17,10 +17,10 @@ from psycopg import sql
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
-from chancy.app import Chancy, Queue
+from chancy.app import Chancy, Queue, Job
 from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
-from chancy.job import Job
+from chancy.utils import timed_block
 
 
 class TimeoutThread(threading.Thread):
@@ -57,6 +57,14 @@ def _job_wrapper(job: Job):
     """
     Wraps the job execution in a function that can be run in a separate
     process.
+
+    .. note::
+
+        It cannot be overstated - while this function implements timeouts and
+        memory limits, it does so in the understanding that the job function is
+        not a bad actor. It's possible for a poorly-behaved job to ignore the
+        timeout and memory limits, or to otherwise interfere with the operation
+        of the worker.
     """
     cleanup = []
 
@@ -91,7 +99,7 @@ def _job_wrapper(job: Job):
         timeout_thread.start()
         cleanup.append(lambda: cancel.set())
 
-    mod_name, func_name = job.name.rsplit(".", 1)
+    mod_name, func_name = job.func.rsplit(".", 1)
     mod = __import__(mod_name, fromlist=[func_name])
     func = getattr(mod, func_name)
 
@@ -166,16 +174,17 @@ class Worker:
 
     The worker will also listen for events in the cluster, such as job
     enqueueing and leader retirement.
+
+    :param app: The Chancy application to run the worker for.
+    :param worker_id: An optional worker ID to use for this worker.
     """
 
     def __init__(self, app: Chancy, worker_id: str = None):
         self.app = app
         self.worker_id = worker_id or str(uuid.uuid4())
-        self.queues: dict[Queue, Nanny] = {
+        self.pools: dict[Queue, Nanny] = {
             queue: Nanny(app, queue) for queue in app.queues
         }
-        # This queue contains changes to the Job's table that we should batch
-        # up and apply in a single transaction.
         self.pending_changes: dict[Queue, asyncio.Queue] = defaultdict(
             asyncio.Queue
         )
@@ -218,25 +227,26 @@ class Worker:
         """
         Periodically pulls tasks from the queue.
         """
-        poll_logger = PrefixAdapter(logger, {"prefix": "POLLER"})
+        poll_logger = PrefixAdapter(logger, {"prefix": "POLL"})
         poll_logger.info("Started periodic polling for tasks.")
 
         async with self.app.pool.connection() as conn:
             while True:
-                poll_logger.debug("Polling for tasks...")
-
-                for queue in self.app.queues:
-                    jobs = await self._fetch_available_jobs(conn, queue)
-                    poll_logger.debug(
-                        f"Found {len(jobs)} job(s) in queue {queue.name}."
-                    )
-                    for job in jobs:
-                        future = self.queues[queue].submit(job)
-                        future.add_done_callback(
-                            partial(self.handle_job_result, queue=queue)
+                with timed_block() as timer:
+                    for queue in self.app.queues:
+                        jobs = await self._fetch_available_jobs(conn, queue)
+                        poll_logger.debug(
+                            f"Found {len(jobs)} job(s) in queue {queue.name}."
                         )
+                        for job in jobs:
+                            future = self.pools[queue].submit(job)
+                            future.add_done_callback(
+                                partial(self._handle_job_result, queue=queue)
+                            )
 
-                poll_logger.debug("Completed a polling cycle.")
+                    poll_logger.debug(
+                        f"Completed a polling cycle in {timer.elapsed:.4f}s."
+                    )
 
                 await asyncio.sleep(self.app.poller_delay)
 
@@ -254,10 +264,10 @@ class Worker:
         """
         jobs_table = sql.Identifier(f"{self.app.prefix}jobs")
 
-        maximum_jobs_to_fetch = queue.concurrency - len(self.queues[queue])
+        maximum_jobs_to_fetch = queue.concurrency - len(self.pools[queue])
 
         # If we have no jobs to fetch and no pending changes, we can skip
-        # the query.
+        # the query stage entirely and just NOP out.
         if not maximum_jobs_to_fetch and self.pending_changes[queue].empty():
             return []
 
@@ -346,9 +356,8 @@ class Worker:
         Listens for events in the cluster using the Postgres LISTEN/NOTIFY
         mechanism.
         """
-        event_logger = PrefixAdapter(logger, {"prefix": "EVENTS"})
+        event_logger = PrefixAdapter(logger, {"prefix": "BUS"})
 
-        event_logger.info("Starting event listener...")
         async with self.app.pool.connection() as conn:
             await conn.execute(
                 sql.SQL("LISTEN {}").format(
@@ -356,7 +365,7 @@ class Worker:
                 )
             )
 
-            event_logger.info("Now listening for events.")
+            event_logger.info("Now listening for cluster events.")
             async for notice in conn.notifies():
                 try:
                     j = json.loads(notice.payload)
@@ -368,13 +377,13 @@ class Worker:
 
                 event_logger.debug(f"Received event: {j}")
 
-    def handle_job_result(self, future: Future, queue: Queue):
+    def _handle_job_result(self, future: Future, queue: Queue):
         """
         Handles the result of a job execution.
         """
-        job_logger = PrefixAdapter(logger, {"prefix": "WORKER"})
+        job_logger = PrefixAdapter(logger, {"prefix": "JOB"})
 
-        job = self.queues[queue].pop(future)
+        job = self.pools[queue].pop(future)
 
         # Check to see if something went wrong with the job.
         exc = future.exception()
@@ -415,4 +424,4 @@ class Worker:
                 completed_at=datetime.now(tz=timezone.utc),
             )
         )
-        job_logger.info(f"Job {job.id} completed successfully.")
+        job_logger.info(f"Job {job.id!r} completed successfully.")
