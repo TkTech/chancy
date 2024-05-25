@@ -1,7 +1,6 @@
 import re
 import enum
 import dataclasses
-from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from typing import Optional, Callable
@@ -15,12 +14,30 @@ from chancy.migrate import Migrator
 from chancy.utils import importable_name
 
 
-@dataclass
+@dataclasses.dataclass(frozen=True)
 class JobContext:
+    """
+    A context object that can be requested by a running job to get information
+    about the job itself.
+    """
+
+    #: The original job that was executed.
     job: "Job"
+    #: The ID of the job, if it has been created in the database.
+    id: Optional[int] = None
+    #: The number of times this job has been attempted.
+    attempts: Optional[int] = None
+    #: The state of the job.
+    state: Optional[str] = None
+    #: The time the job was created.
+    created_at: Optional[datetime] = None
+    #: The time the job was started.
+    started_at: Optional[datetime] = None
+    #: The time the job was completed.
+    completed_at: Optional[datetime] = None
 
 
-@dataclass
+@dataclasses.dataclass
 class Limit:
     """
     Defines a resource limit for the execution of a job.
@@ -55,16 +72,16 @@ class Limit:
         }
 
 
-@dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class Job:
     """
     Defines a job to be executed by Chancy.
+
+    Once created, a Job is immutable and should be treated as such. Use the
+    `with_` methods to create a new job with updated values.
     """
 
-    # The following fields exist only inside the `payload` field in the
-    # database.
-
-    #: The import path of the job to execute.
+    #: A function or importable name to call when the job is executed.
     func: str | Callable[..., None]
     #: The keyword arguments to pass to the job.
     kwargs: Optional[dict] = None
@@ -72,61 +89,41 @@ class Job:
     priority: int = 0
     #: Optional resource limits to apply to the job.
     limits: list[Limit] = dataclasses.field(default_factory=list)
-
-    # The following fields exist as columns in the database.
-
-    #: The ID of the job, if it has been created in the database.
-    id: Optional[int] = None
-    #: The number of times this job has been attempted.
-    attempts: Optional[int] = None
     #: The maximum number of times this job should be attempted.
     max_attempts: int = 1
-    #: The state of the job.
-    state: Optional[str] = None
-    #: The time the job was created.
-    created_at: Optional[datetime] = None
-    #: The time the job was started.
-    started_at: Optional[datetime] = None
-    #: The time the job was completed.
-    completed_at: Optional[datetime] = None
     #: The time the job is scheduled to run.
     scheduled_at: Optional[datetime] = None
 
-    @classmethod
-    def deserialize(cls, data: dict):
-        return cls(
-            func=data["payload"]["name"],
-            kwargs=data["payload"]["kwargs"],
-            limits=[
-                Limit.deserialize(limit) for limit in data["payload"]["limits"]
-            ],
-            id=data["id"],
-            attempts=data["attempts"],
-            max_attempts=data["max_attempts"],
-            state=data["state"],
-            created_at=data["created_at"],
-            started_at=data["started_at"],
-            completed_at=data["completed_at"],
-            scheduled_at=data["scheduled_at"],
-        )
+    def __post_init__(self):
+        if self.priority < 0:
+            raise ValueError("Priority must be greater than or equal to 0.")
 
-    def serialize(self) -> dict:
-        func = importable_name(self.func) if callable(self.func) else self.func
-        return {
-            "id": self.id,
-            "payload": {
-                "name": func,
-                "kwargs": self.kwargs,
-                "limits": [limit.serialize() for limit in self.limits],
-            },
-            "attempts": self.attempts,
-            "max_attempts": self.max_attempts,
-            "state": self.state,
-            "created_at": self.created_at,
-            "started_at": self.started_at,
-            "completed_at": self.completed_at,
-            "scheduled_at": self.scheduled_at,
-        }
+        if self.max_attempts < 1:
+            raise ValueError("max_attempts must be greater than 0.")
+
+    def with_kwargs(self, **kwargs) -> "Job":
+        """
+        Create a new job with updated keyword arguments.
+        """
+        return dataclasses.replace(self, kwargs=kwargs)
+
+    def with_priority(self, priority) -> "Job":
+        """
+        Create a new job with an updated priority.
+        """
+        return dataclasses.replace(self, priority=priority)
+
+    def with_limits(self, limits) -> "Job":
+        """
+        Create a new job with updated limits.
+        """
+        return dataclasses.replace(self, limits=limits)
+
+    def with_max_attempts(self, max_attempts) -> "Job":
+        """
+        Create a new job with an updated maximum number of attempts.
+        """
+        return dataclasses.replace(self, max_attempts=max_attempts)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -152,12 +149,52 @@ class Queue:
     #: The state of the queue.
     state: State = State.ACTIVE
     #: The maximum number of jobs to process before a worker on this queue
-    #: should be restarted. Can help with memory leaks.
+    #: should be restarted. Useful for dealing with unavoidable memory leaks.
     maximum_jobs_per_worker: Optional[int] = None
     #: A function to call when a worker process for this queue is first started.
     #: This can be used to do expensive setup operations once per worker, like
     #: setting up django.
     on_setup: Optional[Callable[[], None]] = None
+
+
+def _prepare_submit(
+    app: "Chancy", queue: Queue, job: Job
+) -> tuple[sql.Composed, dict]:
+    f = importable_name(job.func) if callable(job.func) else job.func
+
+    return (
+        sql.SQL(
+            """
+            INSERT INTO {jobs} (
+                queue,
+                priority,
+                max_attempts,
+                payload,
+                scheduled_at
+            )
+            VALUES (
+                %(name)s,
+                %(priority)s,
+                %(max_attempts)s,
+                %(payload)s,
+                %(scheduled_at)s
+            )
+            """
+        ).format(jobs=sql.Identifier(f"{app.prefix}jobs")),
+        {
+            "name": queue.name if isinstance(queue, Queue) else queue,
+            "payload": Json(
+                {
+                    "func": f,
+                    "kwargs": job.kwargs,
+                    "limits": [limit.serialize() for limit in job.limits],
+                }
+            ),
+            "priority": job.priority,
+            "max_attempts": job.max_attempts,
+            "scheduled_at": job.scheduled_at,
+        },
+    )
 
 
 @dataclasses.dataclass
@@ -175,7 +212,11 @@ class Chancy:
     #: The prefix to use for all Chancy tables in the database.
     prefix: str = "chancy_"
     #: The minimum number of seconds to wait when polling the queue.
-    poller_delay: int = 5
+    job_poller_interval: int = 5
+    #: The minimum number of seconds to wait when polling for leadership.
+    leadership_poller_interval: int = 30
+    #: The number of seconds before a leader is considered expired.
+    leadership_timeout: int = 30
     #: Disable events, relying on polling only.
     disable_events: bool = False
 
@@ -195,7 +236,7 @@ class Chancy:
             if not re.match(r"^[a-z_]+$", queue_name):
                 raise ValueError("Queue names must only contain a-z, and _.")
 
-        if self.poller_delay < 1:
+        if self.job_poller_interval < 1:
             raise ValueError("poller_delay must be greater than 0.")
 
         if self.min_pool_size < 1:
@@ -258,33 +299,8 @@ class Chancy:
         transaction or for ensuring your job is only inserted when a
         transaction the caller is managing is successful.
         """
-        await cursor.execute(
-            sql.SQL(
-                """
-                INSERT INTO {jobs} (
-                    queue,
-                    priority,
-                    max_attempts,
-                    payload,
-                    scheduled_at
-                )
-                VALUES (
-                    %(name)s,
-                    %(priority)s,
-                    %(max_attempts)s,
-                    %(payload)s,
-                    %(scheduled_at)s
-                )
-                """
-            ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
-            {
-                "name": queue.name if isinstance(queue, Queue) else queue,
-                "payload": Json(job.serialize()["payload"]),
-                "priority": job.priority,
-                "max_attempts": job.max_attempts,
-                "scheduled_at": job.scheduled_at,
-            },
-        )
+        query, params = _prepare_submit(self, queue, job)
+        await cursor.execute(query, params)
         await cursor.execute(
             "SELECT pg_notify(%s, %s::text)",
             [
@@ -292,7 +308,6 @@ class Chancy:
                 Json(
                     {
                         "event": "job_submitted",
-                        "job": job.id,
                         "queue": (
                             queue.name if isinstance(queue, Queue) else queue
                         ),
@@ -312,30 +327,8 @@ class Chancy:
         transaction or for ensuring your job is only inserted when a
         transaction the caller is managing is successful.
         """
-        cursor.execute(
-            sql.SQL(
-                """
-                INSERT INTO {jobs} (
-                    queue,
-                    priority,
-                    max_attempts,
-                    payload
-                )
-                VALUES (
-                    %(name)s,
-                    %(priority)s,
-                    %(max_attempts)s,
-                    %(payload)s
-                )
-                """
-            ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
-            {
-                "name": queue.name if isinstance(queue, Queue) else queue,
-                "payload": Json(job.serialize()["payload"]),
-                "priority": job.priority,
-                "max_attempts": job.max_attempts,
-            },
-        )
+        query, params = _prepare_submit(self, queue, job)
+        cursor.execute(query, params)
         cursor.execute(
             "SELECT pg_notify(%s, %s::text)",
             [
@@ -343,7 +336,6 @@ class Chancy:
                 Json(
                     {
                         "event": "job_submitted",
-                        "job": job.id,
                         "queue": (
                             queue.name if isinstance(queue, Queue) else queue
                         ),

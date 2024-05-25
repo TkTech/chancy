@@ -17,6 +17,7 @@ from typing import Optional
 from psycopg import sql
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
+from psycopg.errors import LockNotAvailable
 
 from chancy.app import Chancy, Queue, Job, Limit, JobContext
 from chancy.logger import logger, PrefixAdapter
@@ -54,7 +55,7 @@ def _job_signal_handler(signum, frame):
         raise TimeoutError("Job timed out.")
 
 
-def _job_wrapper(job: Job):
+def _job_wrapper(context: JobContext):
     """
     Wraps the job execution in a function that can be run in a separate
     process.
@@ -69,7 +70,7 @@ def _job_wrapper(job: Job):
     """
     cleanup = []
 
-    for limit in job.limits:
+    for limit in context.job.limits:
         match limit.type:
             case Limit.Type.MEMORY:
                 previous_soft, _ = resource.getrlimit(resource.RLIMIT_AS)
@@ -99,15 +100,15 @@ def _job_wrapper(job: Job):
 
     # Each job stores the function that should be called as a string in the
     # format "module.path.to.function".
-    mod_name, func_name = job.func.rsplit(".", 1)
+    mod_name, func_name = context.job.func.rsplit(".", 1)
     mod = __import__(mod_name, fromlist=[func_name])
     func = getattr(mod, func_name)
 
-    kwargs = job.kwargs or {}
+    kwargs = context.job.kwargs or {}
 
     sig = inspect.signature(func)
     if "job_context" in sig.parameters:
-        kwargs["job_context"] = JobContext(job=job)
+        kwargs["job_context"] = context
 
     try:
         func(**kwargs)
@@ -122,7 +123,7 @@ class StateChange:
     A change to the state of a job.
     """
 
-    job: Job
+    context: JobContext
     state: str
     completed_at: Optional[datetime] = None
 
@@ -137,23 +138,23 @@ class Nanny:
 
     def __init__(self, app: Chancy, queue: Queue):
         self.app = app
-        self.processes = {}
+        self.processes: dict[Future, JobContext] = {}
         self.pool = ProcessPoolExecutor(
             max_workers=queue.concurrency,
             max_tasks_per_child=queue.maximum_jobs_per_worker,
             initializer=queue.on_setup,
         )
 
-    def submit(self, job: Job) -> Future:
+    def submit(self, context: JobContext) -> Future:
         """
         Submit a job to the pool for execution, returning the future of the
         task.
         """
-        future: Future = self.pool.submit(_job_wrapper, job=job)
-        self.processes[future] = job
+        future: Future = self.pool.submit(_job_wrapper, context=context)
+        self.processes[future] = context
         return future
 
-    def pop(self, future: Future) -> Job:
+    def pop(self, future: Future) -> JobContext:
         """
         Retrieve a job from the pool by its future, removing it from the pool.
 
@@ -226,46 +227,39 @@ class Worker:
                 return
 
         async with TaskGroup() as tg:
-            tg.create_task(self._poll_available_tasks())
+            tg.create_task(self._poll_event_loop())
+            tg.create_task(self._leadership_loop())
             if not self.app.disable_events:
                 tg.create_task(self._listen_for_events())
 
-    async def _poll_available_tasks(self):
-        """
-        Periodically pulls tasks from the queue.
-        """
+    async def _poll_event_loop(self):
         poll_logger = PrefixAdapter(logger, {"prefix": "POLL"})
         poll_logger.info("Started periodic polling for tasks.")
 
-        async with self.app.pool.connection() as conn:
-            while True:
-                with timed_block() as timer:
-                    for queue in self.app.queues:
-                        if queue.state == Queue.State.PAUSED:
-                            poll_logger.debug(
-                                f"Queue {queue.name} is paused, skipping."
-                            )
-                            continue
-
-                        jobs = await self._fetch_available_jobs(conn, queue)
+        while True:
+            async with self.app.pool.connection() as conn:
+                for queue in self.app.queues:
+                    if queue.state == Queue.State.PAUSED:
                         poll_logger.debug(
-                            f"Found {len(jobs)} job(s) in queue {queue.name}."
+                            f"Queue {queue.name} is paused, skipping."
                         )
-                        for job in jobs:
-                            future = self.pools[queue].submit(job)
-                            future.add_done_callback(
-                                partial(self._handle_job_result, queue=queue)
-                            )
+                        continue
 
+                    jobs = await self._fetch_available_jobs(conn, queue)
                     poll_logger.debug(
-                        f"Completed a polling cycle in {timer.elapsed:.4f}s."
+                        f"Found {len(jobs)} job(s) in queue {queue.name}."
                     )
+                    for job in jobs:
+                        future = self.pools[queue].submit(job)
+                        future.add_done_callback(
+                            partial(self._handle_job_result, queue=queue)
+                        )
 
-                await asyncio.sleep(self.app.poller_delay)
+                await asyncio.sleep(self.app.job_poller_interval)
 
     async def _fetch_available_jobs(
         self, conn: AsyncConnection, queue: Queue
-    ) -> list[Job]:
+    ) -> list[JobContext]:
         """
         Fetches available jobs from the queue.
 
@@ -311,7 +305,7 @@ class Worker:
                             (
                                 change.state,
                                 change.completed_at,
-                                change.job.id,
+                                change.context.id,
                             )
                             for change in all_pending_changes
                         ],
@@ -364,7 +358,28 @@ class Worker:
                         "maximum_jobs_to_fetch": maximum_jobs_to_fetch,
                     },
                 )
-                return [Job.deserialize(row) for row in await cur.fetchall()]
+                return [
+                    JobContext(
+                        job=Job(
+                            func=row["payload"]["func"],
+                            kwargs=row["payload"]["kwargs"],
+                            limits=[
+                                Limit.deserialize(limit)
+                                for limit in row["payload"]["limits"]
+                            ],
+                            scheduled_at=row["scheduled_at"],
+                            max_attempts=row["max_attempts"],
+                            priority=row["priority"],
+                        ),
+                        attempts=row["attempts"],
+                        id=row["id"],
+                        created_at=row["created_at"],
+                        started_at=row["started_at"],
+                        completed_at=row["completed_at"],
+                        state=row["state"],
+                    )
+                    for row in await cur.fetchall()
+                ]
 
     async def _listen_for_events(self):
         """
@@ -398,7 +413,8 @@ class Worker:
         """
         job_logger = PrefixAdapter(logger, {"prefix": "JOB"})
 
-        job = self.pools[queue].pop(future)
+        context = self.pools[queue].pop(future)
+        job = context.job
 
         # Check to see if something went wrong with the job.
         exc = future.exception()
@@ -406,38 +422,138 @@ class Worker:
             # If the job has a maximum number of attempts, and we haven't
             # exceeded that number, we'll put the job back into the pending
             # state.
-            if job.max_attempts and job.attempts < job.max_attempts:
+            if job.max_attempts and context.attempts < job.max_attempts:
                 self.pending_changes[queue].put_nowait(
                     StateChange(
-                        job=job,
+                        context=context,
                         state="pending",
                     )
                 )
                 job_logger.exception(
-                    f"Job {job.id} failed with an exception ({type(exc)}), "
-                    f" retry attempt {job.attempts}/{job.max_attempts}.",
+                    f"Job {context.id} failed with an exception"
+                    f" ({type(exc)}), retry attempt {context.attempts}/"
+                    f"{job.max_attempts}.",
                     exc_info=exc,
                 )
                 return
 
             self.pending_changes[queue].put_nowait(
                 StateChange(
-                    job=job,
+                    context=context,
                     state="failed",
                     completed_at=datetime.now(tz=timezone.utc),
                 )
             )
             job_logger.error(
-                f"Job {job.id} failed with an exception and has no free retry"
-                f" attempts, marking as failed."
+                f"Job {context.id} failed with an exception and has no free"
+                f" retry attempts, marking as failed."
             )
             return
 
         self.pending_changes[queue].put_nowait(
             StateChange(
-                job=job,
+                context=context,
                 state="completed",
                 completed_at=datetime.now(tz=timezone.utc),
             )
         )
-        job_logger.info(f"Job {job.id!r} completed successfully.")
+        job_logger.info(f"Job {context.id!r} completed successfully.")
+
+    async def _leadership_loop(self):
+        """
+        A loop that periodically attempts to acquire the leader lock.
+
+        The leader lock is used to ensure that certain plugins are only run by
+        a single worker at a time.
+        """
+        leader_logger = PrefixAdapter(logger, {"prefix": "LEADER"})
+
+        while True:
+            async with self.app.pool.connection() as conn:
+                if await self._try_acquire_leader(conn):
+                    leader_logger.info(
+                        f"Acquired leader lock for worker {self.worker_id}."
+                    )
+                else:
+                    leader_logger.debug(
+                        f"Failed to acquire leader lock for worker"
+                        f" {self.worker_id}."
+                    )
+
+                await asyncio.sleep(self.app.leadership_timeout)
+
+    async def _try_acquire_leader(self, conn: AsyncConnection) -> bool:
+        """
+        Attempt to acquire the leader lock for this worker.
+
+        If the leader lock is already held by another worker, this method will
+        return False. Otherwise, it will return True.
+
+        It's possible for there to be no current valid leader while waiting on
+        a worker to time out, but there should never be > 1 leader.
+        """
+        now = datetime.now(tz=timezone.utc)
+        leaders = sql.Identifier(f"{self.app.prefix}leader")
+
+        async with conn.cursor() as cur:
+            try:
+                # It's important that this SELECT covers the entire table to
+                # apply the FOR UPDATE lock.
+                await cur.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            worker_id,
+                            last_seen
+                        FROM {leaders} FOR UPDATE
+                        """
+                    ).format(leaders=leaders)
+                )
+                result = await cur.fetchone()
+                if result:
+                    worker_id, last_seen = result
+                    since = (now - last_seen).total_seconds()
+                    if (
+                        since > self.app.leadership_timeout
+                        or worker_id == self.worker_id
+                    ):
+                        # Either we own the lock already, and we just need to
+                        # update the heartbeat, or the lock is stale, we can
+                        # take it.
+                        await cur.execute(
+                            sql.SQL(
+                                """
+                                UPDATE
+                                    {leaders}
+                                SET
+                                    worker_id = %(worker_id)s,
+                                    last_seen = %(last_seen)s
+                                """
+                            ).format(leaders=leaders),
+                            {"worker_id": self.worker_id, "last_seen": now},
+                        )
+                        await conn.commit()
+                        return True
+                    else:
+                        await conn.rollback()
+                        return False
+                else:
+                    await cur.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO
+                                {leaders}
+                                (worker_id, last_seen)
+                            VALUES
+                                (%(worker_id)s, %(last_seen)s)
+                            ON CONFLICT (worker_id) DO UPDATE SET
+                                last_seen = %(last_seen)s
+                            """
+                        ).format(leaders=leaders),
+                        {"worker_id": self.worker_id, "last_seen": now},
+                    )
+                    await conn.commit()
+                    return True
+            except LockNotAvailable:
+                await conn.rollback()
+                return False

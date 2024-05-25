@@ -7,14 +7,16 @@ A postgres-backed task queue for Python.
 This project is currently in the early stages of development. Use at your own
 risk. It's guaranteed to be buggy and incomplete.
 
+## Why?
+
 The goal is to provide a simple, easy-to-use task queue that can be used in a
 wide variety of projects where the only infrastructure requirement is a postgres
-database that you're probably already using anyway. Its features are added
+server that you're probably already using anyway. Its features are added
 as needed by the author's projects, so it may not be suitable for all use cases.
+You shouldn't need RabbitMQ/Redis + celery to send a few emails or run a few
+background tasks.
 
 ## Features
-
-This project is designed to be simple and easy to use.
 
 - Fully-featured Jobs, with priorities, retries, timeouts, memory limits, future
   scheduling, and more.
@@ -22,7 +24,6 @@ This project is designed to be simple and easy to use.
   transaction they were created in is committed.
 - Completed jobs stick around in the database for easy debugging and job
   tracking, with configurable retention policies.
-- Under 1k lines of code, easily grokkable in a single sitting.
 - Dependency-free except for psycopg3.
 - Multi-tenant support with prefixes for all database tables.
 

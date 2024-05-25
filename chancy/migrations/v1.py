@@ -33,13 +33,15 @@ class V1Migration(Migration):
             await conn.execute(
                 sql.SQL(
                     """
-                    CREATE TABLE {leaders} (
+                    CREATE UNLOGGED TABLE {leader} (
                         id BIGSERIAL PRIMARY KEY,
                         worker_id TEXT NOT NULL,
                         last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                    )
+                    );
+                    ALTER TABLE {leader}
+                        ADD CONSTRAINT worker_id_unique UNIQUE (worker_id);
                     """
-                ).format(leaders=sql.Identifier(f"{migrator.prefix}leaders"))
+                ).format(leader=sql.Identifier(f"{migrator.prefix}leader"))
             )
 
     async def down(self, migrator: Migrator, conn: AsyncConnection):
@@ -53,7 +55,7 @@ class V1Migration(Migration):
                 )
             )
             await conn.execute(
-                sql.SQL("DROP TABLE {leaders}").format(
-                    leaders=sql.Identifier(f"{migrator.prefix}leaders")
+                sql.SQL("DROP TABLE {leader}").format(
+                    leaders=sql.Identifier(f"{migrator.prefix}leader")
                 )
             )
