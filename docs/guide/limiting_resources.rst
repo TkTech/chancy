@@ -32,7 +32,8 @@ If the job exceeds the specific memory usage, a MemoryError will be raised.
 
 .. note::
 
-  This is only available on UNIX-like platforms.
+  This is only available on UNIX-like platforms that support the
+  `resource` module.
 
 Limiting Runtime
 ----------------

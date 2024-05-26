@@ -323,7 +323,29 @@ class Chancy:
         await self.pool.close()
         return False
 
-    async def submit(self, job: Job, queue: Queue):
+    async def open(self):
+        """
+        Open the connection pool.
+
+        When possible, it's preferred to instead use the async context manager
+        interface to ensure the pool is properly opened and closed.
+
+        .. code-block:: python
+
+            async with Chancy(
+                dsn="postgresql://username:password@localhost:8190/postgres",
+            ) as app:
+                ...
+        """
+        await self.pool.open()
+
+    async def close(self):
+        """
+        Close the connection pool.
+        """
+        await self.pool.close()
+
+    async def submit(self, job: Job, queue: Queue | str):
         """
         Submit a job to the specified queue.
 

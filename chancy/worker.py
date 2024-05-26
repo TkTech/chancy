@@ -214,7 +214,7 @@ class Worker:
                       worker.
     """
 
-    def __init__(self, app: Chancy, worker_id: str = None):
+    def __init__(self, app: Chancy, *, worker_id: str = None):
         self.app = app
         self.worker_id = worker_id or str(uuid.uuid4())
         self.pools: dict[Queue, Nanny] = {

@@ -38,20 +38,46 @@ Chancy is available on PyPI. You can install it with pip:
 
    pip install chancy
 
-Chancy follows SemVer, so you can pin your dependencies to a specific version
-if you want to avoid breaking changes.
-
 Usage
 -----
 
-Here's a simple example of how you might use Chancy in your project, starting 1
-job in a queue with a concurrency of 1:
+Using Chancy is fairly straightforward. Just like any work queue, you need to
+have a worker that listens for jobs and a client that submits jobs to the queue.
+First, we'll create a file called `worker.py`:
 
 .. code-block:: python
+  :caption: worker.py
 
    import asyncio
    from chancy.app import Chancy, Queue, Job, Limit
    from chancy.worker import Worker
+
+   async def main():
+       async with Chancy(
+           dsn="postgresql://username:password@localhost:8190/postgres",
+           queues=[
+               Queue(name="default", concurrency=10),
+           ],
+       ) as app:
+           await app.migrate()
+           await Worker(app).start()
+
+   if __name__ == "__main__":
+       asyncio.run(main())
+
+
+Start up one or more of the workers by running `python worker.py`. This will
+start a worker that listens on the "default" queue and runs up to 10 jobs
+concurrently.
+
+Next, we need to create a job that we want to run. Let's create a file called
+`job.py` and add a job that does nothing:
+
+.. code-block:: python
+  :caption: job.py
+
+   import asyncio
+   from chancy.app import Chancy, Queue, Job, Limit
 
 
    def my_long_running_job():
@@ -62,33 +88,22 @@ job in a queue with a concurrency of 1:
        async with Chancy(
            dsn="postgresql://username:password@localhost:8190/postgres",
            queues=[
-               Queue(name="default", concurrency=1),
+               Queue(name="default", concurrency=10),
            ],
        ) as app:
-           # Migrate the database to create the necessary tables if they don't
-           # already exist. Don't do this automatically in production!
-           await app.migrate()
-
-           # Submit a job to the "default" queue. This job will run at most 3
-           # times, with a timeout of 60 seconds and a memory limit of 1 GiB.
-           await app.submit(
-             Job(
-               func=my_long_running_job,
-               max_attempts=3,
-               limits=[
-                 Limit(Limit.Type.MEMORY, 1 * 1024 ** 3),
-                 Limit(Limit.Type.TIME, 60),
-               ],
-             ),
-             "default"
-           )
-
-           # Start the worker to process jobs from the "default" queue.
-           await Worker(app).start()
+           await app.submit(Job(func=my_long_running_job), "default")
 
 
    if __name__ == "__main__":
        asyncio.run(main())
+
+When we run this file, we'll see the job get picked up by the worker and run
+in the background. That's it, all done!
+
+Of course, we might want to have the job run with a higher priority, or
+schedule it to run in the future, or retry if it fails. To learn more about
+these features, check out the :doc:`guide/index`.
+
 
 .. toctree::
    :maxdepth: 4
