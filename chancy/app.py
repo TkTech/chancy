@@ -60,16 +60,10 @@ class Limit:
 
     @classmethod
     def deserialize(cls, data: dict):
-        return cls(
-            type=cls.Type(data["type"]),
-            value=data["value"],
-        )
+        return cls(type=cls.Type(data["t"]), value=data["v"])
 
     def serialize(self) -> dict:
-        return {
-            "type": self.type.value,
-            "value": self.value,
-        }
+        return {"t": self.type.value, "v": self.value}
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -79,13 +73,21 @@ class Job:
 
     Once created, a Job is immutable and should be treated as such. Use the
     `with_` methods to create a new job with updated values.
+
+    Example:
+
+    .. code-block:: python
+
+        job = Job(func=my_task, kwargs={"foo": "bar"})
+        job = job.with_priority(10)
     """
 
     #: A function or importable name to call when the job is executed.
     func: str | Callable[..., None]
     #: The keyword arguments to pass to the job.
     kwargs: Optional[dict] = None
-    #: The priority of the job.
+    #: The priority of the job. Lower numbers are executed first, with 0
+    #: being the highest priority.
     priority: int = 0
     #: Optional resource limits to apply to the job.
     limits: list[Limit] = dataclasses.field(default_factory=list)
@@ -146,7 +148,7 @@ class Queue:
     name: str
     #: Maximum number of jobs to process concurrently (per-worker).
     concurrency: int = 1
-    #: The state of the queue.
+    #: The state of the queue. By default, queues will start as active.
     state: State = State.ACTIVE
     #: The maximum number of jobs to process before a worker on this queue
     #: should be restarted. Useful for dealing with unavoidable memory leaks.
@@ -200,10 +202,45 @@ def _prepare_submit(
 @dataclasses.dataclass
 class Chancy:
     """
-    The main application object for Chancy.
+    The main application object for Chancy containing all configuration and
+    helpers for common operations such as submitting jobs and performing a
+    migration.
+
+    The application object is an async context manager and should be used
+    within an `async with` block to ensure the connection pool is properly
+    opened and closed.
+
+    Example:
+
+    .. code-block:: python
+
+        async with Chancy(
+            dsn="postgresql://postgres:localtest@localhost:8190/postgres",
+            queues=[
+                Queue(name="default", concurrency=1),
+            ],
+        ) as app:
+            ...
+
+    If being used in a non-async application to submit jobs, you can use the
+    `sync_submit_to_cursor` method to submit jobs synchronously using your
+    own cursor & connection.
+
+    Example:
+
+    .. code-block:: python
+
+        with connection() as conn:
+            with conn.cursor() as cur:
+                app.sync_submit_to_cursor(
+                    cur,
+                    Job(func=my_dummy_task),
+                    "default"
+                )
+
     """
 
-    #: A valid engine connection string.
+    #: A postgres DSN to connect to the database.
     dsn: str
     #: A list of queues that this app should be aware of for processing jobs.
     queues: list[Queue] = dataclasses.field(default_factory=list)
@@ -211,13 +248,14 @@ class Chancy:
     plugins: list[str] = dataclasses.field(default_factory=list)
     #: The prefix to use for all Chancy tables in the database.
     prefix: str = "chancy_"
-    #: The minimum number of seconds to wait when polling the queue.
+    #: The minimum number of seconds to wait between polling for new jobs.
     job_poller_interval: int = 5
-    #: The minimum number of seconds to wait when polling for leadership.
+    #: The minimum number of seconds to wait between attempts to acquire
+    #: leadership of the cluster.
     leadership_poller_interval: int = 30
     #: The number of seconds before a leader is considered expired.
-    leadership_timeout: int = 30
-    #: Disable events, relying on polling only.
+    leadership_timeout: int = 60
+    #: Disable pub/sub events, relying on periodic polling only.
     disable_events: bool = False
 
     #: The minimum number of connections to keep in the pool.
@@ -242,17 +280,27 @@ class Chancy:
         if self.min_pool_size < 1:
             raise ValueError("min_pool_size must be greater than 0.")
 
-    async def migrate(self):
+    async def migrate(self, *, to_version: int | None = None):
         """
         Migrate the database to the latest schema version.
 
         This method will apply any pending migrations to the database to bring
         it up to the latest schema version. If the database is already up-to-
         date, this method will do nothing.
+
+        If `to_version` is provided, the database will be migrated up/down
+        to the specified version.
+
+        .. code-block:: python
+
+            async with Chancy(
+                dsn="postgresql://username:password@localhost:8190/postgres",
+            ) as app:
+                await app.migrate()
         """
         migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
         async with self.pool.connection() as conn:
-            await migrator.migrate(conn)
+            return await migrator.migrate(conn, to_version=to_version)
 
     @cached_property
     def pool(self):

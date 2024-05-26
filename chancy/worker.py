@@ -1,3 +1,8 @@
+"""
+The :class:`chancy.worker.Worker` class is the main entry point for running
+workers in a Chancy application.
+"""
+
 import inspect
 import os
 import json
@@ -22,10 +27,9 @@ from psycopg.errors import LockNotAvailable
 from chancy.app import Chancy, Queue, Job, Limit, JobContext
 from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
-from chancy.utils import timed_block
 
 
-class TimeoutThread(threading.Thread):
+class _TimeoutThread(threading.Thread):
     """
     A thread that will raise a TimeoutError after a specified number of
     seconds.
@@ -94,7 +98,7 @@ def _job_wrapper(context: JobContext):
                 # completes before the timeout.
                 signal.signal(signal.SIGALRM, _job_signal_handler)
                 cancel = threading.Event()
-                timeout_thread = TimeoutThread(limit.value, cancel)
+                timeout_thread = _TimeoutThread(limit.value, cancel)
                 timeout_thread.start()
                 cleanup.append(lambda: cancel.set())
 
@@ -121,6 +125,9 @@ def _job_wrapper(context: JobContext):
 class StateChange:
     """
     A change to the state of a job.
+
+    Used to aggregate changes to the state of a job before applying them in a
+    single transaction the next time a worker polls for jobs from a queue.
     """
 
     context: JobContext
@@ -180,11 +187,31 @@ class Worker:
     submitting them to the process pool for execution, and handling the
     results.
 
-    The worker will also listen for events in the cluster, such as job
-    enqueueing and leader retirement.
+    Each worker should have a globally unique worker ID, which is used to
+    acquire the leader lock in the cluster and track statistics. If no worker
+    ID is provided, a random UUID will be generated.
+
+    This worker uses a process pool to execute jobs. While this has higher
+    overhead than threading or asyncio, it provides a high degree of isolation
+    between jobs, and allows for the enforcement of memory and time limits on
+    individual jobs while completely sidestepping the GIL.
+
+    Example:
+
+    .. code-block:: python
+
+        async def main():
+            async with Chancy(
+                dsn="postgresql://username:password@localhost:8190/postgres",
+                queues=[
+                    Queue(name="default", concurrency=1),
+                ],
+            ) as app:
+                await Worker(app).start()
 
     :param app: The Chancy application to run the worker for.
-    :param worker_id: An optional worker ID to use for this worker.
+    :param worker_id: An optional, globally-unique worker ID to use for this
+                      worker.
     """
 
     def __init__(self, app: Chancy, worker_id: str = None):
@@ -470,9 +497,11 @@ class Worker:
 
         while True:
             async with self.app.pool.connection() as conn:
-                if await self._try_acquire_leader(conn):
+                is_leader = await self._try_acquire_leader(conn)
+                if is_leader:
                     leader_logger.info(
-                        f"Acquired leader lock for worker {self.worker_id}."
+                        f"Acquired/refreshed leader lock for worker"
+                        f" {self.worker_id}."
                     )
                 else:
                     leader_logger.debug(

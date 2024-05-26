@@ -1,3 +1,11 @@
+"""
+Utilities for performing database migrations in a PostgreSQL database.
+
+The functionality in this module is standalone and can be used with any
+PostgreSQL database without any dependencies on the rest of the Chancy
+project.
+"""
+
 import re
 import abc
 import importlib.resources

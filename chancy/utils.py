@@ -5,9 +5,13 @@ import contextlib
 @contextlib.contextmanager
 def timed_block():
     """
-    A context manager that times the block of code within it.
+    A context manager that times the block of code within it. The elapsed
+    time will be updated in the `elapsed` attribute of the returned object
+    until the block is exited.
 
     Example:
+
+    .. code-block:: python
 
         with timed_block() as timer:
             time.sleep(1)
