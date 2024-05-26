@@ -1,0 +1,53 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+
+jobs:
+  build:
+    name: Running tests.
+
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    env:
+      OS: ubuntu-latest
+      PYTHON: ${{ matrix.python-version }}
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Installing poetry
+      run: pip install poetry
+
+    - name: Installing dependencies
+      run: poetry install --no-interaction --with dev
+
+    - name: Running tests
+      run: |
+        poetry run pytest --cov=chancy --cov-report=xml
+
+    - name: Uploading coverage
+      uses: codecov/codecov-action@v4
+      with:
+        env_vars: OS,PYTHON
+        fail_ci_if_error: true
+        flags: unittests
+        token: ${{ secrets.CODECOV_TOKEN }}
+        verbose: true
+        slug: TkTech/chancy
+
+    - name: Building docs
+      run: |
+          cd docs && poetry run make clean && poetry run make html
