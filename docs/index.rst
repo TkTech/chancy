@@ -111,7 +111,6 @@ these features, check out the :doc:`guide/index`.
    :hidden:
 
    guide/index
-   plugins/index
    chancy
 
 

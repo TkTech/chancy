@@ -9,11 +9,12 @@ Submodules
 
    chancy.app
    chancy.worker
-   chancy.plugin
    chancy.migrate
    chancy.hub
    chancy.logger
    chancy.utils
+   chancy.plugin
+   chancy.plugins.recovery
 
 Module contents
 ---------------

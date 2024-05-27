@@ -9,4 +9,5 @@ Examples and guides to get you started with Chancy.
 
    worker
    limiting_resources
+   plugins
    recovery

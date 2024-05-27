@@ -1,5 +1,5 @@
-Recovery
-========
+chancy.plugins.recovery
+=======================
 
 .. automodule:: chancy.plugins.recovery
    :members:
