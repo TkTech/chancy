@@ -1,0 +1,1037 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html" /><link rel="search" title="Search" href="../../search.html" />
+
+    <!-- Generated with Sphinx 7.3.7 and Furo 2024.05.06 -->
+        <title>chancy.worker - Chancy</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=387cc868" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=36a5483c" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" /
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">Chancy</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../_static/logo_small.png" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">Chancy</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../guide/index.html">Guide</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../guide/worker.html">Workers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../guide/limiting_resources.html">Limiting Resources</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../guide/plugins.html">Plugins</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../guide/recovery.html">Job Recovery</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../chancy.html">Chancy API</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of Chancy API</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.app.html">chancy.app module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.worker.html">chancy.worker module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.migrate.html">chancy.migrate module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.hub.html">chancy.hub module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.logger.html">chancy.logger module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.utils.html">chancy.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.plugin.html">chancy.plugin module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.plugins.recovery.html">chancy.plugins.recovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.plugins.pruner.html">chancy.plugins.pruner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../chancy.plugins.sentry.html">chancy.plugins.sentry</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for chancy.worker</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">The :class:`chancy.worker.Worker` class is the main entry point for running</span>
+<span class="sd">workers in a Chancy application.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span> <span class="nn">enum</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">uuid</span>
+<span class="kn">import</span> <span class="nn">signal</span>
+<span class="kn">import</span> <span class="nn">asyncio</span>
+<span class="kn">import</span> <span class="nn">inspect</span>
+<span class="kn">import</span> <span class="nn">resource</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">dataclasses</span>
+<span class="kn">from</span> <span class="nn">asyncio</span> <span class="kn">import</span> <span class="n">TaskGroup</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">defaultdict</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ProcessPoolExecutor</span><span class="p">,</span> <span class="n">Future</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span>
+
+<span class="kn">from</span> <span class="nn">psycopg</span> <span class="kn">import</span> <span class="n">sql</span>
+<span class="kn">from</span> <span class="nn">psycopg</span> <span class="kn">import</span> <span class="n">AsyncConnection</span>
+<span class="kn">from</span> <span class="nn">psycopg.rows</span> <span class="kn">import</span> <span class="n">dict_row</span>
+<span class="kn">from</span> <span class="nn">psycopg.errors</span> <span class="kn">import</span> <span class="n">LockNotAvailable</span>
+
+<span class="kn">from</span> <span class="nn">chancy.app</span> <span class="kn">import</span> <span class="n">Chancy</span><span class="p">,</span> <span class="n">Queue</span><span class="p">,</span> <span class="n">Job</span><span class="p">,</span> <span class="n">Limit</span><span class="p">,</span> <span class="n">JobContext</span>
+<span class="kn">from</span> <span class="nn">chancy.logger</span> <span class="kn">import</span> <span class="n">logger</span><span class="p">,</span> <span class="n">PrefixAdapter</span>
+<span class="kn">from</span> <span class="nn">chancy.migrate</span> <span class="kn">import</span> <span class="n">Migrator</span>
+<span class="kn">from</span> <span class="nn">chancy.hub</span> <span class="kn">import</span> <span class="n">Hub</span>
+<span class="kn">from</span> <span class="nn">chancy.utils</span> <span class="kn">import</span> <span class="n">timed_block</span>
+
+
+<div class="viewcode-block" id="Leadership">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Leadership">[docs]</a>
+<span class="k">class</span> <span class="nc">Leadership</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="n">REFRESHED</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">ACQUIRED</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="n">UNAVAILABLE</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">LOST</span> <span class="o">=</span> <span class="mi">4</span></div>
+
+
+
+<span class="k">class</span> <span class="nc">_TimeoutThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A thread that will raise a TimeoutError after a specified number of</span>
+<span class="sd">    seconds.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cancel</span><span class="p">:</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cancel</span> <span class="o">=</span> <span class="n">cancel</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cancel</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="c1"># Our call to wait() returning True means that the flag was set</span>
+            <span class="c1"># before the timeout elapsed, so we should cancel our alarm.</span>
+            <span class="k">return</span>
+
+        <span class="c1"># If we reach this point, the timeout has elapsed, and we should raise</span>
+        <span class="c1"># a TimeoutError back in the main process thread.</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">kill</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">(),</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIGALRM</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_job_signal_handler</span><span class="p">(</span><span class="n">signum</span><span class="p">,</span> <span class="n">frame</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A signal handler for the job wrapper process.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">signum</span> <span class="o">==</span> <span class="n">signal</span><span class="o">.</span><span class="n">SIGALRM</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TimeoutError</span><span class="p">(</span><span class="s2">&quot;Job timed out.&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_job_wrapper</span><span class="p">(</span><span class="n">context</span><span class="p">:</span> <span class="n">JobContext</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Wraps the job execution in a function that can be run in a separate</span>
+<span class="sd">    process.</span>
+
+<span class="sd">    .. note::</span>
+
+<span class="sd">        It cannot be overstated - while this function implements timeouts and</span>
+<span class="sd">        memory limits, it does so in the understanding that the job function is</span>
+<span class="sd">        not a bad actor. It&#39;s possible for a poorly-behaved job to ignore the</span>
+<span class="sd">        timeout and memory limits, or to otherwise interfere with the operation</span>
+<span class="sd">        of the worker.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cleanup</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="n">limit</span> <span class="ow">in</span> <span class="n">context</span><span class="o">.</span><span class="n">job</span><span class="o">.</span><span class="n">limits</span><span class="p">:</span>
+        <span class="k">match</span> <span class="n">limit</span><span class="o">.</span><span class="n">type</span><span class="p">:</span>
+            <span class="k">case</span> <span class="n">Limit</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">MEMORY</span><span class="p">:</span>
+                <span class="n">previous_soft</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">resource</span><span class="o">.</span><span class="n">getrlimit</span><span class="p">(</span><span class="n">resource</span><span class="o">.</span><span class="n">RLIMIT_AS</span><span class="p">)</span>
+                <span class="n">resource</span><span class="o">.</span><span class="n">setrlimit</span><span class="p">(</span>
+                    <span class="n">resource</span><span class="o">.</span><span class="n">RLIMIT_AS</span><span class="p">,</span>
+                    <span class="p">(</span><span class="n">limit</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+                <span class="p">)</span>
+                <span class="c1"># Ensure we reset the memory limit after the job has completed,</span>
+                <span class="c1"># since our process will be reused by a task that may not have</span>
+                <span class="c1"># an explicit memory limit.</span>
+                <span class="n">cleanup</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="k">lambda</span><span class="p">:</span> <span class="n">resource</span><span class="o">.</span><span class="n">setrlimit</span><span class="p">(</span>
+                        <span class="n">resource</span><span class="o">.</span><span class="n">RLIMIT_AS</span><span class="p">,</span>
+                        <span class="p">(</span><span class="n">previous_soft</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">),</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">case</span> <span class="n">Limit</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">TIME</span><span class="p">:</span>
+                <span class="c1"># Use a thread to raise a signal after the timeout has elapsed.</span>
+                <span class="c1"># This emulates SIGALRM on platforms which don&#39;t support it,</span>
+                <span class="c1"># like NT, and allows us to cancel the alarm if the job</span>
+                <span class="c1"># completes before the timeout.</span>
+                <span class="n">signal</span><span class="o">.</span><span class="n">signal</span><span class="p">(</span><span class="n">signal</span><span class="o">.</span><span class="n">SIGALRM</span><span class="p">,</span> <span class="n">_job_signal_handler</span><span class="p">)</span>
+                <span class="n">cancel</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+                <span class="n">timeout_thread</span> <span class="o">=</span> <span class="n">_TimeoutThread</span><span class="p">(</span><span class="n">limit</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">cancel</span><span class="p">)</span>
+                <span class="n">timeout_thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+                <span class="n">cleanup</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">cancel</span><span class="o">.</span><span class="n">set</span><span class="p">())</span>
+
+    <span class="c1"># Each job stores the function that should be called as a string in the</span>
+    <span class="c1"># format &quot;module.path.to.function&quot;.</span>
+    <span class="n">mod_name</span><span class="p">,</span> <span class="n">func_name</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">job</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">mod</span> <span class="o">=</span> <span class="nb">__import__</span><span class="p">(</span><span class="n">mod_name</span><span class="p">,</span> <span class="n">fromlist</span><span class="o">=</span><span class="p">[</span><span class="n">func_name</span><span class="p">])</span>
+    <span class="n">func</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">mod</span><span class="p">,</span> <span class="n">func_name</span><span class="p">)</span>
+
+    <span class="n">kwargs</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">job</span><span class="o">.</span><span class="n">kwargs</span> <span class="ow">or</span> <span class="p">{}</span>
+
+    <span class="n">sig</span> <span class="o">=</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">&quot;job_context&quot;</span> <span class="ow">in</span> <span class="n">sig</span><span class="o">.</span><span class="n">parameters</span><span class="p">:</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;job_context&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">context</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">func</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">clean</span> <span class="ow">in</span> <span class="n">cleanup</span><span class="p">:</span>
+            <span class="n">clean</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="StateChange">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.StateChange">[docs]</a>
+<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">StateChange</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A change to the state of a job.</span>
+
+<span class="sd">    Used to aggregate changes to the state of a job before applying them in a</span>
+<span class="sd">    single transaction the next time a worker polls for jobs from a queue.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">context</span><span class="p">:</span> <span class="n">JobContext</span>
+    <span class="n">state</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">completed_at</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+
+<div class="viewcode-block" id="Nanny">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Nanny">[docs]</a>
+<span class="k">class</span> <span class="nc">Nanny</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A shim around a ProcessPoolExecutor.</span>
+
+<span class="sd">    This class is responsible for submitting jobs to the pool and associating</span>
+<span class="sd">    them with their futures for later retrieval.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app</span><span class="p">:</span> <span class="n">Chancy</span><span class="p">,</span> <span class="n">queue</span><span class="p">:</span> <span class="n">Queue</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">app</span> <span class="o">=</span> <span class="n">app</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processes</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Future</span><span class="p">,</span> <span class="n">JobContext</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pool</span> <span class="o">=</span> <span class="n">ProcessPoolExecutor</span><span class="p">(</span>
+            <span class="n">max_workers</span><span class="o">=</span><span class="n">queue</span><span class="o">.</span><span class="n">concurrency</span><span class="p">,</span>
+            <span class="n">max_tasks_per_child</span><span class="o">=</span><span class="n">queue</span><span class="o">.</span><span class="n">maximum_jobs_per_worker</span><span class="p">,</span>
+            <span class="n">initializer</span><span class="o">=</span><span class="n">queue</span><span class="o">.</span><span class="n">on_setup</span><span class="p">,</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="Nanny.submit">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Nanny.submit">[docs]</a>
+    <span class="k">def</span> <span class="nf">submit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">context</span><span class="p">:</span> <span class="n">JobContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Future</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Submit a job to the pool for execution, returning the future of the</span>
+<span class="sd">        task.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">future</span><span class="p">:</span> <span class="n">Future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">_job_wrapper</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">processes</span><span class="p">[</span><span class="n">future</span><span class="p">]</span> <span class="o">=</span> <span class="n">context</span>
+        <span class="k">return</span> <span class="n">future</span></div>
+
+
+<div class="viewcode-block" id="Nanny.pop">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Nanny.pop">[docs]</a>
+    <span class="k">def</span> <span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">future</span><span class="p">:</span> <span class="n">Future</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">JobContext</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve a job from the pool by its future, removing it from the pool.</span>
+
+<span class="sd">        Raises a KeyError if the future is not found.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">processes</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">future</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">processes</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">processes</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">processes</span><span class="p">[</span><span class="n">key</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="Worker">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Worker">[docs]</a>
+<span class="k">class</span> <span class="nc">Worker</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    A Chancy worker.</span>
+
+<span class="sd">    This class is responsible for polling the queue for available jobs,</span>
+<span class="sd">    submitting them to the process pool for execution, and handling the</span>
+<span class="sd">    results.</span>
+
+<span class="sd">    Each worker should have a globally unique worker ID, which is used to</span>
+<span class="sd">    acquire the leader lock in the cluster and track statistics. If no worker</span>
+<span class="sd">    ID is provided, a random UUID will be generated.</span>
+
+<span class="sd">    This worker uses a process pool to execute jobs. While this has higher</span>
+<span class="sd">    overhead than threading or asyncio, it provides a high degree of isolation</span>
+<span class="sd">    between jobs, and allows for the enforcement of memory and time limits on</span>
+<span class="sd">    individual jobs while completely sidestepping the GIL.</span>
+
+<span class="sd">    Example:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        async def main():</span>
+<span class="sd">            async with Chancy(</span>
+<span class="sd">                dsn=&quot;postgresql://username:password@localhost:8190/postgres&quot;,</span>
+<span class="sd">                queues=[</span>
+<span class="sd">                    Queue(name=&quot;default&quot;, concurrency=1),</span>
+<span class="sd">                ],</span>
+<span class="sd">            ) as app:</span>
+<span class="sd">                await Worker(app).start()</span>
+
+<span class="sd">    :param app: The Chancy application to run the worker for.</span>
+<span class="sd">    :param worker_id: An optional, globally-unique worker ID to use for this</span>
+<span class="sd">                      worker.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="Worker.Event">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Worker.Event">[docs]</a>
+    <span class="k">class</span> <span class="nc">Event</span><span class="p">(</span><span class="n">Hub</span><span class="o">.</span><span class="n">Event</span><span class="p">):</span>
+        <span class="n">ON_LEADERSHIP_LOOP</span> <span class="o">=</span> <span class="s2">&quot;worker.on_leadership_loop&quot;</span>
+        <span class="n">ON_EXCEPTION</span> <span class="o">=</span> <span class="s2">&quot;worker.on_exception&quot;</span></div>
+
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">app</span><span class="p">:</span> <span class="n">Chancy</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">worker_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">app</span> <span class="o">=</span> <span class="n">app</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span> <span class="o">=</span> <span class="n">worker_id</span> <span class="ow">or</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pools</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Queue</span><span class="p">,</span> <span class="n">Nanny</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">queue</span><span class="p">:</span> <span class="n">Nanny</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span> <span class="k">for</span> <span class="n">queue</span> <span class="ow">in</span> <span class="n">app</span><span class="o">.</span><span class="n">queues</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">Queue</span><span class="p">,</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Queue</span><span class="p">]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span>
+            <span class="n">asyncio</span><span class="o">.</span><span class="n">Queue</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">is_leader</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+<div class="viewcode-block" id="Worker.start">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Worker.start">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Start the worker.</span>
+
+<span class="sd">        The worker will immediately begin pulling jobs from the queue, and</span>
+<span class="sd">        make itself available as a possible leader in the cluster.</span>
+
+<span class="sd">        Each worker requires two connections to Postgres; one for polling for</span>
+<span class="sd">        jobs, and one for listening for events.</span>
+
+<span class="sd">        In some cases, workers running plugins may require additional</span>
+<span class="sd">        connections.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">core_logger</span> <span class="o">=</span> <span class="n">PrefixAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;CORE&quot;</span><span class="p">})</span>
+
+        <span class="n">mig</span> <span class="o">=</span> <span class="n">Migrator</span><span class="p">(</span>
+            <span class="s2">&quot;chancy&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;chancy.migrations&quot;</span><span class="p">,</span>
+            <span class="n">prefix</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">prefix</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="k">if</span> <span class="k">await</span> <span class="n">mig</span><span class="o">.</span><span class="n">is_migration_required</span><span class="p">(</span><span class="n">conn</span><span class="p">):</span>
+                <span class="n">core_logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;The database is out of date and requires a migration&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot; before the worker can start.&quot;</span>
+                <span class="p">)</span>
+                <span class="k">return</span>
+
+        <span class="k">async</span> <span class="k">with</span> <span class="n">TaskGroup</span><span class="p">()</span> <span class="k">as</span> <span class="n">tg</span><span class="p">:</span>
+            <span class="n">tg</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_poll_event_loop</span><span class="p">())</span>
+            <span class="n">tg</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_leadership_loop</span><span class="p">())</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">disable_events</span><span class="p">:</span>
+                <span class="n">tg</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_listen_for_events</span><span class="p">())</span></div>
+
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_poll_event_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">poll_logger</span> <span class="o">=</span> <span class="n">PrefixAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;POLL&quot;</span><span class="p">})</span>
+        <span class="n">poll_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Started periodic polling for tasks.&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">plugin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">plugins</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">get_type</span><span class="p">()</span> <span class="o">==</span> <span class="n">plugin</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">WORKER</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Starting worker plugin </span><span class="si">{</span><span class="n">plugin</span><span class="si">!r}</span><span class="s2">.&quot;</span><span class="p">)</span>
+                <span class="k">await</span> <span class="n">plugin</span><span class="o">.</span><span class="n">on_startup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">hub</span><span class="p">)</span>
+
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">queue</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">queues</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">queue</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="n">Queue</span><span class="o">.</span><span class="n">State</span><span class="o">.</span><span class="n">PAUSED</span><span class="p">:</span>
+                        <span class="n">poll_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Queue </span><span class="si">{</span><span class="n">queue</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> is paused, skipping.&quot;</span>
+                        <span class="p">)</span>
+                        <span class="k">continue</span>
+
+                    <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">announce_worker</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+
+                    <span class="n">jobs</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fetch_available_jobs</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">queue</span><span class="p">)</span>
+                    <span class="n">poll_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">jobs</span><span class="p">)</span><span class="si">}</span><span class="s2"> job(s) in queue </span><span class="si">{</span><span class="n">queue</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">.&quot;</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">job</span> <span class="ow">in</span> <span class="n">jobs</span><span class="p">:</span>
+                        <span class="n">future</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pools</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">job</span><span class="p">)</span>
+                        <span class="n">future</span><span class="o">.</span><span class="n">add_done_callback</span><span class="p">(</span>
+                            <span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle_job_result</span><span class="p">,</span> <span class="n">queue</span><span class="o">=</span><span class="n">queue</span><span class="p">)</span>
+                        <span class="p">)</span>
+
+                <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">job_poller_interval</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_fetch_available_jobs</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">AsyncConnection</span><span class="p">,</span> <span class="n">queue</span><span class="p">:</span> <span class="n">Queue</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">JobContext</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fetches available jobs from the queue.</span>
+
+<span class="sd">        Pulls jobs from the queue that are ready to be processed, locking the</span>
+<span class="sd">        jobs to prevent other workers from processing them.</span>
+
+<span class="sd">        If there are pending changes to the job state, they will be applied</span>
+<span class="sd">        before fetching new jobs.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">jobs_table</span> <span class="o">=</span> <span class="n">sql</span><span class="o">.</span><span class="n">Identifier</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">jobs&quot;</span><span class="p">)</span>
+
+        <span class="n">maximum_jobs_to_fetch</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">concurrency</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pools</span><span class="p">[</span><span class="n">queue</span><span class="p">])</span>
+
+        <span class="c1"># If we have no jobs to fetch and no pending changes, we can skip</span>
+        <span class="c1"># the query stage entirely and just NOP out.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">maximum_jobs_to_fetch</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+            <span class="k">return</span> <span class="p">[]</span>
+
+        <span class="k">async</span> <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">(</span><span class="n">row_factory</span><span class="o">=</span><span class="n">dict_row</span><span class="p">)</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="k">async</span> <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">transaction</span><span class="p">():</span>
+                <span class="c1"># To reduce the number of transactions we need to make, we&#39;ll</span>
+                <span class="c1"># batch up any pending changes to the job state and apply them</span>
+                <span class="c1"># in a single transaction.</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+                    <span class="n">all_pending_changes</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">while</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">empty</span><span class="p">():</span>
+                        <span class="n">all_pending_changes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+                        <span class="p">)</span>
+
+                    <span class="k">await</span> <span class="n">cur</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span>
+                        <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span>
+<span class="w">                            </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                            UPDATE {jobs}</span>
+<span class="sd">                            SET</span>
+<span class="sd">                                state = %(state)s,</span>
+<span class="sd">                                completed_at = %(completed_at)s</span>
+<span class="sd">                            WHERE</span>
+<span class="sd">                                id = %(job_id)s</span>
+<span class="sd">                            &quot;&quot;&quot;</span>
+                        <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">jobs</span><span class="o">=</span><span class="n">jobs_table</span><span class="p">),</span>
+                        <span class="p">[</span>
+                            <span class="p">{</span>
+                                <span class="s2">&quot;job_id&quot;</span><span class="p">:</span> <span class="n">change</span><span class="o">.</span><span class="n">context</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+                                <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">change</span><span class="o">.</span><span class="n">state</span><span class="p">,</span>
+                                <span class="s2">&quot;completed_at&quot;</span><span class="p">:</span> <span class="n">change</span><span class="o">.</span><span class="n">completed_at</span><span class="p">,</span>
+                            <span class="p">}</span>
+                            <span class="k">for</span> <span class="n">change</span> <span class="ow">in</span> <span class="n">all_pending_changes</span>
+                        <span class="p">],</span>
+                    <span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">maximum_jobs_to_fetch</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="p">[]</span>
+
+                <span class="k">await</span> <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span>
+<span class="w">                        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                        WITH selected_jobs AS (</span>
+<span class="sd">                            SELECT</span>
+<span class="sd">                                id</span>
+<span class="sd">                            FROM</span>
+<span class="sd">                                {jobs}</span>
+<span class="sd">                            WHERE</span>
+<span class="sd">                                queue = %(queue)s</span>
+<span class="sd">                            AND</span>
+<span class="sd">                                state = &#39;pending&#39;</span>
+<span class="sd">                            AND</span>
+<span class="sd">                                attempts &lt; max_attempts</span>
+<span class="sd">                            AND</span>
+<span class="sd">                                (scheduled_at IS NULL OR scheduled_at &lt;= NOW())</span>
+<span class="sd">                            ORDER BY</span>
+<span class="sd">                                priority ASC,</span>
+<span class="sd">                                created_at ASC,</span>
+<span class="sd">                                id ASC</span>
+<span class="sd">                            LIMIT</span>
+<span class="sd">                                %(maximum_jobs_to_fetch)s</span>
+<span class="sd">                            FOR UPDATE OF {jobs} SKIP LOCKED</span>
+<span class="sd">                        )</span>
+<span class="sd">                        UPDATE</span>
+<span class="sd">                            {jobs}</span>
+<span class="sd">                        SET</span>
+<span class="sd">                            started_at = NOW(),</span>
+<span class="sd">                            attempts = attempts + 1,</span>
+<span class="sd">                            state = &#39;running&#39;,</span>
+<span class="sd">                            taken_by = %(worker_id)s</span>
+<span class="sd">                        FROM</span>
+<span class="sd">                            selected_jobs</span>
+<span class="sd">                        WHERE</span>
+<span class="sd">                            {jobs}.id = selected_jobs.id</span>
+<span class="sd">                        RETURNING {jobs}.*</span>
+<span class="sd">                        &quot;&quot;&quot;</span>
+                    <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                        <span class="n">jobs</span><span class="o">=</span><span class="n">jobs_table</span><span class="p">,</span>
+                    <span class="p">),</span>
+                    <span class="p">{</span>
+                        <span class="s2">&quot;queue&quot;</span><span class="p">:</span> <span class="n">queue</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                        <span class="s2">&quot;maximum_jobs_to_fetch&quot;</span><span class="p">:</span> <span class="n">maximum_jobs_to_fetch</span><span class="p">,</span>
+                        <span class="s2">&quot;worker_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="p">,</span>
+                    <span class="p">},</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="p">[</span>
+                    <span class="n">JobContext</span><span class="p">(</span>
+                        <span class="n">job</span><span class="o">=</span><span class="n">Job</span><span class="p">(</span>
+                            <span class="n">func</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;payload&quot;</span><span class="p">][</span><span class="s2">&quot;func&quot;</span><span class="p">],</span>
+                            <span class="n">kwargs</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;payload&quot;</span><span class="p">][</span><span class="s2">&quot;kwargs&quot;</span><span class="p">],</span>
+                            <span class="n">limits</span><span class="o">=</span><span class="p">[</span>
+                                <span class="n">Limit</span><span class="o">.</span><span class="n">deserialize</span><span class="p">(</span><span class="n">limit</span><span class="p">)</span>
+                                <span class="k">for</span> <span class="n">limit</span> <span class="ow">in</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;payload&quot;</span><span class="p">][</span><span class="s2">&quot;limits&quot;</span><span class="p">]</span>
+                            <span class="p">],</span>
+                            <span class="n">scheduled_at</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;scheduled_at&quot;</span><span class="p">],</span>
+                            <span class="n">max_attempts</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;max_attempts&quot;</span><span class="p">],</span>
+                            <span class="n">priority</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;priority&quot;</span><span class="p">],</span>
+                        <span class="p">),</span>
+                        <span class="n">attempts</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;attempts&quot;</span><span class="p">],</span>
+                        <span class="nb">id</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">],</span>
+                        <span class="n">created_at</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;created_at&quot;</span><span class="p">],</span>
+                        <span class="n">started_at</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;started_at&quot;</span><span class="p">],</span>
+                        <span class="n">completed_at</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;completed_at&quot;</span><span class="p">],</span>
+                        <span class="n">state</span><span class="o">=</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;state&quot;</span><span class="p">],</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="k">await</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+                <span class="p">]</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_listen_for_events</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Listens for events in the cluster using the Postgres LISTEN/NOTIFY</span>
+<span class="sd">        mechanism.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">event_logger</span> <span class="o">=</span> <span class="n">PrefixAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;BUS&quot;</span><span class="p">})</span>
+
+        <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span><span class="s2">&quot;LISTEN </span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                    <span class="n">sql</span><span class="o">.</span><span class="n">Identifier</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">events&quot;</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="n">event_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Now listening for cluster events.&quot;</span><span class="p">)</span>
+            <span class="k">async</span> <span class="k">for</span> <span class="n">notice</span> <span class="ow">in</span> <span class="n">conn</span><span class="o">.</span><span class="n">notifies</span><span class="p">():</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">j</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">notice</span><span class="o">.</span><span class="n">payload</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+                    <span class="n">event_logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;Received invalid JSON payload: </span><span class="si">{</span><span class="n">notice</span><span class="o">.</span><span class="n">payload</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+                    <span class="k">continue</span>
+
+                <span class="n">event_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Received event: </span><span class="si">{</span><span class="n">j</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_handle_job_result</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">future</span><span class="p">:</span> <span class="n">Future</span><span class="p">,</span> <span class="n">queue</span><span class="p">:</span> <span class="n">Queue</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Handles the result of a job execution.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">job_logger</span> <span class="o">=</span> <span class="n">PrefixAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;JOB&quot;</span><span class="p">})</span>
+
+        <span class="n">context</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pools</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">future</span><span class="p">)</span>
+        <span class="n">job</span> <span class="o">=</span> <span class="n">context</span><span class="o">.</span><span class="n">job</span>
+
+        <span class="c1"># Check to see if something went wrong with the job.</span>
+        <span class="n">exc</span> <span class="o">=</span> <span class="n">future</span><span class="o">.</span><span class="n">exception</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">exc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">hub</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">Event</span><span class="o">.</span><span class="n">ON_EXCEPTION</span><span class="p">,</span> <span class="bp">self</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+            <span class="p">)</span>
+
+            <span class="c1"># If the job has a maximum number of attempts, and we haven&#39;t</span>
+            <span class="c1"># exceeded that number, we&#39;ll put the job back into the pending</span>
+            <span class="c1"># state.</span>
+            <span class="k">if</span> <span class="n">job</span><span class="o">.</span><span class="n">max_attempts</span> <span class="ow">and</span> <span class="n">context</span><span class="o">.</span><span class="n">attempts</span> <span class="o">&lt;</span> <span class="n">job</span><span class="o">.</span><span class="n">max_attempts</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">put_nowait</span><span class="p">(</span>
+                    <span class="n">StateChange</span><span class="p">(</span>
+                        <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
+                        <span class="n">state</span><span class="o">=</span><span class="s2">&quot;pending&quot;</span><span class="p">,</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">job_logger</span><span class="o">.</span><span class="n">exception</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> failed with an exception&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot; (</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">exc</span><span class="p">)</span><span class="si">}</span><span class="s2">), retry attempt </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">attempts</span><span class="si">}</span><span class="s2">/&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">job</span><span class="o">.</span><span class="n">max_attempts</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">,</span>
+                    <span class="n">exc_info</span><span class="o">=</span><span class="n">exc</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">return</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">put_nowait</span><span class="p">(</span>
+                <span class="n">StateChange</span><span class="p">(</span>
+                    <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
+                    <span class="n">state</span><span class="o">=</span><span class="s2">&quot;failed&quot;</span><span class="p">,</span>
+                    <span class="n">completed_at</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">),</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">job_logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> failed with an exception and has no free&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot; retry attempts, marking as failed.&quot;</span>
+            <span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">pending_changes</span><span class="p">[</span><span class="n">queue</span><span class="p">]</span><span class="o">.</span><span class="n">put_nowait</span><span class="p">(</span>
+            <span class="n">StateChange</span><span class="p">(</span>
+                <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">,</span>
+                <span class="n">state</span><span class="o">=</span><span class="s2">&quot;completed&quot;</span><span class="p">,</span>
+                <span class="n">completed_at</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">job_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Job </span><span class="si">{</span><span class="n">context</span><span class="o">.</span><span class="n">id</span><span class="si">!r}</span><span class="s2"> completed successfully.&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_leadership_loop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        A loop that periodically attempts to acquire the leader lock.</span>
+
+<span class="sd">        The leader lock is used to ensure that certain plugins are only run by</span>
+<span class="sd">        a single worker at a time.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">leader_logger</span> <span class="o">=</span> <span class="n">PrefixAdapter</span><span class="p">(</span><span class="n">logger</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;LEADER&quot;</span><span class="p">})</span>
+
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_try_acquire_leader</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+                <span class="k">match</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="k">case</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">REFRESHED</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">is_leader</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="n">leader_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Refreshed leader lock for worker&quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">case</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">ACQUIRED</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">is_leader</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="n">leader_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Acquired leader lock for worker&quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">.&quot;</span>
+                        <span class="p">)</span>
+                        <span class="c1"># Bootstrap leadership plugins</span>
+                        <span class="k">for</span> <span class="n">plugin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">plugins</span><span class="p">:</span>
+                            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">get_type</span><span class="p">()</span> <span class="o">==</span> <span class="n">plugin</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">LEADER</span><span class="p">:</span>
+                                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                                    <span class="sa">f</span><span class="s2">&quot;Starting leader plugin </span><span class="si">{</span><span class="n">plugin</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+                                <span class="p">)</span>
+                                <span class="k">await</span> <span class="n">plugin</span><span class="o">.</span><span class="n">on_startup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">hub</span><span class="p">)</span>
+                    <span class="k">case</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">UNAVAILABLE</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">is_leader</span> <span class="o">=</span> <span class="kc">False</span>
+                        <span class="n">leader_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Failed to acquire leader lock for worker&quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">case</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">LOST</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">is_leader</span> <span class="o">=</span> <span class="kc">False</span>
+                        <span class="n">leader_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Lost leader lock for worker </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="si">}</span><span class="s2">.&quot;</span>
+                        <span class="p">)</span>
+                        <span class="c1"># We&#39;ve lost leadership, deactivate leadership plugins</span>
+                        <span class="k">for</span> <span class="n">plugin</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">plugins</span><span class="p">:</span>
+                            <span class="k">if</span> <span class="n">plugin</span><span class="o">.</span><span class="n">get_type</span><span class="p">()</span> <span class="o">==</span> <span class="n">plugin</span><span class="o">.</span><span class="n">Type</span><span class="o">.</span><span class="n">LEADER</span><span class="p">:</span>
+                                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                                    <span class="sa">f</span><span class="s2">&quot;Shutting down leader plugin&quot;</span>
+                                    <span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="n">plugin</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+                                <span class="p">)</span>
+                                <span class="k">await</span> <span class="n">plugin</span><span class="o">.</span><span class="n">on_shutdown</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">hub</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_leader</span><span class="p">:</span>
+                    <span class="k">with</span> <span class="n">timed_block</span><span class="p">()</span> <span class="k">as</span> <span class="n">timer</span><span class="p">:</span>
+                        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">hub</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">Event</span><span class="o">.</span><span class="n">ON_LEADERSHIP_LOOP</span><span class="p">,</span> <span class="bp">self</span>
+                        <span class="p">)</span>
+                        <span class="k">if</span> <span class="n">timer</span><span class="o">.</span><span class="n">elapsed</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">leadership_timeout</span><span class="p">:</span>
+                            <span class="n">leader_logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                                <span class="sa">f</span><span class="s2">&quot;Leadership loop took longer than the&quot;</span>
+                                <span class="sa">f</span><span class="s2">&quot; leadership timeout of&quot;</span>
+                                <span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">leadership_timeout</span><span class="si">}</span><span class="s2"> seconds.&quot;</span>
+                            <span class="p">)</span>
+
+                <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">leadership_timeout</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_try_acquire_leader</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">AsyncConnection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Leadership</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Attempt to acquire the leader lock for this worker.</span>
+
+<span class="sd">        If the leader lock is already held by another worker, this method will</span>
+<span class="sd">        return False. Otherwise, it will return True.</span>
+
+<span class="sd">        It&#39;s possible for there to be no current valid leader while waiting on</span>
+<span class="sd">        a worker to time out, but there should never be &gt; 1 leader.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">tz</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+        <span class="n">leaders</span> <span class="o">=</span> <span class="n">sql</span><span class="o">.</span><span class="n">Identifier</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">leader&quot;</span><span class="p">)</span>
+        <span class="n">was_leader</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_leader</span>
+
+        <span class="k">async</span> <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="c1"># It&#39;s important that this SELECT covers the entire table to</span>
+                <span class="c1"># apply the FOR UPDATE lock.</span>
+                <span class="k">await</span> <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                    <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span>
+<span class="w">                        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                        SELECT</span>
+<span class="sd">                            worker_id,</span>
+<span class="sd">                            last_seen</span>
+<span class="sd">                        FROM {leaders} FOR UPDATE</span>
+<span class="sd">                        &quot;&quot;&quot;</span>
+                    <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">leaders</span><span class="o">=</span><span class="n">leaders</span><span class="p">)</span>
+                <span class="p">)</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="n">worker_id</span><span class="p">,</span> <span class="n">last_seen</span> <span class="o">=</span> <span class="n">result</span>
+                    <span class="n">since</span> <span class="o">=</span> <span class="p">(</span><span class="n">now</span> <span class="o">-</span> <span class="n">last_seen</span><span class="p">)</span><span class="o">.</span><span class="n">total_seconds</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="p">(</span>
+                        <span class="n">since</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">leadership_timeout</span>
+                        <span class="ow">or</span> <span class="n">worker_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span>
+                    <span class="p">):</span>
+                        <span class="c1"># Either we own the lock already, and we just need to</span>
+                        <span class="c1"># update the heartbeat, or the lock is stale, we can</span>
+                        <span class="c1"># take it.</span>
+                        <span class="k">await</span> <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                            <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span>
+<span class="w">                                </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                                UPDATE</span>
+<span class="sd">                                    {leaders}</span>
+<span class="sd">                                SET</span>
+<span class="sd">                                    worker_id = %(worker_id)s,</span>
+<span class="sd">                                    last_seen = %(last_seen)s</span>
+<span class="sd">                                &quot;&quot;&quot;</span>
+                            <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">leaders</span><span class="o">=</span><span class="n">leaders</span><span class="p">),</span>
+                            <span class="p">{</span><span class="s2">&quot;worker_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="p">,</span> <span class="s2">&quot;last_seen&quot;</span><span class="p">:</span> <span class="n">now</span><span class="p">},</span>
+                        <span class="p">)</span>
+                        <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+                        <span class="k">if</span> <span class="n">worker_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="p">:</span>
+                            <span class="k">return</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">REFRESHED</span>
+                        <span class="k">return</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">ACQUIRED</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+                        <span class="k">return</span> <span class="p">(</span>
+                            <span class="n">Leadership</span><span class="o">.</span><span class="n">LOST</span>
+                            <span class="k">if</span> <span class="n">was_leader</span>
+                            <span class="k">else</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">UNAVAILABLE</span>
+                        <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">await</span> <span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                        <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span>
+<span class="w">                            </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                            INSERT INTO</span>
+<span class="sd">                                {leaders}</span>
+<span class="sd">                                (worker_id, last_seen)</span>
+<span class="sd">                            VALUES</span>
+<span class="sd">                                (%(worker_id)s, %(last_seen)s)</span>
+<span class="sd">                            ON CONFLICT (worker_id) DO UPDATE SET</span>
+<span class="sd">                                last_seen = %(last_seen)s</span>
+<span class="sd">                            &quot;&quot;&quot;</span>
+                        <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">leaders</span><span class="o">=</span><span class="n">leaders</span><span class="p">),</span>
+                        <span class="p">{</span><span class="s2">&quot;worker_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="p">,</span> <span class="s2">&quot;last_seen&quot;</span><span class="p">:</span> <span class="n">now</span><span class="p">},</span>
+                    <span class="p">)</span>
+                    <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+                    <span class="k">return</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">ACQUIRED</span>
+            <span class="k">except</span> <span class="n">LockNotAvailable</span><span class="p">:</span>
+                <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">rollback</span><span class="p">()</span>
+                <span class="k">return</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">LOST</span> <span class="k">if</span> <span class="n">was_leader</span> <span class="k">else</span> <span class="n">Leadership</span><span class="o">.</span><span class="n">UNAVAILABLE</span>
+
+<div class="viewcode-block" id="Worker.announce_worker">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Worker.announce_worker">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">announce_worker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">AsyncConnection</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Announce the worker to the cluster.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span>
+<span class="w">                </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                INSERT INTO {workers}</span>
+<span class="sd">                    (worker_id, last_seen)</span>
+<span class="sd">                VALUES</span>
+<span class="sd">                    (%(worker_id)s, %(last_seen)s)</span>
+<span class="sd">                ON CONFLICT (worker_id) DO UPDATE SET</span>
+<span class="sd">                    last_seen = %(last_seen)s</span>
+<span class="sd">                &quot;&quot;&quot;</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">workers</span><span class="o">=</span><span class="n">sql</span><span class="o">.</span><span class="n">Identifier</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">workers&quot;</span><span class="p">)),</span>
+            <span class="p">{</span><span class="s2">&quot;worker_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="p">,</span> <span class="s2">&quot;last_seen&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()},</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Worker.revoke_worker">
+<a class="viewcode-back" href="../../chancy.worker.html#chancy.worker.Worker.revoke_worker">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">revoke_worker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">AsyncConnection</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Revoke the worker from the cluster.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">await</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="n">sql</span><span class="o">.</span><span class="n">SQL</span><span class="p">(</span>
+<span class="w">                </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">                DELETE FROM {workers}</span>
+<span class="sd">                WHERE</span>
+<span class="sd">                    worker_id = %(worker_id)s</span>
+<span class="sd">                &quot;&quot;&quot;</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">workers</span><span class="o">=</span><span class="n">sql</span><span class="o">.</span><span class="n">Identifier</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="o">.</span><span class="n">prefix</span><span class="si">}</span><span class="s2">workers&quot;</span><span class="p">)),</span>
+            <span class="p">{</span><span class="s2">&quot;worker_id&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">worker_id</span><span class="p">},</span>
+        <span class="p">)</span></div>
+</div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, Tyler Kennedy
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/scripts/furo.js?v=4e2eecee"></script>
+    </body>
+</html>

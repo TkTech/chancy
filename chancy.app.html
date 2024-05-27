@@ -1,0 +1,830 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="chancy.worker module" href="chancy.worker.html" /><link rel="prev" title="Chancy API" href="chancy.html" />
+
+    <!-- Generated with Sphinx 7.3.7 and Furo 2024.05.06 -->
+        <title>chancy.app module - Chancy</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=387cc868" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=36a5483c" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f8f8f8;
+  --color-code-foreground: black;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-half" viewBox="0 0 24 24">
+    <title>Auto light/dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-shadow">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M13 12h5" />
+      <path d="M13 15h4" />
+      <path d="M13 18h1" />
+      <path d="M13 9h4" />
+      <path d="M13 6h1" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" /
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Chancy</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="_static/logo_small.png" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">Chancy</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 has-children"><a class="reference internal" href="guide/index.html">Guide</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="guide/worker.html">Workers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide/limiting_resources.html">Limiting Resources</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide/plugins.html">Plugins</a></li>
+<li class="toctree-l2"><a class="reference internal" href="guide/recovery.html">Job Recovery</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="chancy.html">Chancy API</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of Chancy API</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">chancy.app module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.worker.html">chancy.worker module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.migrate.html">chancy.migrate module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.hub.html">chancy.hub module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.logger.html">chancy.logger module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.utils.html">chancy.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugin.html">chancy.plugin module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugins.recovery.html">chancy.plugins.recovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugins.pruner.html">chancy.plugins.pruner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugins.sentry.html">chancy.plugins.sentry</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/chancy.app.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-chancy.app">
+<span id="chancy-app-module"></span><h1>chancy.app module<a class="headerlink" href="#module-chancy.app" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Chancy">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">chancy.app.</span></span><span class="sig-name descname"><span class="pre">Chancy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dsn:</span> <span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">queues:</span> <span class="pre">list[~chancy.app.Queue]</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plugins:</span> <span class="pre">list[~chancy.plugin.Plugin]</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefix:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'chancy_'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_poller_interval:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">leadership_poller_interval:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">leadership_timeout:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_events:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_pool_size:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_pool_size:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hub:</span> <span class="pre">~chancy.hub.Hub</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Chancy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>The main application object for Chancy containing all configuration and
+helpers for common operations such as submitting jobs and performing a
+migration.</p>
+<p>The application object is an async context manager and should be used
+within an <cite>async with</cite> block to ensure the connection pool is properly
+opened and closed.</p>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span>
+    <span class="n">dsn</span><span class="o">=</span><span class="s2">&quot;postgresql://postgres:localtest@localhost:8190/postgres&quot;</span><span class="p">,</span>
+    <span class="n">queues</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">Queue</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;default&quot;</span><span class="p">,</span> <span class="n">concurrency</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+    <span class="p">],</span>
+<span class="p">)</span> <span class="k">as</span> <span class="n">app</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>If being used in a non-async application to submit jobs, you can use the
+<cite>sync_submit_to_cursor</cite> method to submit jobs synchronously using your
+own cursor &amp; connection.</p>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">connection</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span> <span class="k">as</span> <span class="n">cur</span><span class="p">:</span>
+        <span class="n">app</span><span class="o">.</span><span class="n">sync_submit_to_cursor</span><span class="p">(</span>
+            <span class="n">cur</span><span class="p">,</span>
+            <span class="n">Job</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">my_dummy_task</span><span class="p">),</span>
+            <span class="s2">&quot;default&quot;</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.close">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Chancy.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.close" title="Link to this definition">¶</a></dt>
+<dd><p>Close the connection pool.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.disable_events">
+<span class="sig-name descname"><span class="pre">disable_events</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#chancy.app.Chancy.disable_events" title="Link to this definition">¶</a></dt>
+<dd><p>Disable pub/sub events, relying on periodic polling only.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.dsn">
+<span class="sig-name descname"><span class="pre">dsn</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#chancy.app.Chancy.dsn" title="Link to this definition">¶</a></dt>
+<dd><p>A postgres DSN to connect to the database.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.hub">
+<span class="sig-name descname"><span class="pre">hub</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="chancy.hub.html#chancy.hub.Hub" title="chancy.hub.Hub"><span class="pre">Hub</span></a></em><a class="headerlink" href="#chancy.app.Chancy.hub" title="Link to this definition">¶</a></dt>
+<dd><p>Event hub for registering and emitting events.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.job_poller_interval">
+<span class="sig-name descname"><span class="pre">job_poller_interval</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></em><a class="headerlink" href="#chancy.app.Chancy.job_poller_interval" title="Link to this definition">¶</a></dt>
+<dd><p>The minimum number of seconds to wait between polling for new jobs.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.leadership_poller_interval">
+<span class="sig-name descname"><span class="pre">leadership_poller_interval</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">30</span></em><a class="headerlink" href="#chancy.app.Chancy.leadership_poller_interval" title="Link to this definition">¶</a></dt>
+<dd><p>The minimum number of seconds to wait between attempts to acquire
+leadership of the cluster.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.leadership_timeout">
+<span class="sig-name descname"><span class="pre">leadership_timeout</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">60</span></em><a class="headerlink" href="#chancy.app.Chancy.leadership_timeout" title="Link to this definition">¶</a></dt>
+<dd><p>The number of seconds before a leader is considered expired.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.max_pool_size">
+<span class="sig-name descname"><span class="pre">max_pool_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></em><a class="headerlink" href="#chancy.app.Chancy.max_pool_size" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum number of connections to keep in the pool.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.migrate">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">migrate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Chancy.migrate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.migrate" title="Link to this definition">¶</a></dt>
+<dd><p>Migrate the database to the latest schema version.</p>
+<p>This method will apply any pending migrations to the database to bring
+it up to the latest schema version. If the database is already up-to-
+date, this method will do nothing.</p>
+<p>If <cite>to_version</cite> is provided, the database will be migrated up/down
+to the specified version.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span>
+    <span class="n">dsn</span><span class="o">=</span><span class="s2">&quot;postgresql://username:password@localhost:8190/postgres&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">as</span> <span class="n">app</span><span class="p">:</span>
+    <span class="k">await</span> <span class="n">app</span><span class="o">.</span><span class="n">migrate</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.min_pool_size">
+<span class="sig-name descname"><span class="pre">min_pool_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#chancy.app.Chancy.min_pool_size" title="Link to this definition">¶</a></dt>
+<dd><p>The minimum number of connections to keep in the pool.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.open">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Chancy.open"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.open" title="Link to this definition">¶</a></dt>
+<dd><p>Open the connection pool.</p>
+<p>When possible, it’s preferred to instead use the async context manager
+interface to ensure the pool is properly opened and closed.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span>
+    <span class="n">dsn</span><span class="o">=</span><span class="s2">&quot;postgresql://username:password@localhost:8190/postgres&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="k">as</span> <span class="n">app</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.plugins">
+<span class="sig-name descname"><span class="pre">plugins</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.plugin.html#chancy.plugin.Plugin" title="chancy.plugin.Plugin"><span class="pre">Plugin</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#chancy.app.Chancy.plugins" title="Link to this definition">¶</a></dt>
+<dd><p>A list of plugins to enable for this application.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="chancy.app.Chancy.pool">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pool</span></span><a class="headerlink" href="#chancy.app.Chancy.pool" title="Link to this definition">¶</a></dt>
+<dd><p>A connection pool for the Chancy application.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.prefix">
+<span class="sig-name descname"><span class="pre">prefix</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'chancy_'</span></em><a class="headerlink" href="#chancy.app.Chancy.prefix" title="Link to this definition">¶</a></dt>
+<dd><p>The prefix to use for all Chancy tables in the database.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.queues">
+<span class="sig-name descname"><span class="pre">queues</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#chancy.app.Queue" title="chancy.app.Queue"><span class="pre">Queue</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#chancy.app.Chancy.queues" title="Link to this definition">¶</a></dt>
+<dd><p>A list of queues that this app should be aware of for processing jobs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.submit">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">submit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Queue" title="chancy.app.Queue"><span class="pre">Queue</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Chancy.submit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.submit" title="Link to this definition">¶</a></dt>
+<dd><p>Submit a job to the specified queue.</p>
+<p>This method will insert the job into the database and notify any
+listening workers that a new job is available. It will be submitted
+immediately using a new connection and transaction. To submit multiple
+jobs in a single transaction, use <cite>submit_to_cursor</cite>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.submit_to_cursor">
+<em class="property"><span class="pre">async</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">submit_to_cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">AsyncCursor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Queue" title="chancy.app.Queue"><span class="pre">Queue</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Chancy.submit_to_cursor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.submit_to_cursor" title="Link to this definition">¶</a></dt>
+<dd><p>Submit a job to the specified queue using the provided cursor.</p>
+<p>This method is useful for submitting multiple jobs in a single
+transaction or for ensuring your job is only inserted when a
+transaction the caller is managing is successful.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_submit_to_cursor">
+<span class="sig-name descname"><span class="pre">sync_submit_to_cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Cursor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Queue" title="chancy.app.Queue"><span class="pre">Queue</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Chancy.sync_submit_to_cursor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_submit_to_cursor" title="Link to this definition">¶</a></dt>
+<dd><p>Submit a job to the specified queue using the provided (synchronous)
+cursor.</p>
+<p>This method is useful for submitting multiple jobs in a single
+transaction or for ensuring your job is only inserted when a
+transaction the caller is managing is successful.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Job">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">chancy.app.</span></span><span class="sig-name descname"><span class="pre">Job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">*,</span> <span class="pre">func:</span> <span class="pre">str</span> <span class="pre">|</span> <span class="pre">~typing.Callable[[...],</span> <span class="pre">None],</span> <span class="pre">kwargs:</span> <span class="pre">dict</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None,</span> <span class="pre">priority:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">0,</span> <span class="pre">limits:</span> <span class="pre">list[~chancy.app.Limit]</span> <span class="pre">=</span> <span class="pre">&lt;factory&gt;,</span> <span class="pre">max_attempts:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">scheduled_at:</span> <span class="pre">~datetime.datetime</span> <span class="pre">|</span> <span class="pre">None</span> <span class="pre">=</span> <span class="pre">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Job"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Job" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Defines a job to be executed by Chancy.</p>
+<p>Once created, a Job is immutable and should be treated as such. Use the
+<cite>with_</cite> methods to create a new job with updated values.</p>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">job</span> <span class="o">=</span> <span class="n">Job</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">my_task</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;foo&quot;</span><span class="p">:</span> <span class="s2">&quot;bar&quot;</span><span class="p">})</span>
+<span class="n">job</span> <span class="o">=</span> <span class="n">job</span><span class="o">.</span><span class="n">with_priority</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Job.func">
+<span class="sig-name descname"><span class="pre">func</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#chancy.app.Job.func" title="Link to this definition">¶</a></dt>
+<dd><p>A function or importable name to call when the job is executed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Job.kwargs">
+<span class="sig-name descname"><span class="pre">kwargs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.Job.kwargs" title="Link to this definition">¶</a></dt>
+<dd><p>The keyword arguments to pass to the job.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Job.limits">
+<span class="sig-name descname"><span class="pre">limits</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#chancy.app.Limit" title="chancy.app.Limit"><span class="pre">Limit</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#chancy.app.Job.limits" title="Link to this definition">¶</a></dt>
+<dd><p>Optional resource limits to apply to the job.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Job.max_attempts">
+<span class="sig-name descname"><span class="pre">max_attempts</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#chancy.app.Job.max_attempts" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum number of times this job should be attempted.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Job.priority">
+<span class="sig-name descname"><span class="pre">priority</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#chancy.app.Job.priority" title="Link to this definition">¶</a></dt>
+<dd><p>The priority of the job. Lower numbers are executed first, with 0
+being the highest priority.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Job.scheduled_at">
+<span class="sig-name descname"><span class="pre">scheduled_at</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.Job.scheduled_at" title="Link to this definition">¶</a></dt>
+<dd><p>The time the job is scheduled to run.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Job.with_kwargs">
+<span class="sig-name descname"><span class="pre">with_kwargs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></span><a class="reference internal" href="_modules/chancy/app.html#Job.with_kwargs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Job.with_kwargs" title="Link to this definition">¶</a></dt>
+<dd><p>Create a new job with updated keyword arguments.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Job.with_limits">
+<span class="sig-name descname"><span class="pre">with_limits</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">limits</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></span><a class="reference internal" href="_modules/chancy/app.html#Job.with_limits"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Job.with_limits" title="Link to this definition">¶</a></dt>
+<dd><p>Create a new job with updated limits.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Job.with_max_attempts">
+<span class="sig-name descname"><span class="pre">with_max_attempts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">max_attempts</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></span><a class="reference internal" href="_modules/chancy/app.html#Job.with_max_attempts"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Job.with_max_attempts" title="Link to this definition">¶</a></dt>
+<dd><p>Create a new job with an updated maximum number of attempts.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Job.with_priority">
+<span class="sig-name descname"><span class="pre">with_priority</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">priority</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></span><a class="reference internal" href="_modules/chancy/app.html#Job.with_priority"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Job.with_priority" title="Link to this definition">¶</a></dt>
+<dd><p>Create a new job with an updated priority.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.JobContext">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">chancy.app.</span></span><span class="sig-name descname"><span class="pre">JobContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attempts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">created_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">started_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">completed_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#JobContext"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.JobContext" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A context object that can be requested by a running job to get information
+about the job itself.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.JobContext.attempts">
+<span class="sig-name descname"><span class="pre">attempts</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.JobContext.attempts" title="Link to this definition">¶</a></dt>
+<dd><p>The number of times this job has been attempted.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.JobContext.completed_at">
+<span class="sig-name descname"><span class="pre">completed_at</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.JobContext.completed_at" title="Link to this definition">¶</a></dt>
+<dd><p>The time the job was completed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.JobContext.created_at">
+<span class="sig-name descname"><span class="pre">created_at</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.JobContext.created_at" title="Link to this definition">¶</a></dt>
+<dd><p>The time the job was created.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.JobContext.id">
+<span class="sig-name descname"><span class="pre">id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.JobContext.id" title="Link to this definition">¶</a></dt>
+<dd><p>The ID of the job, if it has been created in the database.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.JobContext.job">
+<span class="sig-name descname"><span class="pre">job</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#chancy.app.Job" title="chancy.app.Job"><span class="pre">Job</span></a></em><a class="headerlink" href="#chancy.app.JobContext.job" title="Link to this definition">¶</a></dt>
+<dd><p>The original job that was executed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.JobContext.started_at">
+<span class="sig-name descname"><span class="pre">started_at</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.JobContext.started_at" title="Link to this definition">¶</a></dt>
+<dd><p>The time the job was started.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.JobContext.state">
+<span class="sig-name descname"><span class="pre">state</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.JobContext.state" title="Link to this definition">¶</a></dt>
+<dd><p>The state of the job.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Limit">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">chancy.app.</span></span><span class="sig-name descname"><span class="pre">Limit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Limit.Type" title="chancy.app.Limit.Type"><span class="pre">Type</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Limit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Limit" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Defines a resource limit for the execution of a job.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Limit.Type">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qualname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Limit.Type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Limit.Type" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></p>
+<p>The type of resource limit.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Limit.Type.MEMORY">
+<span class="sig-name descname"><span class="pre">MEMORY</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'memory'</span></em><a class="headerlink" href="#chancy.app.Limit.Type.MEMORY" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum amount of memory (in bytes) the job can use.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Limit.Type.TIME">
+<span class="sig-name descname"><span class="pre">TIME</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'time'</span></em><a class="headerlink" href="#chancy.app.Limit.Type.TIME" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum amount of time (in seconds) the job can run.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Limit.deserialize">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">deserialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Limit.deserialize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Limit.deserialize" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Limit.serialize">
+<span class="sig-name descname"><span class="pre">serialize</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="reference internal" href="_modules/chancy/app.html#Limit.serialize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Limit.serialize" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Limit.type">
+<span class="sig-name descname"><span class="pre">type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#chancy.app.Limit.Type" title="chancy.app.Limit.Type"><span class="pre">Type</span></a></em><a class="headerlink" href="#chancy.app.Limit.type" title="Link to this definition">¶</a></dt>
+<dd><p>The type of limit.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Limit.value">
+<span class="sig-name descname"><span class="pre">value</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#chancy.app.Limit.value" title="Link to this definition">¶</a></dt>
+<dd><p>The value of the limit.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Queue">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">chancy.app.</span></span><span class="sig-name descname"><span class="pre">Queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concurrency</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chancy.app.Queue.State" title="chancy.app.Queue.State"><span class="pre">State</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">State.ACTIVE</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maximum_jobs_per_worker</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">on_setup</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Queue"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Queue" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Defines a named queue for processing jobs in Chancy.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Queue.State">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">State</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qualname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/chancy/app.html#Queue.State"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Queue.State" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">IntEnum</span></code></p>
+<p>The state of a queue.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Queue.State.ACTIVE">
+<span class="sig-name descname"><span class="pre">ACTIVE</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#chancy.app.Queue.State.ACTIVE" title="Link to this definition">¶</a></dt>
+<dd><p>The queue is currently processing jobs.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Queue.State.PAUSED">
+<span class="sig-name descname"><span class="pre">PAUSED</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#chancy.app.Queue.State.PAUSED" title="Link to this definition">¶</a></dt>
+<dd><p>The queue is paused and not processing jobs.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Queue.concurrency">
+<span class="sig-name descname"><span class="pre">concurrency</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#chancy.app.Queue.concurrency" title="Link to this definition">¶</a></dt>
+<dd><p>Maximum number of jobs to process concurrently (per-worker).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Queue.maximum_jobs_per_worker">
+<span class="sig-name descname"><span class="pre">maximum_jobs_per_worker</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.Queue.maximum_jobs_per_worker" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum number of jobs to process before a worker on this queue
+should be restarted. Useful for dealing with unavoidable memory leaks.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Queue.name">
+<span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#chancy.app.Queue.name" title="Link to this definition">¶</a></dt>
+<dd><p>A name for the queue, must only be a-z and underscore.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Queue.on_setup">
+<span class="sig-name descname"><span class="pre">on_setup</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chancy.app.Queue.on_setup" title="Link to this definition">¶</a></dt>
+<dd><p>A function to call when a worker process for this queue is first started.
+This can be used to do expensive setup operations once per worker, like
+setting up django.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Queue.state">
+<span class="sig-name descname"><span class="pre">state</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#chancy.app.Queue.State" title="chancy.app.Queue.State"><span class="pre">State</span></a></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#chancy.app.Queue.state" title="Link to this definition">¶</a></dt>
+<dd><p>The state of the queue. By default, queues will start as active.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="chancy.worker.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">chancy.worker module</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="chancy.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Chancy API</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, Tyler Kennedy
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">chancy.app module</a><ul>
+<li><a class="reference internal" href="#chancy.app.Chancy"><code class="docutils literal notranslate"><span class="pre">Chancy</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Chancy.close"><code class="docutils literal notranslate"><span class="pre">Chancy.close()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.disable_events"><code class="docutils literal notranslate"><span class="pre">Chancy.disable_events</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.dsn"><code class="docutils literal notranslate"><span class="pre">Chancy.dsn</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.hub"><code class="docutils literal notranslate"><span class="pre">Chancy.hub</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.job_poller_interval"><code class="docutils literal notranslate"><span class="pre">Chancy.job_poller_interval</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.leadership_poller_interval"><code class="docutils literal notranslate"><span class="pre">Chancy.leadership_poller_interval</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.leadership_timeout"><code class="docutils literal notranslate"><span class="pre">Chancy.leadership_timeout</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.max_pool_size"><code class="docutils literal notranslate"><span class="pre">Chancy.max_pool_size</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.migrate"><code class="docutils literal notranslate"><span class="pre">Chancy.migrate()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.min_pool_size"><code class="docutils literal notranslate"><span class="pre">Chancy.min_pool_size</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.open"><code class="docutils literal notranslate"><span class="pre">Chancy.open()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.plugins"><code class="docutils literal notranslate"><span class="pre">Chancy.plugins</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.pool"><code class="docutils literal notranslate"><span class="pre">Chancy.pool</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.prefix"><code class="docutils literal notranslate"><span class="pre">Chancy.prefix</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.queues"><code class="docutils literal notranslate"><span class="pre">Chancy.queues</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.submit"><code class="docutils literal notranslate"><span class="pre">Chancy.submit()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.submit_to_cursor"><code class="docutils literal notranslate"><span class="pre">Chancy.submit_to_cursor()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_submit_to_cursor"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_submit_to_cursor()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.Job"><code class="docutils literal notranslate"><span class="pre">Job</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Job.func"><code class="docutils literal notranslate"><span class="pre">Job.func</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.kwargs"><code class="docutils literal notranslate"><span class="pre">Job.kwargs</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.limits"><code class="docutils literal notranslate"><span class="pre">Job.limits</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.max_attempts"><code class="docutils literal notranslate"><span class="pre">Job.max_attempts</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.priority"><code class="docutils literal notranslate"><span class="pre">Job.priority</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.scheduled_at"><code class="docutils literal notranslate"><span class="pre">Job.scheduled_at</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.with_kwargs"><code class="docutils literal notranslate"><span class="pre">Job.with_kwargs()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.with_limits"><code class="docutils literal notranslate"><span class="pre">Job.with_limits()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.with_max_attempts"><code class="docutils literal notranslate"><span class="pre">Job.with_max_attempts()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Job.with_priority"><code class="docutils literal notranslate"><span class="pre">Job.with_priority()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.JobContext"><code class="docutils literal notranslate"><span class="pre">JobContext</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.JobContext.attempts"><code class="docutils literal notranslate"><span class="pre">JobContext.attempts</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.JobContext.completed_at"><code class="docutils literal notranslate"><span class="pre">JobContext.completed_at</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.JobContext.created_at"><code class="docutils literal notranslate"><span class="pre">JobContext.created_at</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.JobContext.id"><code class="docutils literal notranslate"><span class="pre">JobContext.id</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.JobContext.job"><code class="docutils literal notranslate"><span class="pre">JobContext.job</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.JobContext.started_at"><code class="docutils literal notranslate"><span class="pre">JobContext.started_at</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.JobContext.state"><code class="docutils literal notranslate"><span class="pre">JobContext.state</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.Limit"><code class="docutils literal notranslate"><span class="pre">Limit</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Limit.Type"><code class="docutils literal notranslate"><span class="pre">Limit.Type</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Limit.Type.MEMORY"><code class="docutils literal notranslate"><span class="pre">Limit.Type.MEMORY</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Limit.Type.TIME"><code class="docutils literal notranslate"><span class="pre">Limit.Type.TIME</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.Limit.deserialize"><code class="docutils literal notranslate"><span class="pre">Limit.deserialize()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Limit.serialize"><code class="docutils literal notranslate"><span class="pre">Limit.serialize()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Limit.type"><code class="docutils literal notranslate"><span class="pre">Limit.type</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Limit.value"><code class="docutils literal notranslate"><span class="pre">Limit.value</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.Queue"><code class="docutils literal notranslate"><span class="pre">Queue</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Queue.State"><code class="docutils literal notranslate"><span class="pre">Queue.State</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Queue.State.ACTIVE"><code class="docutils literal notranslate"><span class="pre">Queue.State.ACTIVE</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Queue.State.PAUSED"><code class="docutils literal notranslate"><span class="pre">Queue.State.PAUSED</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.Queue.concurrency"><code class="docutils literal notranslate"><span class="pre">Queue.concurrency</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Queue.maximum_jobs_per_worker"><code class="docutils literal notranslate"><span class="pre">Queue.maximum_jobs_per_worker</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Queue.name"><code class="docutils literal notranslate"><span class="pre">Queue.name</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Queue.on_setup"><code class="docutils literal notranslate"><span class="pre">Queue.on_setup</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Queue.state"><code class="docutils literal notranslate"><span class="pre">Queue.state</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/furo.js?v=4e2eecee"></script>
+    </body>
+</html>
