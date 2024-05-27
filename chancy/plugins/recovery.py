@@ -37,7 +37,7 @@ class Recovery(Plugin):
         hub.remove(Worker.Event.ON_LEADERSHIP_LOOP, self._recover_jobs)
 
     async def _recover_jobs(self, worker: Worker):
-        recovery_logger = PrefixAdapter(logger, {"prefix": "Recovery"})
+        recovery_logger = PrefixAdapter(logger, {"prefix": "RECOVERY"})
 
         if time.monotonic() - self._last_check < self.interval:
             return
@@ -48,7 +48,7 @@ class Recovery(Plugin):
             recovery_logger.debug("Checking for stuck jobs...")
 
             threshold = datetime.now(tz=timezone.utc) - timedelta(
-                seconds=worker.app.heartbeat_timeout
+                seconds=self.rescue_after
             )
 
             async with conn.transaction():

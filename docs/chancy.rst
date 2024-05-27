@@ -15,6 +15,7 @@ Submodules
    chancy.utils
    chancy.plugin
    chancy.plugins.recovery
+   chancy.plugins.pruner
 
 Module contents
 ---------------

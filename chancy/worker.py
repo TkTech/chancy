@@ -515,13 +515,16 @@ class Worker:
 
         while True:
             async with self.app.pool.connection() as conn:
-                match await self._try_acquire_leader(conn):
+                result = await self._try_acquire_leader(conn)
+                match result:
                     case Leadership.REFRESHED:
+                        self.is_leader = True
                         leader_logger.info(
                             f"Refreshed leader lock for worker"
                             f" {self.worker_id}."
                         )
                     case Leadership.ACQUIRED:
+                        self.is_leader = True
                         leader_logger.info(
                             f"Acquired leader lock for worker"
                             f" {self.worker_id}."
@@ -534,11 +537,13 @@ class Worker:
                                 )
                                 await plugin.on_startup(self.app.hub)
                     case Leadership.UNAVAILABLE:
+                        self.is_leader = False
                         leader_logger.debug(
                             f"Failed to acquire leader lock for worker"
                             f" {self.worker_id}."
                         )
                     case Leadership.LOST:
+                        self.is_leader = False
                         leader_logger.info(
                             f"Lost leader lock for worker {self.worker_id}."
                         )
@@ -551,14 +556,17 @@ class Worker:
                                 )
                                 await plugin.on_shutdown(self.app.hub)
 
-                with timed_block() as timer:
-                    await self.app.hub.emit(self.Event.ON_LEADERSHIP_LOOP, self)
-                    if timer.elapsed > self.app.leadership_timeout:
-                        leader_logger.warning(
-                            f"Leadership loop took longer than the"
-                            f" leadership timeout of"
-                            f" {self.app.leadership_timeout} seconds."
+                if self.is_leader:
+                    with timed_block() as timer:
+                        await self.app.hub.emit(
+                            self.Event.ON_LEADERSHIP_LOOP, self
                         )
+                        if timer.elapsed > self.app.leadership_timeout:
+                            leader_logger.warning(
+                                f"Leadership loop took longer than the"
+                                f" leadership timeout of"
+                                f" {self.app.leadership_timeout} seconds."
+                            )
 
                 await asyncio.sleep(self.app.leadership_timeout)
 
@@ -619,7 +627,6 @@ class Worker:
                         return Leadership.ACQUIRED
                     else:
                         await conn.rollback()
-                        self.is_leader = False
                         return (
                             Leadership.LOST
                             if was_leader
@@ -641,11 +648,9 @@ class Worker:
                         {"worker_id": self.worker_id, "last_seen": now},
                     )
                     await conn.commit()
-                    self.is_leader = True
                     return Leadership.ACQUIRED
             except LockNotAvailable:
                 await conn.rollback()
-                self.is_leader = False
                 return Leadership.LOST if was_leader else Leadership.UNAVAILABLE
 
     async def announce_worker(self, conn: AsyncConnection):

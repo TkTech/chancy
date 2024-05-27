@@ -14,6 +14,12 @@ state so that it can be picked up by another worker.
 Chancy doesn't enable any plugins by default, but this one is highly recommended
 for production use.
 
+.. warning::
+
+    It's possible for jobs to run more than once. This is a trade-off between
+    reliability and consistency. Remember, your jobs should always be
+    idempotent - that is, they should be safe to run multiple times.
+
 .. code-block:: python
   :caption: worker.py
 
@@ -29,7 +35,7 @@ for production use.
                Queue(name="default", concurrency=10),
            ],
            plugins=[
-               Recovery(interval=60, rescue_after=60 * 5)
+               Recovery(interval=60, rescue_after=60 * 60)
             ],
            ]
        ) as app:

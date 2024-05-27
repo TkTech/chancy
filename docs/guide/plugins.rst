@@ -68,3 +68,7 @@ either enable and configure these plugins or provide your own:
    * - :class:`~chancy.plugins.recovery.Recovery`
      - Handles the recovery of jobs whose workers have crashed.
      - Leader
+
+   * - :class:`~chancy.plugins.pruner.Pruner`
+     - Deletes completed jobs from the database.
+     - Leader
