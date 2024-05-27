@@ -108,8 +108,10 @@ these features, check out the :doc:`guide/index`.
 .. toctree::
    :maxdepth: 4
    :caption: Contents:
+   :hidden:
 
    guide/index
+   plugins/index
    chancy
 
 

@@ -21,6 +21,7 @@ class V1Migration(Migration):
                         priority INTEGER DEFAULT 0,
                         attempts INTEGER DEFAULT 0,
                         max_attempts INTEGER DEFAULT 1,
+                        taken_by TEXT,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         started_at TIMESTAMPTZ,
                         completed_at TIMESTAMPTZ,
@@ -39,9 +40,25 @@ class V1Migration(Migration):
                         last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );
                     ALTER TABLE {leader}
-                        ADD CONSTRAINT worker_id_unique UNIQUE (worker_id);
+                        ADD CONSTRAINT leader_worker_id_unique UNIQUE
+                            (worker_id);
                     """
                 ).format(leader=sql.Identifier(f"{migrator.prefix}leader"))
+            )
+
+            await conn.execute(
+                sql.SQL(
+                    """
+                    CREATE UNLOGGED TABLE {workers} (
+                        id BIGSERIAL PRIMARY KEY,
+                        worker_id TEXT NOT NULL,
+                        last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    ALTER TABLE {workers}
+                        ADD CONSTRAINT workers_worker_id_unique UNIQUE
+                            (worker_id);
+                    """
+                ).format(workers=sql.Identifier(f"{migrator.prefix}workers"))
             )
 
     async def down(self, migrator: Migrator, conn: AsyncConnection):
@@ -57,5 +74,20 @@ class V1Migration(Migration):
             await conn.execute(
                 sql.SQL("DROP TABLE {leader}").format(
                     leaders=sql.Identifier(f"{migrator.prefix}leader")
+                )
+            )
+            await conn.execute(
+                sql.SQL("DROP TABLE {workers}").format(
+                    workers=sql.Identifier(f"{migrator.prefix}workers")
+                )
+            )
+            await conn.execute(
+                sql.SQL("DROP CONSTRAINT leader_worker_id_unique").format(
+                    workers=sql.Identifier(f"{migrator.prefix}leader")
+                )
+            )
+            await conn.execute(
+                sql.SQL("DROP CONSTRAINT workers_worker_id_unique").format(
+                    workers=sql.Identifier(f"{migrator.prefix}workers")
                 )
             )

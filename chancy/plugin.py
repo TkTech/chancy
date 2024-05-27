@@ -1,8 +1,29 @@
-class Plugin:
+import abc
+
+from chancy.hub import Hub
+
+
+class Plugin(abc.ABC):
+    class Type:
+        LEADER = "leader"
+        WORKER = "worker"
+
     @classmethod
-    def is_leader_only(cls) -> bool:
+    @abc.abstractmethod
+    def get_type(cls):
         """
-        Return True if this plugin should only be run on the leader node.
-        Defaults to True.
+        Returns the type of the plugin.
         """
-        return True
+
+    async def on_startup(self, hub: Hub):
+        """
+        Called when the plugin is started.
+        """
+
+    async def on_shutdown(self, hub: Hub):
+        """
+        Called when the plugin is stopped.
+        """
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}>"

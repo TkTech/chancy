@@ -10,8 +10,10 @@ from psycopg import AsyncCursor, Cursor
 from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool
 
+from chancy.hub import Hub
 from chancy.migrate import Migrator
 from chancy.utils import importable_name
+from chancy.plugin import Plugin
 
 
 @dataclasses.dataclass(frozen=True)
@@ -245,7 +247,7 @@ class Chancy:
     #: A list of queues that this app should be aware of for processing jobs.
     queues: list[Queue] = dataclasses.field(default_factory=list)
     #: A list of plugins to enable for this application.
-    plugins: list[str] = dataclasses.field(default_factory=list)
+    plugins: list[Plugin] = dataclasses.field(default_factory=list)
     #: The prefix to use for all Chancy tables in the database.
     prefix: str = "chancy_"
     #: The minimum number of seconds to wait between polling for new jobs.
@@ -262,6 +264,9 @@ class Chancy:
     min_pool_size: int = 1
     #: The maximum number of connections to keep in the pool.
     max_pool_size: int = 3
+
+    #: Event hub for registering and emitting events.
+    hub: Hub = dataclasses.field(default_factory=Hub)
 
     def __post_init__(self):
         # Ensure all defined queues have distinct names.

@@ -1,5 +1,5 @@
-chancy package
-==============
+Chancy API
+==========
 
 Submodules
 ----------
@@ -8,11 +8,12 @@ Submodules
    :maxdepth: 4
 
    chancy.app
-   chancy.logger
-   chancy.migrate
-   chancy.plugin
-   chancy.utils
    chancy.worker
+   chancy.plugin
+   chancy.migrate
+   chancy.hub
+   chancy.logger
+   chancy.utils
 
 Module contents
 ---------------

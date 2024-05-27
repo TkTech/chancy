@@ -3,12 +3,13 @@ The :class:`chancy.worker.Worker` class is the main entry point for running
 workers in a Chancy application.
 """
 
-import inspect
+import enum
 import os
 import json
 import uuid
 import signal
 import asyncio
+import inspect
 import resource
 import threading
 import dataclasses
@@ -27,6 +28,15 @@ from psycopg.errors import LockNotAvailable
 from chancy.app import Chancy, Queue, Job, Limit, JobContext
 from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
+from chancy.hub import Hub
+from chancy.utils import timed_block
+
+
+class Leadership(enum.IntEnum):
+    REFRESHED = 1
+    ACQUIRED = 2
+    UNAVAILABLE = 3
+    LOST = 4
 
 
 class _TimeoutThread(threading.Thread):
@@ -214,6 +224,9 @@ class Worker:
                       worker.
     """
 
+    class Event(Hub.Event):
+        ON_LEADERSHIP_LOOP = "worker.on_leadership_loop"
+
     def __init__(self, app: Chancy, *, worker_id: str = None):
         self.app = app
         self.worker_id = worker_id or str(uuid.uuid4())
@@ -223,6 +236,7 @@ class Worker:
         self.pending_changes: dict[Queue, asyncio.Queue] = defaultdict(
             asyncio.Queue
         )
+        self.is_leader: bool = False
 
     async def start(self):
         """
@@ -271,6 +285,8 @@ class Worker:
                             f"Queue {queue.name} is paused, skipping."
                         )
                         continue
+
+                    await self.announce_worker(conn)
 
                     jobs = await self._fetch_available_jobs(conn, queue)
                     poll_logger.debug(
@@ -322,18 +338,18 @@ class Worker:
                             """
                             UPDATE {jobs}
                             SET
-                                state = %s,
-                                completed_at = %s
+                                state = %(state)s,
+                                completed_at = %(completed_at)s
                             WHERE
-                                id = %s
+                                id = %(job_id)s
                             """
                         ).format(jobs=jobs_table),
                         [
-                            (
-                                change.state,
-                                change.completed_at,
-                                change.context.id,
-                            )
+                            {
+                                "job_id": change.context.id,
+                                "state": change.state,
+                                "completed_at": change.completed_at,
+                            }
                             for change in all_pending_changes
                         ],
                     )
@@ -370,7 +386,8 @@ class Worker:
                         SET
                             started_at = NOW(),
                             attempts = attempts + 1,
-                            state = 'running'
+                            state = 'running',
+                            taken_by = %(worker_id)s
                         FROM
                             selected_jobs
                         WHERE
@@ -383,6 +400,7 @@ class Worker:
                     {
                         "queue": queue.name,
                         "maximum_jobs_to_fetch": maximum_jobs_to_fetch,
+                        "worker_id": self.worker_id,
                     },
                 )
                 return [
@@ -497,21 +515,54 @@ class Worker:
 
         while True:
             async with self.app.pool.connection() as conn:
-                is_leader = await self._try_acquire_leader(conn)
-                if is_leader:
-                    leader_logger.info(
-                        f"Acquired/refreshed leader lock for worker"
-                        f" {self.worker_id}."
-                    )
-                else:
-                    leader_logger.debug(
-                        f"Failed to acquire leader lock for worker"
-                        f" {self.worker_id}."
-                    )
+                match await self._try_acquire_leader(conn):
+                    case Leadership.REFRESHED:
+                        leader_logger.info(
+                            f"Refreshed leader lock for worker"
+                            f" {self.worker_id}."
+                        )
+                    case Leadership.ACQUIRED:
+                        leader_logger.info(
+                            f"Acquired leader lock for worker"
+                            f" {self.worker_id}."
+                        )
+                        # Bootstrap leadership plugins
+                        for plugin in self.app.plugins:
+                            if plugin.get_type() == plugin.Type.LEADER:
+                                logger.debug(
+                                    f"Starting leader plugin {plugin!r}."
+                                )
+                                await plugin.on_startup(self.app.hub)
+                    case Leadership.UNAVAILABLE:
+                        leader_logger.debug(
+                            f"Failed to acquire leader lock for worker"
+                            f" {self.worker_id}."
+                        )
+                    case Leadership.LOST:
+                        leader_logger.info(
+                            f"Lost leader lock for worker {self.worker_id}."
+                        )
+                        # We've lost leadership, deactivate leadership plugins
+                        for plugin in self.app.plugins:
+                            if plugin.get_type() == plugin.Type.LEADER:
+                                logger.debug(
+                                    f"Shutting down leader plugin"
+                                    f" {plugin!r}."
+                                )
+                                await plugin.on_shutdown(self.app.hub)
+
+                with timed_block() as timer:
+                    await self.app.hub.emit(self.Event.ON_LEADERSHIP_LOOP, self)
+                    if timer.elapsed > self.app.leadership_timeout:
+                        leader_logger.warning(
+                            f"Leadership loop took longer than the"
+                            f" leadership timeout of"
+                            f" {self.app.leadership_timeout} seconds."
+                        )
 
                 await asyncio.sleep(self.app.leadership_timeout)
 
-    async def _try_acquire_leader(self, conn: AsyncConnection) -> bool:
+    async def _try_acquire_leader(self, conn: AsyncConnection) -> Leadership:
         """
         Attempt to acquire the leader lock for this worker.
 
@@ -523,6 +574,7 @@ class Worker:
         """
         now = datetime.now(tz=timezone.utc)
         leaders = sql.Identifier(f"{self.app.prefix}leader")
+        was_leader = self.is_leader
 
         async with conn.cursor() as cur:
             try:
@@ -562,10 +614,17 @@ class Worker:
                             {"worker_id": self.worker_id, "last_seen": now},
                         )
                         await conn.commit()
-                        return True
+                        if worker_id == self.worker_id:
+                            return Leadership.REFRESHED
+                        return Leadership.ACQUIRED
                     else:
                         await conn.rollback()
-                        return False
+                        self.is_leader = False
+                        return (
+                            Leadership.LOST
+                            if was_leader
+                            else Leadership.UNAVAILABLE
+                        )
                 else:
                     await cur.execute(
                         sql.SQL(
@@ -582,7 +641,42 @@ class Worker:
                         {"worker_id": self.worker_id, "last_seen": now},
                     )
                     await conn.commit()
-                    return True
+                    self.is_leader = True
+                    return Leadership.ACQUIRED
             except LockNotAvailable:
                 await conn.rollback()
-                return False
+                self.is_leader = False
+                return Leadership.LOST if was_leader else Leadership.UNAVAILABLE
+
+    async def announce_worker(self, conn: AsyncConnection):
+        """
+        Announce the worker to the cluster.
+        """
+        await conn.execute(
+            sql.SQL(
+                """
+                INSERT INTO {workers}
+                    (worker_id, last_seen)
+                VALUES
+                    (%(worker_id)s, %(last_seen)s)
+                ON CONFLICT (worker_id) DO UPDATE SET
+                    last_seen = %(last_seen)s
+                """
+            ).format(workers=sql.Identifier(f"{self.app.prefix}workers")),
+            {"worker_id": self.worker_id, "last_seen": datetime.now()},
+        )
+
+    async def revoke_worker(self, conn: AsyncConnection):
+        """
+        Revoke the worker from the cluster.
+        """
+        await conn.execute(
+            sql.SQL(
+                """
+                DELETE FROM {workers}
+                WHERE
+                    worker_id = %(worker_id)s
+                """
+            ).format(workers=sql.Identifier(f"{self.app.prefix}workers")),
+            {"worker_id": self.worker_id},
+        )
