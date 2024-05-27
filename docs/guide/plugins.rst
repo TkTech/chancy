@@ -72,3 +72,18 @@ either enable and configure these plugins or provide your own:
    * - :class:`~chancy.plugins.pruner.Pruner`
      - Deletes completed jobs from the database.
      - Leader
+
+
+Optional Plugins
+----------------
+
+.. list-table:: Required Plugins
+   :header-rows: 1
+
+   * - Name
+     - Description
+     - Type
+
+   * - :class:`~chancy.plugins.sentry.Sentry`
+     - Adds extra contextual information to Sentry.
+     - Worker

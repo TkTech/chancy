@@ -226,6 +226,7 @@ class Worker:
 
     class Event(Hub.Event):
         ON_LEADERSHIP_LOOP = "worker.on_leadership_loop"
+        ON_EXCEPTION = "worker.on_exception"
 
     def __init__(self, app: Chancy, *, worker_id: str = None):
         self.app = app
@@ -276,6 +277,11 @@ class Worker:
     async def _poll_event_loop(self):
         poll_logger = PrefixAdapter(logger, {"prefix": "POLL"})
         poll_logger.info("Started periodic polling for tasks.")
+
+        for plugin in self.app.plugins:
+            if plugin.get_type() == plugin.Type.WORKER:
+                logger.debug(f"Starting worker plugin {plugin!r}.")
+                await plugin.on_startup(self.app.hub)
 
         while True:
             async with self.app.pool.connection() as conn:
@@ -464,6 +470,10 @@ class Worker:
         # Check to see if something went wrong with the job.
         exc = future.exception()
         if exc is not None:
+            asyncio.run(
+                self.app.hub.emit(self.Event.ON_EXCEPTION, self, exc, context)
+            )
+
             # If the job has a maximum number of attempts, and we haven't
             # exceeded that number, we'll put the job back into the pending
             # state.

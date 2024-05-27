@@ -16,6 +16,7 @@ Submodules
    chancy.plugin
    chancy.plugins.recovery
    chancy.plugins.pruner
+   chancy.plugins.sentry
 
 Module contents
 ---------------
