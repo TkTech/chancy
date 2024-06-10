@@ -1,11 +1,10 @@
+import asyncio
 import uuid
 from asyncio import TaskGroup
 from functools import cached_property
-from typing import Iterable
 
 from psycopg_pool import AsyncConnectionPool
 
-from chancy.executor import Job
 from chancy.migrate import Migrator
 from chancy.queue import Queue
 
@@ -70,6 +69,38 @@ class Chancy:
         await self.pool.close()
         return False
 
+    async def open(self):
+        """
+        Open the connection pool.
+
+        Whenever possible, it's preferred to use the async context manager
+        instead of this method, as it will ensure that the connection pool is
+        properly closed when the block is exited. Ex:
+
+        .. code-block:: python
+
+                async with Chancy(...) as chancy:
+                    ...
+
+        """
+        await self.pool.open()
+
+    async def close(self):
+        """
+        Close the connection pool.
+
+        Whenever possible, it's preferred to use the async context manager
+        instead of this method, as it will ensure that the connection pool is
+        properly closed when the block is exited. Ex:
+
+        .. code-block:: python
+
+                    async with Chancy(...) as chancy:
+                        ...
+        """
+        if not self.pool.closed:
+            await self.pool.close()
+
     async def start_worker(self, *, worker_id: str | None = None):
         """
         Start the worker.
@@ -102,3 +133,30 @@ class Chancy:
                 raise ValueError(f"Queue {queue_name!r} not found")
 
             await queue.push_jobs(conn, list(jobs), prefix=self.prefix)
+
+    def push_sync(self, queue_name: str, *jobs):
+        """
+        Push one or more jobs onto a queue.
+
+        This is a shim to allow synchronous code to push jobs onto a queue.
+        If an event loop is already running, the jobs will be pushed onto the
+        queue asynchronously. If no event loop is running, a new one will be
+        created and run until the jobs have been pushed.
+
+        It is recommended to use the asynchronous `push` method instead of this
+        method whenever possible.
+
+        :param queue_name: The name of the queue to push the job onto.
+        :param jobs: The jobs to push onto the queue.
+        """
+        queue = next(q for q in self.queues if q.name == queue_name)
+
+        async def push_jobs():
+            async with self.pool.connection() as conn:
+                await queue.push_jobs(conn, list(jobs), prefix=self.prefix)
+
+        existing_loop = asyncio.get_event_loop()
+        if existing_loop.is_running():
+            asyncio.run_coroutine_threadsafe(push_jobs(), existing_loop)
+        else:
+            asyncio.get_event_loop().run_until_complete(push_jobs())
