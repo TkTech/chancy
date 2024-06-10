@@ -4,6 +4,8 @@ import enum
 from datetime import datetime
 from typing import Any, Optional
 
+from chancy.utils import importable_name
+
 
 @dataclasses.dataclass
 class Limit:
@@ -36,9 +38,25 @@ class Job:
     func: str
     kwargs: dict[str, Any] | None = dataclasses.field(default_factory=dict)
     priority: int = 0
-    max_attempts: int | None = None
+    max_attempts: int = 1
     scheduled_at: Optional[datetime] = None
     limits: list[Limit] = dataclasses.field(default_factory=list)
+
+    @classmethod
+    def from_func(cls, func, **kwargs):
+        return cls(func=importable_name(func), **kwargs)
+
+    def with_priority(self, priority: int) -> "Job":
+        return dataclasses.replace(self, priority=priority)
+
+    def with_max_attempts(self, max_attempts: int) -> "Job":
+        return dataclasses.replace(self, max_attempts=max_attempts)
+
+    def with_scheduled_at(self, scheduled_at: datetime) -> "Job":
+        return dataclasses.replace(self, scheduled_at=scheduled_at)
+
+    def with_limits(self, limits: list[Limit]) -> "Job":
+        return dataclasses.replace(self, limits=limits)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

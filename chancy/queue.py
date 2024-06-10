@@ -2,8 +2,9 @@ import asyncio
 
 from psycopg import sql, AsyncConnection
 from psycopg.rows import dict_row
+from psycopg.types.json import Json
 
-from chancy.executor import Executor, JobInstance, Limit
+from chancy.executor import Executor, JobInstance, Limit, Job
 from chancy.executors.process import ProcessExecutor
 from chancy.logger import PrefixAdapter, logger
 
@@ -34,7 +35,7 @@ class Queue:
         self.polling_interval = polling_interval
         self.pending_updates = asyncio.Queue()
 
-    async def poll(self, worker):
+    async def poll(self, app, *, worker_id: str):
         """
         Continuously polls the queue for new jobs.
 
@@ -44,7 +45,8 @@ class Queue:
         If you want to pull jobs from the queue without further processing,
         you can use the `fetch_jobs` method directly instead.
 
-        :param worker: The worker that is polling the queue.
+        :param app: The app that is polling the queue.
+        :param worker_id: The ID of the worker polling the queue.
         """
         poll_logger = PrefixAdapter(logger, {"prefix": f"Q.{self.name}"})
         poll_logger.info(
@@ -52,7 +54,7 @@ class Queue:
         )
 
         while True:
-            async with worker.pool.connection() as conn:
+            async with app.pool.connection() as conn:
                 # If we wouldn't be able to run a job even if we had one, we
                 # should just wait. Pre-fetching can be advantageous, but
                 # IMO it causes more headache (as seen with Celery and future
@@ -68,8 +70,8 @@ class Queue:
                 jobs = await self.fetch_jobs(
                     conn,
                     up_to=maximum_jobs_to_poll,
-                    prefix=worker.prefix,
-                    worker_id=worker.worker_id,
+                    prefix=app.prefix,
+                    worker_id=worker_id,
                 )
 
                 for job in jobs:
@@ -228,3 +230,49 @@ class Queue:
         the queue.
         """
         await self.pending_updates.put(job)
+
+    async def push_jobs(
+        self, conn: AsyncConnection, jobs: list[Job], prefix: str = "chancy_"
+    ):
+        """
+        Push one or more jobs onto the queue.
+
+        :param conn: The database connection to use.
+        :param jobs: The jobs to push onto the queue.
+        :param prefix: The prefix to use for the database tables.
+        """
+        jobs_table = sql.Identifier(f"{prefix}jobs")
+
+        async with conn.cursor() as cursor:
+            await cursor.executemany(
+                sql.SQL(
+                    """
+                    INSERT INTO
+                        {jobs} (
+                            queue,
+                            payload,
+                            priority,
+                            max_attempts,
+                            scheduled_at
+                    ) VALUES (%s, %s, %s, %s, %s);
+                    """
+                ).format(jobs=jobs_table),
+                [
+                    (
+                        self.name,
+                        Json(
+                            {
+                                "func": job.func,
+                                "kwargs": job.kwargs or {},
+                                "limits": [
+                                    limit.serialize() for limit in job.limits
+                                ],
+                            }
+                        ),
+                        job.priority,
+                        job.max_attempts,
+                        job.scheduled_at,
+                    )
+                    for job in jobs
+                ],
+            )

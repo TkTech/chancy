@@ -4,6 +4,7 @@ import functools
 import os
 import resource
 import signal
+import traceback
 import typing
 import threading
 from asyncio import Future
@@ -164,6 +165,8 @@ class ProcessExecutor(Executor):
         exc = future.exception()
 
         if exc is not None:
+            traceback.print_exception(type(exc), exc, exc.__traceback__)
+
             new_state = dataclasses.replace(
                 job,
                 state=(
