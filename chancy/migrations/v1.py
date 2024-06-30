@@ -25,7 +25,7 @@ class V1Migration(Migration):
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         started_at TIMESTAMPTZ,
                         completed_at TIMESTAMPTZ,
-                        scheduled_at TIMESTAMPTZ
+                        scheduled_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     )
                     """
                 ).format(jobs=sql.Identifier(f"{migrator.prefix}jobs"))

@@ -1,7 +1,7 @@
 import abc
 import dataclasses
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from chancy.utils import importable_name
@@ -39,7 +39,9 @@ class Job:
     kwargs: dict[str, Any] | None = dataclasses.field(default_factory=dict)
     priority: int = 0
     max_attempts: int = 1
-    scheduled_at: Optional[datetime] = None
+    scheduled_at: datetime = dataclasses.field(
+        default_factory=lambda: datetime.now(tz=timezone.utc)
+    )
     limits: list[Limit] = dataclasses.field(default_factory=list)
 
     @classmethod

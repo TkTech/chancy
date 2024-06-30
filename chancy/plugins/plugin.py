@@ -4,7 +4,8 @@ import asyncio
 import typing
 
 if typing.TYPE_CHECKING:
-    from chancy.app import Chancy, Worker
+    from chancy.app import Chancy
+    from chancy.worker import Worker
 
 
 class PluginScope(enum.Enum):
@@ -37,7 +38,12 @@ class Plugin(abc.ABC):
 
     @abc.abstractmethod
     async def run(self, worker: "Worker", chancy: "Chancy"):
-        pass
+        """
+        Runs the plugin.
+
+        This function can and should run indefinitely, as it will be cancelled
+        when the worker is stopped.
+        """
 
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"

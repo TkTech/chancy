@@ -2,7 +2,8 @@ import asyncio
 from psycopg import AsyncConnection
 from psycopg import sql
 
-from chancy.app import Chancy, Worker
+from chancy.app import Chancy
+from chancy.worker import Worker
 from chancy.plugins.plugin import Plugin, PluginScope
 from chancy.plugins.rule import RuleT, AgeRule
 from chancy.logger import logger, PrefixAdapter
@@ -10,10 +11,10 @@ from chancy.logger import logger, PrefixAdapter
 
 class Pruner(Plugin):
     """
-    A plugin that prunes jobs from the database.
+    A plugin that prunes stale data from the database.
 
-    The pruner is fairly configurable, and can be used to remove jobs that are
-    older than a certain age, or that match certain criteria.
+    Jobs
+    ----
 
     The pruner will never prune jobs that haven't been run yet ("pending"),
     or are currently being run ("running").
@@ -44,6 +45,16 @@ class Pruner(Plugin):
         from chancy.plugins.rule import AgeRule, QueueRule, JobRule
         Pruner((QueueRule("default") + AgeRule(60)) | JobRule("update_cache"))
 
+    By default, the pruner will run every 60 seconds and will remove up to
+    10,000 jobs in a single run that have been completed for more than 60
+    seconds.
+
+    .. note::
+
+        By default, only an AgeRule will be covered by an index. If you use
+        multiple rules, you may need to create additional indexes to improve
+        performance on busy queues.
+
     :param rule: The rule that the pruner will use to match jobs.
     :param maximum_to_prune: The maximum number of jobs to prune in a single
                              run of the pruner.
@@ -56,7 +67,7 @@ class Pruner(Plugin):
         rule: RuleT = AgeRule(60),
         *,
         maximum_to_prune: int = 10000,
-        poll_interval: int = 60 * 1,
+        poll_interval: int = 60,
     ):
         super().__init__()
         self.rule = rule
@@ -82,20 +93,23 @@ class Pruner(Plugin):
                 log.debug(
                     "Beginning pruner run to remove jobs from the database."
                 )
-                rows_removed = await self.prune(chancy, conn)
+                rows_removed = await self.prune(worker, chancy, conn)
                 log.info(
                     f"Pruner removed {rows_removed} row(s) from the database."
                 )
 
-    async def prune(self, chancy: Chancy, conn: AsyncConnection) -> int:
+    async def prune(
+        self, worker: Worker, chancy: Chancy, conn: AsyncConnection
+    ) -> int:
         """
-        Prune jobs from the database according to the configured rule.
+        Prune stale records from the database.
 
+        :param worker: The worker that is running the pruner.
         :param chancy: The Chancy application.
         :param conn: The database connection.
         :return: The number of rows removed from the database
         """
-        query = sql.SQL(
+        job_query = sql.SQL(
             """
             WITH jobs_to_prune AS (
                 SELECT ctid
@@ -115,5 +129,5 @@ class Pruner(Plugin):
 
         async with conn.cursor() as cursor:
             async with conn.transaction():
-                await cursor.execute(query)
+                await cursor.execute(job_query)
                 return cursor.rowcount
