@@ -81,13 +81,3 @@ class V1Migration(Migration):
                     workers=sql.Identifier(f"{migrator.prefix}workers")
                 )
             )
-            await conn.execute(
-                sql.SQL("DROP CONSTRAINT leader_worker_id_unique").format(
-                    workers=sql.Identifier(f"{migrator.prefix}leader")
-                )
-            )
-            await conn.execute(
-                sql.SQL("DROP CONSTRAINT workers_worker_id_unique").format(
-                    workers=sql.Identifier(f"{migrator.prefix}workers")
-                )
-            )

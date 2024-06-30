@@ -11,7 +11,7 @@ from chancy.logger import PrefixAdapter, logger
 
 class Queue:
     """
-    A named Chancy queue.
+    A Chancy queue.
 
     :param name: The name of the queue.
     :param concurrency: The maximum number of jobs that can be run concurrently
@@ -25,7 +25,7 @@ class Queue:
         self,
         name: str,
         *,
-        concurrency: int,
+        concurrency: int = 1,
         executor: Executor | None = None,
         polling_interval: int | None = 5,
     ):
