@@ -88,11 +88,7 @@ class Queue:
                     prefix=app.prefix,
                     worker_id=worker.worker_id,
                 )
-
-                worker.hub.emit(
-                    "queue.polled",
-                    fetched=len(jobs),
-                )
+                await worker.hub.emit("queue.polled", fetched=len(jobs))
 
                 for job in jobs:
                     poll_logger.debug(
