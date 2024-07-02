@@ -48,7 +48,7 @@ class Queue:
         # An event that can be used to wake up the queue if it's sleeping.
         self._wake_up = asyncio.Event()
 
-    async def poll(self, app, *, worker_id: str):
+    async def poll(self, app, worker):
         """
         Continuously polls the queue for new jobs.
 
@@ -59,7 +59,7 @@ class Queue:
         you can use the `fetch_jobs` method directly instead.
 
         :param app: The app that is polling the queue.
-        :param worker_id: The ID of the worker polling the queue.
+        :param worker: The worker that is polling the queue.
         """
         poll_logger = PrefixAdapter(logger, {"prefix": f"Q.{self.name}"})
         poll_logger.info(
@@ -86,7 +86,12 @@ class Queue:
                     conn,
                     up_to=maximum_jobs_to_poll,
                     prefix=app.prefix,
-                    worker_id=worker_id,
+                    worker_id=worker.worker_id,
+                )
+
+                worker.hub.emit(
+                    "queue.polled",
+                    fetched=len(jobs),
                 )
 
                 for job in jobs:

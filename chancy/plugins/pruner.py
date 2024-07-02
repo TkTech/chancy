@@ -99,6 +99,11 @@ class Pruner(Plugin):
                         f"Pruner removed {rows_removed} row(s) from the"
                         f" database. Took {chancy_time.elapsed:.2f} seconds."
                     )
+                    await worker.hub.emit(
+                        "pruner.removed",
+                        elapsed=chancy_time.elapsed,
+                        rows_removed=rows_removed,
+                    )
 
     async def prune(
         self, worker: Worker, chancy: Chancy, conn: AsyncConnection

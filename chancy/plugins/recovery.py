@@ -54,6 +54,11 @@ class Recovery(Plugin):
                         f"Recovery recovered {rows_recovered} row(s) from the"
                         f" database. Took {chancy_time.elapsed:.2f} seconds."
                     )
+                    await worker.hub.emit(
+                        "recovery.recovered",
+                        elapsed=chancy_time.elapsed,
+                        rows_recovered=rows_recovered,
+                    )
 
     async def recover(
         self, worker: Worker, chancy: Chancy, conn: AsyncConnection

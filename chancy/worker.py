@@ -9,6 +9,7 @@ from psycopg import sql
 from chancy.app import Chancy
 from chancy.logger import PrefixAdapter, logger
 from chancy.plugins.plugin import Plugin
+from chancy.hub import Hub
 
 
 class Worker:
@@ -97,6 +98,8 @@ class Worker:
         self.heartbeat_timeout = 90
         #: The plugins that are associated with the worker.
         self.plugins = plugins or []
+        #: An event hub for tracing and debugging.
+        self.hub = Hub()
 
         self._is_leader = False
 
@@ -123,7 +126,7 @@ class Worker:
                 group.create_task(
                     queue.poll(
                         self.chancy,
-                        worker_id=self.worker_id,
+                        self,
                     )
                 )
 
@@ -206,6 +209,8 @@ class Worker:
                 [self.worker_id],
             )
 
+        await self.hub.emit("worker.announced")
+
     async def revoke_worker(self, conn):
         """
         Revoke the worker from the cluster.
@@ -227,6 +232,8 @@ class Worker:
                 ),
                 [self.worker_id],
             )
+
+        await self.hub.emit("worker.revoked")
 
     async def _check_and_update_leadership(self, conn):
         async with conn.cursor() as cur:
@@ -310,6 +317,7 @@ class Worker:
         Called when the worker gains leadership of the cluster.
         """
         self.logger.info("Gained cluster leadership.")
+        await self.hub.emit("leadership.gained")
         self._is_leader = True
 
     async def on_maintained_leadership(self):
@@ -317,6 +325,7 @@ class Worker:
         Called when the worker maintains an existing leadership of the cluster.
         """
         self.logger.debug("Maintained existing cluster leadership.")
+        await self.hub.emit("leadership.maintained")
         self._is_leader = True
 
     async def on_lost_leadership(self):
@@ -326,6 +335,7 @@ class Worker:
         """
         if self._is_leader:
             self.logger.info("Lost cluster leadership.")
+            await self.hub.emit("leadership.lost")
         else:
             self.logger.debug("Not the current leader of the cluster.")
         self._is_leader = False

@@ -40,7 +40,7 @@ class Live(Plugin):
             )
         )
 
-        log.info("Started listening for live notifications.")
+        log.info("Started listening for realtime notifications.")
 
         async for notification in connection.notifies():
             log.debug(f"Received notification: {notification.payload}")
