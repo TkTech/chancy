@@ -2,7 +2,6 @@ import asyncio
 import uuid
 from asyncio import TaskGroup
 from datetime import datetime
-from functools import cached_property
 
 from psycopg import sql
 
@@ -70,32 +69,47 @@ class Worker:
     :param chancy: The Chancy application that the worker is associated with.
     :param worker_id: The ID of the worker, which must be globally unique. If
                       not provided, a random UUID will be generated.
+    :param plugins: A list of plugins to run with the worker.
+    :param leadership_poll_interval: The number of seconds between leadership
+                                     poll intervals.
+    :param leadership_timeout: The number of seconds before a worker is
+                               considered to have lost leadership.
+    :param heartbeat_poll_interval: The number of seconds between heartbeat
+                                    poll intervals.
+    :param heartbeat_timeout: The number of seconds before a worker is
+                              considered to have lost connection to the
+                              cluster.
     """
 
     def __init__(
         self,
         chancy: Chancy,
+        *,
         worker_id: str | None = None,
         plugins: list["Plugin"] = None,
+        leadership_poll_interval: int = 60,
+        leadership_timeout: int = 60 * 3,
+        heartbeat_poll_interval: int = 30,
+        heartbeat_timeout: int = 90,
     ):
         #: The Chancy application that the worker is associated with.
         self.chancy = chancy
         #: The ID of the worker, which must be globally unique.
         self.worker_id = worker_id or str(uuid.uuid4())
         #: The logger used by an active worker.
-        self.logger = PrefixAdapter(logger, {"prefix": f"Worker"})
+        self.logger = PrefixAdapter(logger, {"prefix": "Worker"})
         #: The table used to store leadership information.
         self.leadership_table = sql.Identifier(f"{self.chancy.prefix}leader")
         #: The number of seconds between leadership poll intervals.
-        self.leadership_poll_interval = 60
+        self.leadership_poll_interval = leadership_poll_interval
         #: The number of seconds before a worker is considered to have lost
         #: leadership.
-        self.leadership_timeout = 60 * 3
+        self.leadership_timeout = leadership_timeout
         #: The number of seconds between heartbeat poll intervals.
-        self.heartbeat_poll_interval = 30
+        self.heartbeat_poll_interval = heartbeat_poll_interval
         #: The number of seconds before a worker is considered to have lost
         #: connection to the cluster.
-        self.heartbeat_timeout = 90
+        self.heartbeat_timeout = heartbeat_timeout
         #: The plugins that are associated with the worker.
         self.plugins = plugins or []
         #: An event hub for tracing and debugging.
@@ -344,10 +358,10 @@ class Worker:
         self._is_leader = False
 
     def __getitem__(self, key: str):
-        return self.queues_by_name[key]
+        return self.chancy.queues_by_name[key]
 
     def __contains__(self, key: str):
-        return key in self.queues_by_name
+        return key in self.chancy.queues_by_name
 
     def __iter__(self):
         return iter(self.chancy.queues)
@@ -357,7 +371,3 @@ class Worker:
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"
-
-    @cached_property
-    def queues_by_name(self):
-        return {q.name: q for q in self.chancy.queues}

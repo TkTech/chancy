@@ -12,14 +12,11 @@ class Recovery(Plugin):
     Recovers jobs that appear to be abandoned by a worker.
 
     Typically, this happens when a worker is unexpectedly terminated, or has
-    otherwise been lost.
+    otherwise been lost which we recognize by checking the last seen timestamp
+    of the worker heartbeat.
 
-    This plugin works on a couple of metrics. If a worker fails to send its
-    periodic heartbeat, it will be considered lost and the jobs it was running
-    will be recovered.
-
-    This will transition jobs back to the "pending" state, and increment the
-    `max_attempts` counter by 1 to allow it to be retried.
+    This will transition any matching jobs back to the "pending" state, and
+    increment the `max_attempts` counter by 1 to allow it to be retried.
 
     :param poll_interval: The number of seconds between recovery poll intervals.
     """

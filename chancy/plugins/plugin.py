@@ -9,10 +9,20 @@ if typing.TYPE_CHECKING:
 
 
 class PluginScope(enum.Enum):
+    #: The plugin will run only on workers.
     WORKER = "worker"
 
 
 class Plugin(abc.ABC):
+    """
+    Base class for all plugins.
+
+    Plugins are used to extend the functionality of the worker. When a worker
+    starts, it will call :meth:`run` on all plugins that have a scope that
+    matches the worker's scope.
+
+    """
+
     def __init__(self):
         # An asyncio.Event that can be used to cancel the plugin.
         self.cancel_signal = asyncio.Event()
@@ -48,7 +58,7 @@ class Plugin(abc.ABC):
     async def sleep(self, seconds: int) -> None:
         """
         Sleep for a specified number of seconds, but allow the plugin to be
-        cancelled during the sleep.
+        cancelled during the sleep by calling :meth:`cancel`.
         """
         await asyncio.wait(
             # As of 3.11, asyncio.wait() no longer accepts coroutines directly,

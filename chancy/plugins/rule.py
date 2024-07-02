@@ -1,3 +1,8 @@
+"""
+Utilities for creating dynamic rules that can be used when configuring the
+conditions of a Plugin.
+"""
+
 import abc
 from typing import Union
 

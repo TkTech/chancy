@@ -113,11 +113,7 @@ class Chancy:
                 await queue.push_jobs(conn, list(jobs), prefix=self.prefix)
                 return
 
-            try:
-                queue = next(q for q in self.queues if q.name == queue)
-            except StopIteration:
-                raise ValueError(f"Queue {queue!r} not found")
-
+            queue = self.queues_by_name[queue]
             await queue.push_jobs(conn, list(jobs), prefix=self.prefix)
 
     def _sanity_check(self):
@@ -126,3 +122,7 @@ class Chancy:
         """
         if len(set(q.name.lower() for q in self.queues)) != len(self.queues):
             raise ValueError("Queue names must be unique")
+
+    @cached_property
+    def queues_by_name(self):
+        return {q.name: q for q in self.queues}
