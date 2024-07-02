@@ -83,7 +83,7 @@ class Worker:
         #: The ID of the worker, which must be globally unique.
         self.worker_id = worker_id or str(uuid.uuid4())
         #: The logger used by an active worker.
-        self.logger = PrefixAdapter(logger, {"prefix": f"W.{self.worker_id}"})
+        self.logger = PrefixAdapter(logger, {"prefix": f"Worker"})
         #: The table used to store leadership information.
         self.leadership_table = sql.Identifier(f"{self.chancy.prefix}leader")
         #: The number of seconds between leadership poll intervals.
@@ -111,7 +111,10 @@ class Worker:
         configured plugins, and managing leadership election.
         """
         async with self.chancy.pool.connection() as conn:
-            self.logger.debug("Performing initial worker announcement.")
+            self.logger.debug(
+                f"Performing initial worker announcement using worker ID"
+                f" {self.worker_id!r}."
+            )
             await self.announce_worker(conn)
 
         async with TaskGroup() as group:
