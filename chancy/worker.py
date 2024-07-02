@@ -2,6 +2,7 @@ import asyncio
 import uuid
 from asyncio import TaskGroup
 from datetime import datetime
+from functools import cached_property
 
 from psycopg import sql
 
@@ -16,7 +17,8 @@ class Worker:
     configured plugins, and internal management such as heartbeats and
     cluster leadership.
 
-    Example:
+    As an example, lets create a Worker that will poll the "default" queue
+    with a concurrency of 10, and run a single worker:
 
     .. code-block:: python
 
@@ -28,6 +30,41 @@ class Worker:
         ) as chancy:
             await chancy.migrate()
             await Worker(chancy).start()
+
+    Now, this worker wouldn't be very useful in production, missing some core
+    "extras". Chancy implements core functionality as plugins, such as
+    abandoned job recovery and completed job pruning. We do this because very
+    busy queues may need very specific behavior and queries to perform well,
+    and we don't want to force that on everyone. We do provide decent default
+    plugins to get you started, though.
+
+    .. code-block:: python
+
+        from chancy.plugins.pruner import Pruner
+        from chancy.plugins.recovery import Recovery
+        from chancy.plugins.live import Live
+
+        async with Chancy(
+            dsn="postgresql://localhost/postgres",
+            queues=[
+                Queue(name="default", concurrency=10),
+            ],
+        ) as chancy:
+            await chancy.migrate()
+            await Worker(
+                chancy,
+                plugins=[Pruner(), Recovery(), Live()]
+            ).start()
+
+    With this, the workers will now run job pruning, abandoned job recovery,
+    and live job detection. Writing your own plugins is easy, and you can
+    create your own to handle any custom behavior you need. Checkout the
+    plugin's documentation for configuration options.
+
+    .. note::
+
+        Don't share plugin instances between workers. Each worker should have
+        its own instance of each plugin.
 
     :param chancy: The Chancy application that the worker is associated with.
     :param worker_id: The ID of the worker, which must be globally unique. If
@@ -92,11 +129,29 @@ class Worker:
 
     @property
     def is_leader(self):
+        """
+        True if the worker is the current leader of the cluster as of the last
+        leadership check.
+
+        .. note::
+
+            The default leadership implementation is "good enough" to ensure
+            that only one worker is the leader at any given time, but it's
+            possible for a worker to _lose_ leadership _after_ this property
+            is checked and before, say, a plugin finishes running. Plugins
+            that should be leader-only should keep in mind that more than one
+            may be running at once in rare cases.
+        """
         return self._is_leader
 
     async def maintain_leadership(self):
         """
         Attempt to gain and maintain leadership of the cluster.
+
+        .. note::
+
+            This method should not be called directly. It is automatically
+            run when the worker is started.
         """
         while True:
             try:
@@ -113,6 +168,11 @@ class Worker:
         """
         Announces the worker to the cluster, and maintains a periodic heartbeat
         to ensure that the worker is still alive.
+
+        .. note::
+
+            This method should not be called directly. It is automatically
+            run when the worker is started.
         """
         while True:
             async with self.chancy.pool.connection() as conn:
@@ -126,7 +186,7 @@ class Worker:
         Announce the worker to the cluster.
 
         This will insert the worker into the workers table, or update the
-        last_seen timestamp if the worker is already present.
+        `last_seen` timestamp if the worker is already present.
 
         :param conn: The connection to use for the announcement.
         """
@@ -152,6 +212,8 @@ class Worker:
 
         This will remove the worker from the workers table, making it appear
         as though the worker has gone offline.
+
+        :param conn: The connection to use for the revocation.
         """
         async with conn.cursor() as cur:
             await cur.execute(
@@ -267,3 +329,22 @@ class Worker:
         else:
             self.logger.debug("Not the current leader of the cluster.")
         self._is_leader = False
+
+    def __getitem__(self, key: str):
+        return self.queues_by_name[key]
+
+    def __contains__(self, key: str):
+        return key in self.queues_by_name
+
+    def __iter__(self):
+        return iter(self.chancy.queues)
+
+    def __len__(self):
+        return len(self.chancy.queues)
+
+    def __repr__(self):
+        return f"<Worker({self.worker_id!r})>"
+
+    @cached_property
+    def queues_by_name(self):
+        return {q.name: q for q in self.chancy.queues}

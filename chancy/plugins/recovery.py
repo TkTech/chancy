@@ -48,12 +48,8 @@ class Recovery(Plugin):
                 continue
 
             async with chancy.pool.connection() as conn:
-                log.debug(
-                    "Beginning recovery run to recover jobs from the database."
-                )
                 with timed_block() as chancy_time:
                     rows_recovered = await self.recover(worker, chancy, conn)
-
                     log.info(
                         f"Recovery recovered {rows_recovered} row(s) from the"
                         f" database. Took {chancy_time.elapsed:.2f} seconds."
@@ -89,7 +85,8 @@ class Recovery(Plugin):
                         AND
                         cw.last_seen >= NOW() - INTERVAL '{interval} SECOND'
                     )
-              );
+              )
+              AND state = 'running';
         """
         ).format(
             jobs=sql.Identifier(f"{chancy.prefix}jobs"),

@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from psycopg import sql, AsyncConnection
 from psycopg.rows import dict_row
@@ -12,6 +13,13 @@ from chancy.logger import PrefixAdapter, logger
 class Queue:
     """
     A Chancy queue.
+
+    Queues are used to store jobs that need to be run by workers. Each queue
+    has a name, a concurrency limit, and an executor that is responsible for
+    running the jobs in the queue.
+
+    By default, a Queue will use a ProcessExecutor that is "good enough" for
+    most use cases.
 
     :param name: The name of the queue.
     :param concurrency: The maximum number of jobs that can be run concurrently
@@ -33,7 +41,12 @@ class Queue:
         self.concurrency = concurrency
         self.executor = executor or ProcessExecutor(self)
         self.polling_interval = polling_interval
+
+        # A queue of pending updates to jobs that need to be applied on the
+        # next fetch.
         self.pending_updates = asyncio.Queue()
+        # An event that can be used to wake up the queue if it's sleeping.
+        self._wake_up = asyncio.Event()
 
     async def poll(self, app, *, worker_id: str):
         """
@@ -55,6 +68,8 @@ class Queue:
 
         while True:
             async with app.pool.connection() as conn:
+                self._wake_up.clear()
+
                 # If we wouldn't be able to run a job even if we had one, we
                 # should just wait. Pre-fetching can be advantageous, but
                 # IMO it causes more headache (as seen with Celery and future
@@ -80,10 +95,13 @@ class Queue:
                     )
                     await self.executor.push(job)
 
-            poll_logger.debug(
-                f"Polling finished, idling for {self.polling_interval}s."
+            await asyncio.wait(
+                [
+                    asyncio.create_task(asyncio.sleep(self.polling_interval)),
+                    asyncio.create_task(self._wake_up.wait()),
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
             )
-            await asyncio.sleep(self.polling_interval)
 
     async def fetch_jobs(
         self,
@@ -244,35 +262,55 @@ class Queue:
         jobs_table = sql.Identifier(f"{prefix}jobs")
 
         async with conn.cursor() as cursor:
-            await cursor.executemany(
-                sql.SQL(
-                    """
-                    INSERT INTO
-                        {jobs} (
-                            queue,
-                            payload,
-                            priority,
-                            max_attempts,
-                            scheduled_at
-                    ) VALUES (%s, %s, %s, %s, %s);
-                    """
-                ).format(jobs=jobs_table),
-                [
-                    (
-                        self.name,
-                        Json(
-                            {
-                                "func": job.func,
-                                "kwargs": job.kwargs or {},
-                                "limits": [
-                                    limit.serialize() for limit in job.limits
-                                ],
-                            }
+            async with conn.transaction():
+                await cursor.executemany(
+                    sql.SQL(
+                        """
+                        INSERT INTO
+                            {jobs} (
+                                queue,
+                                payload,
+                                priority,
+                                max_attempts,
+                                scheduled_at
+                        ) VALUES (%s, %s, %s, %s, %s);
+                        """
+                    ).format(jobs=jobs_table),
+                    [
+                        (
+                            self.name,
+                            Json(
+                                {
+                                    "func": job.func,
+                                    "kwargs": job.kwargs or {},
+                                    "limits": [
+                                        limit.serialize()
+                                        for limit in job.limits
+                                    ],
+                                }
+                            ),
+                            job.priority,
+                            job.max_attempts,
+                            job.scheduled_at,
+                        )
+                        for job in jobs
+                    ],
+                )
+                await cursor.execute(
+                    sql.SQL("SELECT pg_notify({events}, {event});").format(
+                        events=sql.Literal(f"{prefix}events"),
+                        event=sql.Literal(
+                            json.dumps({"t": "job_pushed", "q": self.name})
                         ),
-                        job.priority,
-                        job.max_attempts,
-                        job.scheduled_at,
                     )
-                    for job in jobs
-                ],
-            )
+                )
+
+    async def wake_up(self):
+        """
+        Wake up the queue.
+
+        If the queue's `start()` coroutine is running and sleeping waiting for
+        the next poll, this method will wake it up and cause it to poll
+        immediately.
+        """
+        self._wake_up.set()

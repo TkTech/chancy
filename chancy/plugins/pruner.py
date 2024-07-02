@@ -93,9 +93,6 @@ class Pruner(Plugin):
                 continue
 
             async with chancy.pool.connection() as conn:
-                log.debug(
-                    "Beginning pruner run to remove jobs from the database."
-                )
                 with timed_block() as chancy_time:
                     rows_removed = await self.prune(worker, chancy, conn)
                     log.info(
