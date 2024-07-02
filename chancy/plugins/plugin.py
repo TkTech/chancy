@@ -45,5 +45,20 @@ class Plugin(abc.ABC):
         when the worker is stopped.
         """
 
+    async def sleep(self, seconds: int) -> None:
+        """
+        Sleep for a specified number of seconds, but allow the plugin to be
+        cancelled during the sleep.
+        """
+        await asyncio.wait(
+            # As of 3.11, asyncio.wait() no longer accepts coroutines directly,
+            # so we must wrap them in asyncio.create_task().
+            [
+                asyncio.create_task(asyncio.sleep(seconds)),
+                asyncio.create_task(self.cancel_signal.wait()),
+            ],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"
