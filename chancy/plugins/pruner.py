@@ -6,7 +6,6 @@ from chancy.worker import Worker
 from chancy.plugins.plugin import Plugin, PluginScope
 from chancy.plugins.rule import RuleT, AgeRule
 from chancy.utils import timed_block
-from chancy.logger import logger, PrefixAdapter
 
 
 class Pruner(Plugin):
@@ -79,23 +78,12 @@ class Pruner(Plugin):
         return PluginScope.WORKER
 
     async def run(self, worker: Worker, chancy: Chancy):
-        log = PrefixAdapter(logger, {"prefix": "Pruner"})
-
-        while True:
-            await self.sleep(self.poll_interval)
-            if await self.is_cancelled():
-                break
-
-            if not worker.is_leader:
-                log.debug(
-                    "Skipping pruner run because this worker is not the leader."
-                )
-                continue
-
+        while await self.sleep(self.poll_interval):
+            await self.wait_for_leader(worker)
             async with chancy.pool.connection() as conn:
                 with timed_block() as chancy_time:
                     rows_removed = await self.prune(worker, chancy, conn)
-                    log.info(
+                    self.log.info(
                         f"Pruner removed {rows_removed} row(s) from the"
                         f" database. Took {chancy_time.elapsed:.2f} seconds."
                     )

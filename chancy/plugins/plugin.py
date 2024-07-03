@@ -2,6 +2,10 @@ import abc
 import enum
 import asyncio
 import typing
+import logging
+from functools import cached_property
+
+from chancy.logger import logger, PrefixAdapter
 
 if typing.TYPE_CHECKING:
     from chancy.app import Chancy
@@ -30,14 +34,15 @@ class Plugin(abc.ABC):
     async def cancel(self) -> None:
         """
         Cancel the plugin.
+
+        Wakes up the plugin if it's sleeping and attempts to have it exit
+        gracefully.
         """
         self.cancel_signal.set()
 
-    async def is_cancelled(self) -> bool:
-        """
-        Check if the plugin has been cancelled.
-        """
-        return self.cancel_signal.is_set()
+    @cached_property
+    def log(self) -> logging.LoggerAdapter:
+        return PrefixAdapter(logger, {"prefix": self.__class__.__name__})
 
     @classmethod
     @abc.abstractmethod
@@ -55,20 +60,50 @@ class Plugin(abc.ABC):
         when the worker is stopped.
         """
 
-    async def sleep(self, seconds: int) -> None:
+    async def sleep(self, seconds: int) -> bool:
         """
         Sleep for a specified number of seconds, but allow the plugin to be
         cancelled during the sleep by calling :meth:`cancel`.
         """
-        await asyncio.wait(
+        sleep = asyncio.create_task(asyncio.sleep(seconds))
+        cancel = asyncio.create_task(self.cancel_signal.wait())
+
+        done, pending = await asyncio.wait(
             # As of 3.11, asyncio.wait() no longer accepts coroutines directly,
             # so we must wrap them in asyncio.create_task().
-            [
-                asyncio.create_task(asyncio.sleep(seconds)),
-                asyncio.create_task(self.cancel_signal.wait()),
-            ],
+            [sleep, cancel],
             return_when=asyncio.FIRST_COMPLETED,
         )
+
+        for task in pending:
+            task.cancel()
+
+        if cancel in done:
+            raise asyncio.CancelledError()
+
+        return True
+
+    async def wait_for_leader(self, worker: "Worker") -> None:
+        """
+        Wait until the worker running this plugin is the leader.
+
+        This function will return immediately if the worker is already the
+        leader. If the plugin's :meth:`cancel` method is called, this function
+        will raise an asyncio.CancelledError.
+        """
+        cancel = asyncio.create_task(self.cancel_signal.wait())
+        leader = asyncio.create_task(worker.is_leader.wait())
+
+        done, pending = await asyncio.wait(
+            [cancel, leader],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        for task in pending:
+            task.cancel()
+
+        if cancel in done:
+            raise asyncio.CancelledError()
 
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"

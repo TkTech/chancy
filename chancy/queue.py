@@ -1,5 +1,6 @@
-import asyncio
 import json
+import asyncio
+from typing import Callable
 
 from psycopg import sql, AsyncConnection
 from psycopg.rows import dict_row
@@ -34,13 +35,17 @@ class Queue:
         name: str,
         *,
         concurrency: int = 1,
-        executor: Executor | None = None,
+        executor: Callable[["Queue"], Executor] | None = None,
         polling_interval: int | None = 5,
     ):
         self.name = name
         self.concurrency = concurrency
-        self.executor = executor or ProcessExecutor(self)
         self.polling_interval = polling_interval
+
+        if executor is None:
+            self.executor = ProcessExecutor(self)
+        else:
+            self.executor = executor(self)
 
         # A queue of pending updates to jobs that need to be applied on the
         # next fetch.
@@ -101,13 +106,16 @@ class Queue:
                     )
                     await self.executor.push(job)
 
-            await asyncio.wait(
+            done, pending = await asyncio.wait(
                 [
                     asyncio.create_task(asyncio.sleep(self.polling_interval)),
                     asyncio.create_task(self._wake_up.wait()),
                 ],
                 return_when=asyncio.FIRST_COMPLETED,
             )
+
+            for task in pending:
+                task.cancel()
 
     async def fetch_jobs(
         self,
@@ -306,7 +314,7 @@ class Queue:
                     sql.SQL("SELECT pg_notify({events}, {event});").format(
                         events=sql.Literal(f"{prefix}events"),
                         event=sql.Literal(
-                            json.dumps({"t": "job_pushed", "q": self.name})
+                            json.dumps({"t": "pushed", "q": self.name})
                         ),
                     )
                 )

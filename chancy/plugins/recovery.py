@@ -30,24 +30,12 @@ class Recovery(Plugin):
         return PluginScope.WORKER
 
     async def run(self, worker: Worker, chancy: Chancy):
-        log = worker.logger
-
-        while True:
-            await self.sleep(self.poll_interval)
-            if await self.is_cancelled():
-                break
-
-            if not worker.is_leader:
-                log.debug(
-                    "Skipping recovery run because this worker is not the"
-                    " leader."
-                )
-                continue
-
+        while await self.sleep(self.poll_interval):
+            await self.wait_for_leader(worker)
             async with chancy.pool.connection() as conn:
                 with timed_block() as chancy_time:
                     rows_recovered = await self.recover(worker, chancy, conn)
-                    log.info(
+                    self.log.info(
                         f"Recovery recovered {rows_recovered} row(s) from the"
                         f" database. Took {chancy_time.elapsed:.2f} seconds."
                     )

@@ -60,6 +60,9 @@ class Job:
     def with_limits(self, limits: list[Limit]) -> "Job":
         return dataclasses.replace(self, limits=limits)
 
+    def with_kwargs(self, kwargs: dict[str, Any]) -> "Job":
+        return dataclasses.replace(self, kwargs=kwargs)
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class JobInstance(Job):

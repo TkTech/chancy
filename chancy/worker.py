@@ -1,14 +1,17 @@
 import asyncio
+import json
 import uuid
+from typing import Any
 from asyncio import TaskGroup
 from datetime import datetime
 
 from psycopg import sql
+from psycopg import AsyncConnection, AsyncCursor
 
 from chancy.app import Chancy
-from chancy.logger import PrefixAdapter, logger
-from chancy.plugins.plugin import Plugin
 from chancy.hub import Hub
+from chancy.plugins.plugin import Plugin
+from chancy.logger import PrefixAdapter, logger
 
 
 class Worker:
@@ -30,36 +33,6 @@ class Worker:
         ) as chancy:
             await chancy.migrate()
             await Worker(chancy).start()
-
-    Now, this worker wouldn't be very useful in production, missing some core
-    "extras". Chancy implements core functionality as plugins, such as
-    abandoned job recovery and completed job pruning. We do this because very
-    busy queues may need very specific behavior and queries to perform well,
-    and we don't want to force that on everyone. We do provide decent default
-    plugins to get you started, though.
-
-    .. code-block:: python
-
-        from chancy.plugins.pruner import Pruner
-        from chancy.plugins.recovery import Recovery
-        from chancy.plugins.live import Live
-
-        async with Chancy(
-            dsn="postgresql://localhost/postgres",
-            queues=[
-                Queue(name="default", concurrency=10),
-            ],
-        ) as chancy:
-            await chancy.migrate()
-            await Worker(
-                chancy,
-                plugins=[Pruner(), Recovery(), Live()]
-            ).start()
-
-    With this, the workers will now run job pruning, abandoned job recovery,
-    and live job detection. Writing your own plugins is easy, and you can
-    create your own to handle any custom behavior you need. Checkout the
-    plugin's documentation for configuration options.
 
     .. note::
 
@@ -115,7 +88,7 @@ class Worker:
         #: An event hub for tracing and debugging.
         self.hub = Hub()
 
-        self._is_leader = False
+        self.is_leader = asyncio.Event()
 
     async def start(self):
         """
@@ -134,9 +107,9 @@ class Worker:
         async with TaskGroup() as group:
             group.create_task(self.maintain_leadership())
             group.create_task(self.maintain_heartbeat())
+            group.create_task(self.maintain_notifications())
 
             for plugin in self.plugins:
-                self.logger.info(f"Starting plugin {plugin!r}")
                 group.create_task(plugin.run(self, self.chancy))
 
             for queue in self.chancy.queues:
@@ -146,23 +119,6 @@ class Worker:
                         self,
                     )
                 )
-
-    @property
-    def is_leader(self):
-        """
-        True if the worker is the current leader of the cluster as of the last
-        leadership check.
-
-        .. note::
-
-            The default leadership implementation is "good enough" to ensure
-            that only one worker is the leader at any given time, but it's
-            possible for a worker to _lose_ leadership _after_ this property
-            is checked and before, say, a plugin finishes running. Plugins
-            that should be leader-only should keep in mind that more than one
-            may be running at once in rare cases.
-        """
-        return self._is_leader
 
     async def maintain_leadership(self):
         """
@@ -201,7 +157,46 @@ class Worker:
                     await self.announce_worker(conn)
             await asyncio.sleep(self.heartbeat_poll_interval)
 
-    async def announce_worker(self, conn):
+    async def maintain_notifications(self):
+        """
+        Listen for notifications from the database.
+
+        Improves the reactivity of a worker by allowing it to almost immediately
+        react to database events using Postgres's LISTEN/NOTIFY feature.
+
+        .. note::
+
+            This feature utilizes a permanent connection to the database
+            separate from the shared connection pool.
+
+        .. note::
+
+            This method should not be called directly. It is automatically
+            run when the worker is started.
+        """
+        connection = await AsyncConnection.connect(
+            self.chancy.dsn, autocommit=True
+        )
+        await connection.execute(
+            sql.SQL("LISTEN {channel};").format(
+                channel=sql.Identifier(f"{self.chancy.prefix}events")
+            )
+        )
+        self.logger.info("Started listening for realtime notifications.")
+        async for notification in connection.notifies():
+            j = json.loads(notification.payload)
+            match j["t"]:
+                case "pushed":
+                    try:
+                        await self[j["q"]].wake_up()
+                    except KeyError:
+                        # This worker isn't setup to process this queue, so
+                        # we'll just ignore it.
+                        continue
+                case _:
+                    await self.hub.emit(j["t"], j)
+
+    async def announce_worker(self, conn: AsyncConnection):
         """
         Announce the worker to the cluster.
 
@@ -228,7 +223,7 @@ class Worker:
 
         await self.hub.emit("worker.announced")
 
-    async def revoke_worker(self, conn):
+    async def revoke_worker(self, conn: AsyncConnection):
         """
         Revoke the worker from the cluster.
 
@@ -252,7 +247,31 @@ class Worker:
 
         await self.hub.emit("worker.revoked")
 
-    async def _check_and_update_leadership(self, conn):
+    async def notify(
+        self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
+    ):
+        """
+        Notify the cluster of an event.
+
+        .. note::
+
+            This method does not start or end a transaction. It is up to the
+            caller to manage the transaction.
+
+        :param cursor: The cursor to use for the notification.
+        :param event: The event to notify the cluster of.
+        :param payload: The payload to send with the notification.
+        """
+        await cursor.execute(
+            sql.SQL(
+                """
+                SELECT pg_notify({channel}, %s)
+                """
+            ).format(channel=sql.Identifier(f"{self.chancy.prefix}events")),
+            [json.dumps({"t": event, **payload})],
+        )
+
+    async def _check_and_update_leadership(self, conn: AsyncConnection):
         async with conn.cursor() as cur:
             await cur.execute(
                 sql.SQL(
@@ -280,7 +299,7 @@ class Worker:
             else:
                 await self._gain_leadership_first_time(cur)
 
-    async def _gain_leadership(self, cur, leader_id):
+    async def _gain_leadership(self, cur: AsyncCursor, leader_id: str):
         """
         Update the leadership table to gain leadership.
         """
@@ -296,7 +315,7 @@ class Worker:
         )
         await self.on_gained_leadership()
 
-    async def _gain_leadership_first_time(self, cur):
+    async def _gain_leadership_first_time(self, cur: AsyncCursor):
         """
         Insert a new entry in the leadership table to gain leadership for the
         first time.
@@ -313,7 +332,7 @@ class Worker:
         )
         await self.on_gained_leadership()
 
-    async def _maintain_leadership(self, cur, leader_id):
+    async def _maintain_leadership(self, cur: AsyncCursor, leader_id: str):
         """
         Update the leadership table to maintain leadership.
         """
@@ -334,28 +353,29 @@ class Worker:
         Called when the worker gains leadership of the cluster.
         """
         self.logger.info("Gained cluster leadership.")
+        self.is_leader.set()
         await self.hub.emit("leadership.gained")
-        self._is_leader = True
 
     async def on_maintained_leadership(self):
         """
         Called when the worker maintains an existing leadership of the cluster.
         """
         self.logger.debug("Maintained existing cluster leadership.")
+        self.is_leader.set()
         await self.hub.emit("leadership.maintained")
-        self._is_leader = True
 
     async def on_lost_leadership(self):
         """
         Called when the worker either loses leadership of the cluster, or
         if it was unable to acquire leadership.
         """
-        if self._is_leader:
+        if self.is_leader.is_set():
             self.logger.info("Lost cluster leadership.")
+            self.is_leader.clear()
             await self.hub.emit("leadership.lost")
         else:
             self.logger.debug("Not the current leader of the cluster.")
-        self._is_leader = False
+            self.is_leader.clear()
 
     def __getitem__(self, key: str):
         return self.chancy.queues_by_name[key]
