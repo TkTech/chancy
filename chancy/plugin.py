@@ -13,8 +13,10 @@ if typing.TYPE_CHECKING:
 
 
 class PluginScope(enum.Enum):
-    #: The plugin will run only on workers.
+    #: The plugin is a general worker plugin.
     WORKER = "worker"
+    #: The plugin implements a queue provider.
+    QUEUE = "queue"
 
 
 class Plugin(abc.ABC):
@@ -28,8 +30,11 @@ class Plugin(abc.ABC):
     """
 
     def __init__(self):
-        # An asyncio.Event that can be used to cancel the plugin.
+        #: An asyncio.Event that can be used to cancel the plugin.
         self.cancel_signal = asyncio.Event()
+        #: An asyncio.Event that can be used to wake up the plugin if it's
+        #: sleeping.
+        self.wakeup_signal = asyncio.Event()
 
     async def cancel(self) -> None:
         """
@@ -67,11 +72,12 @@ class Plugin(abc.ABC):
         """
         sleep = asyncio.create_task(asyncio.sleep(seconds))
         cancel = asyncio.create_task(self.cancel_signal.wait())
+        wakeup = asyncio.create_task(self.wakeup_signal.wait())
 
         done, pending = await asyncio.wait(
             # As of 3.11, asyncio.wait() no longer accepts coroutines directly,
             # so we must wrap them in asyncio.create_task().
-            [sleep, cancel],
+            [sleep, cancel, wakeup],
             return_when=asyncio.FIRST_COMPLETED,
         )
 
@@ -81,6 +87,7 @@ class Plugin(abc.ABC):
         if cancel in done:
             raise asyncio.CancelledError()
 
+        self.wakeup_signal.clear()
         return True
 
     async def wait_for_leader(self, worker: "Worker") -> None:
@@ -104,6 +111,9 @@ class Plugin(abc.ABC):
 
         if cancel in done:
             raise asyncio.CancelledError()
+
+    def wake_up(self):
+        self.wakeup_signal.set()
 
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"

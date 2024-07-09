@@ -28,15 +28,13 @@ To use a different executor, simply pass it to the Queue constructor:
    :caption: worker.py
 
    import asyncio
-   from chancy.queue import Queue
-   from chancy.app import Chancy
-   from chancy.worker import Worker
+   from chancy import Chancy, Queue, Worker
    from chancy.executors.process import ProcessExecutor
 
    async def main():
        async with Chancy(
            dsn="postgresql://localhost/postgres",
-           queues=[
+           plugins=[
                Queue(name="default", concurrency=10, executor=ProcessExecutor),
            ],
        ) as chancy:

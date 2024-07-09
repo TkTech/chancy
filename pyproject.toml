@@ -9,7 +9,6 @@ readme = "README.md"
 python = "^3.10"
 psycopg = {extras = ["pool", "binary"], version = "^3.1.19"}
 
-
 [tool.poetry.group.dev.dependencies]
 black = "^24.4.2"
 pytest-postgresql = "^6.0.0"

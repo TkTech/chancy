@@ -1,26 +1,25 @@
+import abc
 import json
 import asyncio
 from typing import Callable
+from functools import cached_property
 
-from psycopg import sql, AsyncConnection
+from psycopg import sql, AsyncConnection, AsyncCursor
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from chancy.executor import Executor, JobInstance, Limit, Job
 from chancy.executors.process import ProcessExecutor
-from chancy.logger import PrefixAdapter, logger
+from chancy.plugin import Plugin, PluginScope
 
 
-class Queue:
+class QueuePlugin(Plugin, abc.ABC):
     """
-    A Chancy queue.
+    A specialized plugin that provides a queue for pull jobs from, and clients
+    to push jobs to.
 
-    Queues are used to store jobs that need to be run by workers. Each queue
-    has a name, a concurrency limit, and an executor that is responsible for
-    running the jobs in the queue.
-
-    By default, a Queue will use a ProcessExecutor that is "good enough" for
-    most use cases.
+    This class is an abstract base class that should be subclassed to implement
+    a queue provider, such as a Redis-backed queue or an SQS-backed queue.
 
     :param name: The name of the queue.
     :param concurrency: The maximum number of jobs that can be run concurrently
@@ -35,55 +34,83 @@ class Queue:
         name: str,
         *,
         concurrency: int = 1,
-        executor: Callable[["Queue"], Executor] | None = None,
+        executor: Callable[["QueuePlugin"], Executor] | None = None,
         polling_interval: int | None = 5,
     ):
+        super().__init__()
         self.name = name
         self.concurrency = concurrency
         self.polling_interval = polling_interval
-
-        if executor is None:
-            self.executor = ProcessExecutor(self)
-        else:
-            self.executor = executor(self)
-
+        self._executor = ProcessExecutor if executor is None else executor
         # A queue of pending updates to jobs that need to be applied on the
         # next fetch.
         self.pending_updates = asyncio.Queue()
-        # An event that can be used to wake up the queue if it's sleeping.
-        self._wake_up = asyncio.Event()
 
-    async def poll(self, app, worker):
+    @cached_property
+    def executor(self) -> Executor:
+        return self._executor(self)
+
+    @classmethod
+    def get_scope(cls) -> PluginScope:
+        return PluginScope.QUEUE
+
+    @abc.abstractmethod
+    async def push(self, app, jobs: list[Job]):
+        """
+        Push one or more jobs onto the queue.
+
+        :param app: The Chancy application.
+        :param jobs: The jobs to push onto the queue.
+        """
+
+
+class Queue(QueuePlugin):
+    """
+    A postgres-backed queue that uses the database to store jobs.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        concurrency: int = 1,
+        executor: Callable[["Queue"], Executor] | None = None,
+        polling_interval: int | None = 5,
+    ):
+        super().__init__(
+            name,
+            concurrency=concurrency,
+            executor=executor,
+            polling_interval=polling_interval,
+        )
+        # A queue of pending updates to jobs that need to be applied on the
+        # next fetch.
+        self.pending_updates = asyncio.Queue()
+
+    async def run(self, worker, app):
         """
         Continuously polls the queue for new jobs.
 
         This method will run indefinitely, polling the queue for new jobs and
         running them as they become available.
 
-        If you want to pull jobs from the queue without further processing,
-        you can use the `fetch_jobs` method directly instead.
+        .. note::
+
+            If you want to pull jobs from the queue to process them yourself,
+            you can use the :meth:`fetch()` method directly.
 
         :param app: The app that is polling the queue.
         :param worker: The worker that is polling the queue.
         """
-        poll_logger = PrefixAdapter(logger, {"prefix": f"Q.{self.name}"})
-        poll_logger.info(
-            f"Queue {self.name!r} is now active and polling for new jobs."
-        )
-
-        while True:
+        while await self.sleep(self.polling_interval):
             async with app.pool.connection() as conn:
-                self._wake_up.clear()
-
                 # If we wouldn't be able to run a job even if we had one, we
                 # should just wait. Pre-fetching can be advantageous, but
                 # IMO it causes more headache (as seen with Celery and future
                 # scheduled tasks) than it's worth.
                 maximum_jobs_to_poll = self.concurrency - len(self.executor)
                 if maximum_jobs_to_poll <= 0:
-                    poll_logger.debug(
-                        "No capacity for new jobs, skipping poll."
-                    )
+                    self.log.debug("No capacity for new jobs, skipping poll.")
                     await asyncio.sleep(self.polling_interval)
                     continue
 
@@ -101,21 +128,8 @@ class Queue:
                 )
 
                 for job in jobs:
-                    poll_logger.debug(
-                        f"Found job {job.id}, pushing to executor."
-                    )
+                    self.log.debug(f"Found job {job.id}, pushing to executor.")
                     await self.executor.push(job)
-
-            done, pending = await asyncio.wait(
-                [
-                    asyncio.create_task(asyncio.sleep(self.polling_interval)),
-                    asyncio.create_task(self._wake_up.wait()),
-                ],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-
-            for task in pending:
-                task.cancel()
 
     async def fetch_jobs(
         self,
@@ -263,68 +277,63 @@ class Queue:
         """
         await self.pending_updates.put(job)
 
+    async def push(self, app, jobs: list[Job]):
+        async with app.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                async with conn.transaction():
+                    await self.push_jobs(cursor, jobs, prefix=app.prefix)
+
     async def push_jobs(
-        self, conn: AsyncConnection, jobs: list[Job], prefix: str = "chancy_"
+        self, cursor: AsyncCursor, jobs: list[Job], prefix: str = "chancy_"
     ):
         """
         Push one or more jobs onto the queue.
 
-        :param conn: The database connection to use.
+        This non-standard queue method can be used to push jobs to the database
+        within an existing transaction. This is very useful when you want to
+        push jobs to the queue only if related objects are successfully
+        created, like running onboarding for a new user only if the user is
+        successfully created.
+
+        :param cursor: The database cursor to use.
         :param jobs: The jobs to push onto the queue.
         :param prefix: The prefix to use for the database tables.
         """
-        jobs_table = sql.Identifier(f"{prefix}jobs")
-
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.executemany(
-                    sql.SQL(
-                        """
-                        INSERT INTO
-                            {jobs} (
-                                queue,
-                                payload,
-                                priority,
-                                max_attempts,
-                                scheduled_at
-                        ) VALUES (%s, %s, %s, %s, %s);
-                        """
-                    ).format(jobs=jobs_table),
-                    [
-                        (
-                            self.name,
-                            Json(
-                                {
-                                    "func": job.func,
-                                    "kwargs": job.kwargs or {},
-                                    "limits": [
-                                        limit.serialize()
-                                        for limit in job.limits
-                                    ],
-                                }
-                            ),
-                            job.priority,
-                            job.max_attempts,
-                            job.scheduled_at,
-                        )
-                        for job in jobs
-                    ],
+        await cursor.executemany(
+            sql.SQL(
+                """
+                INSERT INTO
+                    {jobs} (
+                        queue,
+                        payload,
+                        priority,
+                        max_attempts,
+                        scheduled_at
+                ) VALUES (%s, %s, %s, %s, %s);
+                """
+            ).format(jobs=sql.Identifier(f"{prefix}jobs")),
+            [
+                (
+                    self.name,
+                    Json(
+                        {
+                            "func": job.func,
+                            "kwargs": job.kwargs or {},
+                            "limits": [
+                                limit.serialize() for limit in job.limits
+                            ],
+                        }
+                    ),
+                    job.priority,
+                    job.max_attempts,
+                    job.scheduled_at,
                 )
-                await cursor.execute(
-                    sql.SQL("SELECT pg_notify({events}, {event});").format(
-                        events=sql.Literal(f"{prefix}events"),
-                        event=sql.Literal(
-                            json.dumps({"t": "pushed", "q": self.name})
-                        ),
-                    )
-                )
-
-    async def wake_up(self):
-        """
-        Wake up the queue.
-
-        If the queue's `start()` coroutine is running and sleeping waiting for
-        the next poll, this method will wake it up and cause it to poll
-        immediately.
-        """
-        self._wake_up.set()
+                for job in jobs
+            ],
+        )
+        await cursor.execute(
+            sql.SQL("SELECT pg_notify({events}, {event});").format(
+                events=sql.Literal(f"{prefix}events"),
+                event=sql.Literal(json.dumps({"t": "pushed", "q": self.name})),
+            )
+        )

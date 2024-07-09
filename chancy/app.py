@@ -5,9 +5,10 @@ from psycopg_pool import AsyncConnectionPool
 
 from chancy.migrate import Migrator
 from chancy.queue import Queue
+from chancy.plugin import Plugin
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class Chancy:
     """
     The main application object for Chancy.
@@ -19,8 +20,8 @@ class Chancy:
 
     #: The DSN to use to connect to the database.
     dsn: str
-    #: The queues that are managed by the Chancy application.
-    queues: list[Queue] = dataclasses.field(default_factory=list)
+    #: The list of plugins that are to be used by the Chancy application.
+    plugins: list[Plugin] = dataclasses.field(default_factory=list)
     #: The prefix to use for all Chancy database tables.
     prefix: str = "chancy_"
     #: The minimum number of connections to keep in the connection pool.
@@ -32,7 +33,10 @@ class Chancy:
     poll_reconnect_timeout: int = 60 * 5
 
     def __post_init__(self):
-        self._sanity_check()
+        # Ensure there are no queues with duplicate names
+        queue_names = [p.name for p in self.plugins if isinstance(p, Queue)]
+        if len(queue_names) != len(set(queue_names)):
+            raise ValueError("Duplicate queue names are not allowed.")
 
     async def migrate(self, *, to_version: int | None = None):
         """
@@ -103,26 +107,21 @@ class Chancy:
         """
         Push one or more jobs onto a queue.
 
-        All jobs will be committed as part of the same INSERT and transaction.
-
         :param queue: The name or Queue of the queue to push the job onto.
         :param jobs: The jobs to push onto the queue.
         """
-        async with self.pool.connection() as conn:
-            if isinstance(queue, Queue):
-                await queue.push_jobs(conn, list(jobs), prefix=self.prefix)
-                return
+        if isinstance(queue, Queue):
+            await queue.push(self, list(jobs))
+            return
 
-            queue = self.queues_by_name[queue]
-            await queue.push_jobs(conn, list(jobs), prefix=self.prefix)
-
-    def _sanity_check(self):
-        """
-        Perform a sanity check on the Chancy application.
-        """
-        if len(set(q.name.lower() for q in self.queues)) != len(self.queues):
-            raise ValueError("Queue names must be unique")
+        await self[queue].push(self, list(jobs))
 
     @cached_property
-    def queues_by_name(self):
-        return {q.name: q for q in self.queues}
+    def queues(self):
+        """
+        A list of all queues that are managed by the Chancy application.
+        """
+        return {p.name: p for p in self.plugins if isinstance(p, Queue)}
+
+    def __getitem__(self, queue_name: str):
+        return self.queues[queue_name]

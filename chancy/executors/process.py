@@ -13,9 +13,6 @@ from typing import Callable
 
 from chancy.executor import Executor, JobInstance, Limit
 
-if typing.TYPE_CHECKING:
-    from chancy.queue import Queue
-
 
 class _TimeoutThread(threading.Thread):
     """
@@ -59,7 +56,7 @@ class ProcessExecutor(Executor):
                                     can run before being replaced.
     """
 
-    def __init__(self, queue: "Queue", *, maximum_jobs_per_worker: int = 100):
+    def __init__(self, queue, *, maximum_jobs_per_worker: int = 100):
         super().__init__(queue)
 
         self.processes: dict[Future, JobInstance] = {}

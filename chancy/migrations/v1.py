@@ -18,7 +18,7 @@ class V1Migration(Migration):
                         queue TEXT NOT NULL,
                         payload JSON NOT NULL,
                         state VARCHAR (25) NOT NULL DEFAULT 'pending',
-                        priority INTEGER DEFAULT 0,
+                        priority INTEGER DEFAULT 10,
                         attempts INTEGER DEFAULT 0,
                         max_attempts INTEGER DEFAULT 1,
                         taken_by TEXT,
@@ -37,7 +37,8 @@ class V1Migration(Migration):
                     CREATE UNLOGGED TABLE {leader} (
                         id BIGSERIAL PRIMARY KEY,
                         worker_id TEXT NOT NULL,
-                        last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        expires_at TIMESTAMPTZ NOT NULL
                     );
                     ALTER TABLE {leader}
                         ADD CONSTRAINT leader_worker_id_unique UNIQUE
@@ -50,13 +51,9 @@ class V1Migration(Migration):
                 sql.SQL(
                     """
                     CREATE UNLOGGED TABLE {workers} (
-                        id BIGSERIAL PRIMARY KEY,
-                        worker_id TEXT NOT NULL,
+                        worker_id TEXT NOT NULL PRIMARY KEY,
                         last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );
-                    ALTER TABLE {workers}
-                        ADD CONSTRAINT workers_worker_id_unique UNIQUE
-                            (worker_id);
                     """
                 ).format(workers=sql.Identifier(f"{migrator.prefix}workers"))
             )

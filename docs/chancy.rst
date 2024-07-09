@@ -1,11 +1,6 @@
 Chancy API
 ==========
 
-.. automodule:: chancy
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Subpackages
 -----------
 
@@ -29,3 +24,4 @@ Submodules
    chancy.queue
    chancy.utils
    chancy.worker
+   chancy.plugin

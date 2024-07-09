@@ -22,15 +22,17 @@ background tasks.
 Features
 --------
 
-- Fully-featured Jobs, with priorities, retries, timeouts, memory limits, future
-  scheduling, and more.
-- Transactional job queueing. Jobs are only inserted into the database if the
-  transaction they were created in is committed.
+- Jobs support priorities, retries, timeouts, memory limits, future scheduling,
+  and more.
 - Completed jobs stick around in the database for easy debugging and job
-  tracking, with configurable retention policies.
+  tracking, with configurable retention policies. Inspect your jobs with plain
+  old SQL.
 - Dependency-free except for psycopg3.
 - Multi-tenant support with prefixes for all database tables.
-- Inspect your queue with plain old SQL.
+- Optional transactional job queueing - only queue a job if your transaction
+  commits successfully.
+- asyncio-based worker, can be run in-process with your web server on small
+  projects or as a standalone worker on larger projects.
 
 Installation
 ------------
@@ -52,21 +54,23 @@ First, we'll create a file called `worker.py`:
   :caption: worker.py
 
    import asyncio
-   from chancy.queue import Queue
-   from chancy.app import Chancy
-   from chancy.worker import Worker
+   from chancy import Chancy, Worker, Queue
    from chancy.plugins.pruner import Pruner
    from chancy.plugins.recovery import Recovery
+   from chancy.plugins.leadership import Leadership
 
    async def main():
        async with Chancy(
            dsn="postgresql://localhost/postgres",
-           queues=[
+           plugins=[
                Queue(name="default", concurrency=10),
+               Pruner(),
+               Recovery(),
+               Leadership()
            ],
        ) as chancy:
            await chancy.migrate()
-           await Worker(chancy, plugins=[Pruner(), Recovery()]).start()
+           await Worker(chancy).start()
 
 
    if __name__ == "__main__":
@@ -84,9 +88,7 @@ Next, we need to create a job that we want to run. Let's create a file called
 
 
   import asyncio
-  from chancy.executor import Job
-  from chancy.queue import Queue
-  from chancy.app import Chancy
+  from chancy import Chancy, Job, Queue
 
   def my_dummy_task(name: str):
       print(f"Hello, {name}!")
@@ -94,7 +96,7 @@ Next, we need to create a job that we want to run. Let's create a file called
   async def main():
       async with Chancy(
           dsn="postgresql://localhost/postgres",
-          queues=[
+          plugins=[
               Queue(name="default", concurrency=10),
           ],
       ) as chancy:
@@ -120,9 +122,10 @@ can import as a Job.
    :caption: Contents:
    :hidden:
 
+   jobs
    plugins
    executors
-   jobs
+   advanced/index
    chancy
 
 

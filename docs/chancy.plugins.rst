@@ -12,7 +12,7 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   chancy.plugins.plugin
+   chancy.plugins.leadership
    chancy.plugins.pruner
    chancy.plugins.recovery
    chancy.plugins.rule

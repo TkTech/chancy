@@ -1,10 +1,14 @@
 import abc
-import dataclasses
 import enum
+import typing
+import dataclasses
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from chancy.utils import importable_name
+
+if typing.TYPE_CHECKING:
+    from chancy.queue import QueuePlugin
 
 
 @dataclasses.dataclass
@@ -93,7 +97,7 @@ class Executor(abc.ABC):
     pool.
     """
 
-    def __init__(self, queue):
+    def __init__(self, queue: "QueuePlugin"):
         self.queue = queue
 
     @abc.abstractmethod

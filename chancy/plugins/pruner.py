@@ -3,7 +3,7 @@ from psycopg import sql
 
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.plugins.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin, PluginScope
 from chancy.plugins.rule import RuleT, AgeRule
 from chancy.utils import timed_block
 
@@ -53,6 +53,18 @@ class Pruner(Plugin):
         By default, only an AgeRule will be covered by an index. If you use
         multiple rules, you may need to create additional indexes to improve
         performance on busy queues.
+
+    Events
+    ------
+
+    The following events are emitted by the pruner plugin:
+
+    +---------------------+------------------------------------------------+
+    | Event Name          | Description                                    |
+    +=====================+================================================+
+    | `pruner.removed`    | Emitted when the pruner has removed jobs from  |
+    |                     | the database.                                  |
+    +---------------------+------------------------------------------------+
 
     :param rule: The rule that the pruner will use to match jobs.
     :param maximum_to_prune: The maximum number of jobs to prune in a single
