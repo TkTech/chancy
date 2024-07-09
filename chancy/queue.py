@@ -7,6 +7,7 @@ from functools import cached_property
 from psycopg import sql, AsyncConnection, AsyncCursor
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
+from psycopg.errors import UniqueViolation
 
 from chancy.executor import Executor, JobInstance, Limit, Job
 from chancy.executors.process import ProcessExecutor
@@ -257,6 +258,7 @@ class Queue(QueuePlugin):
                     attempts=record["attempts"],
                     max_attempts=record["max_attempts"],
                     state=record["state"],
+                    unique_key=record["unique_key"],
                     limits=[
                         Limit.deserialize(limit)
                         for limit in record["payload"]["limits"]
@@ -308,8 +310,10 @@ class Queue(QueuePlugin):
                         payload,
                         priority,
                         max_attempts,
-                        scheduled_at
-                ) VALUES (%s, %s, %s, %s, %s);
+                        scheduled_at,
+                        unique_key
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
                 """
             ).format(jobs=sql.Identifier(f"{prefix}jobs")),
             [
@@ -327,6 +331,7 @@ class Queue(QueuePlugin):
                     job.priority,
                     job.max_attempts,
                     job.scheduled_at,
+                    job.unique_key,
                 )
                 for job in jobs
             ],

@@ -39,14 +39,27 @@ class Job:
     Chancy queue and executed elsewhere.
     """
 
+    #: An importable name for the function that should be executed when this
+    #: job is run. Ex: my_module.my_function
     func: str
+    #: The keyword arguments to pass to the job function when it is executed.
     kwargs: dict[str, Any] | None = dataclasses.field(default_factory=dict)
+    #: The priority of this job. Jobs with higher priority values will be
+    #: executed before jobs with lower priority values.
     priority: int = 0
+    #: The maximum number of times this job can be attempted before it is
+    #: considered failed.
     max_attempts: int = 1
+    #: The time at which this job should be scheduled to run.
     scheduled_at: datetime = dataclasses.field(
         default_factory=lambda: datetime.now(tz=timezone.utc)
     )
+    #: A list of resource limits that should be applied to this job.
     limits: list[Limit] = dataclasses.field(default_factory=list)
+    #: An optional, globally unique identifier for this job. If provided,
+    #: only 1 copy of a job with this key will be allowed to run or be
+    #: scheduled at a time.
+    unique_key: str | None = None
 
     @classmethod
     def from_func(cls, func, **kwargs):
@@ -66,6 +79,9 @@ class Job:
 
     def with_kwargs(self, kwargs: dict[str, Any]) -> "Job":
         return dataclasses.replace(self, kwargs=kwargs)
+
+    def with_unique_key(self, unique_key: str) -> "Job":
+        return dataclasses.replace(self, unique_key=unique_key)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)

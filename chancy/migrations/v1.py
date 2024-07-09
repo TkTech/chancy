@@ -25,10 +25,27 @@ class V1Migration(Migration):
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         started_at TIMESTAMPTZ,
                         completed_at TIMESTAMPTZ,
-                        scheduled_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        scheduled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        unique_key TEXT
                     )
                     """
                 ).format(jobs=sql.Identifier(f"{migrator.prefix}jobs"))
+            )
+            await conn.execute(
+                sql.SQL(
+                    """
+                    CREATE UNIQUE INDEX {jobs_unique_key}
+                    ON {jobs} (unique_key)
+                    WHERE
+                        unique_key IS NOT NULL
+                            AND state NOT IN ('succeeded', 'failed');
+                    """
+                ).format(
+                    jobs_unique_key=sql.Identifier(
+                        f"{migrator.prefix}jobs_unique_key"
+                    ),
+                    jobs=sql.Identifier(f"{migrator.prefix}jobs"),
+                )
             )
 
             await conn.execute(

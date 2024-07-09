@@ -218,3 +218,33 @@ them when running the job, and if the job exceeds the limits a standard
    advisory, and not a security boundary. An executor that supports these
    limits will do its best to enforce them, but untrusted code can always
    find a way to disable them.
+
+
+Globally unique jobs
+--------------------
+
+It's possible to give a job a globally unique identifier, which can be used to
+prevent the same job from being pushed to the queue more than once. For
+example, an expensive "Generate Report" job could be given a unique ID based
+on the parameters of the report, and if the same report is requested again
+before the first one is finished, the second request will just be silently
+ignored.
+
+.. code-block:: python
+   :caption: job.py
+
+   import asyncio
+   from chancy import Job
+
+   user_id = 1234
+   hello_world = Job(
+      func="my_reports.generate_report",
+      kwargs={"user_id": user_id},
+      unique_key=f"hello_world_{user_id}"
+   )
+
+.. note::
+
+   Globally unique jobs should be treated as truly "global", that is they will
+   be unique *across all queues*. You can always use the queue's name as part
+   of your unique key to scope it to a specific queue.
