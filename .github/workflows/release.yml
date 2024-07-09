@@ -46,7 +46,7 @@ jobs:
         uses: snok/install-poetry@v1
 
       - name: Installing Package
-        run: poetry install --no-interaction --with dev
+        run: poetry install --no-interaction --with dev --all-extras
 
       - name: Installing extras
         run: |
