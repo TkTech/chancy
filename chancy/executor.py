@@ -83,6 +83,36 @@ class Job:
     def with_unique_key(self, unique_key: str) -> "Job":
         return dataclasses.replace(self, unique_key=unique_key)
 
+    def pack(self) -> dict:
+        """
+        Pack the job into a dictionary that can be serialized and used to
+        recreate the job later.
+        """
+        return {
+            "f": self.func,
+            "k": self.kwargs,
+            "p": self.priority,
+            "a": self.max_attempts,
+            "s": self.scheduled_at.timestamp(),
+            "l": [limit.serialize() for limit in self.limits],
+            "u": self.unique_key,
+        }
+
+    @classmethod
+    def unpack(cls, data: dict) -> "Job":
+        """
+        Unpack a serialized job into a Job instance.
+        """
+        return cls(
+            func=data["f"],
+            kwargs=data["k"],
+            priority=data["p"],
+            max_attempts=data["a"],
+            scheduled_at=datetime.fromtimestamp(data["s"], tz=timezone.utc),
+            limits=[Limit.deserialize(limit) for limit in data["l"]],
+            unique_key=data["u"],
+        )
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class JobInstance(Job):

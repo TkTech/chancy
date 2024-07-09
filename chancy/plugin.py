@@ -6,6 +6,7 @@ import logging
 from functools import cached_property
 
 from chancy.logger import logger, PrefixAdapter
+from chancy.migrate import Migrator
 
 if typing.TYPE_CHECKING:
     from chancy.app import Chancy
@@ -64,6 +65,36 @@ class Plugin(abc.ABC):
         This function can and should run indefinitely, as it will be cancelled
         when the worker is stopped.
         """
+
+    def migrate_package(self) -> str | None:
+        """
+        Get the package name that contains the migration scripts for this
+        plugin, if it has any.
+        """
+
+    def migrate_key(self) -> str | None:
+        """
+        Get the migration key for this plugin, if it has any.
+        """
+
+    async def migrate(self, chancy: "Chancy", *, to_version: int | None = None):
+        """
+        Migrate the database to the latest schema version.
+
+        If `to_version` is provided, the database will be migrated to that
+        specific version, up or down as necessary.
+        """
+        key = self.migrate_key()
+        if key is None:
+            return
+
+        package = self.migrate_package()
+        if package is None:
+            return
+
+        migrator = Migrator(key, package, prefix=chancy.prefix)
+        async with chancy.pool.connection() as conn:
+            await migrator.migrate(conn, to_version=to_version)
 
     async def sleep(self, seconds: int) -> bool:
         """

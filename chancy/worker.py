@@ -178,7 +178,7 @@ class Worker:
                 ),
                 [self.worker_id],
             )
-            await self.notify(
+            await self.chancy.notify(
                 cur, "worker.started", {"worker_id": self.worker_id}
             )
 
@@ -210,33 +210,6 @@ class Worker:
             )
 
         await self.hub.emit("worker.stopped")
-
-    async def notify(
-        self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
-    ):
-        """
-        Notify the cluster of an event.
-
-        .. note::
-
-            This method does not start or end a transaction. It is up to the
-            caller to manage the transaction.
-
-        :param cursor: The cursor to use for the notification.
-        :param event: The event to notify the cluster of.
-        :param payload: The payload to send with the notification.
-        """
-        await cursor.execute(
-            sql.SQL(
-                """
-                SELECT pg_notify(%s, %s)
-                """
-            ),
-            [
-                f"{self.chancy.prefix}events",
-                json.dumps({"t": event, **payload}),
-            ],
-        )
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"

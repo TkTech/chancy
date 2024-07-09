@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "chancy"
-version = "0.3.1"
+version = "0.4.0"
 description = ""
 authors = ["Tyler Kennedy <tk@tkte.ch>"]
 readme = "README.md"
@@ -8,6 +8,11 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.11"
 psycopg = {extras = ["pool", "binary"], version = "^3.1.19"}
+croniter = {version = "^2.0.5", optional = true}
+
+[tool.poetry.extras]
+cron = ["croniter"]
+
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.4.2"

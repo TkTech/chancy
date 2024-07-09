@@ -13,6 +13,8 @@ themselves:
   database to keep it from growing indefinitely.
 - :class:`chancy.plugins.recovery.Recovery` - Recovers jobs that
   were running when a worker crashed or otherwise disappeared.
+- :class:`chancy.plugins.cron.Cron` - Provides a way to define
+  jobs that run on a schedule using cron syntax.
 
 To enable these plugins, simply pass them to the
 :class:`~chancy.app.Chancy` constructor:

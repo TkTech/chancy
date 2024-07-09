@@ -1,6 +1,10 @@
+import json
 import dataclasses
 from functools import cached_property
+from typing import Any
 
+from psycopg import sql
+from psycopg import AsyncCursor
 from psycopg_pool import AsyncConnectionPool
 
 from chancy.migrate import Migrator
@@ -42,12 +46,19 @@ class Chancy:
         """
         Migrate the database to the latest schema version.
 
+        This convenience method will migrate all plugins that have migration
+        scripts associated with them as well. If you need to migrate a specific
+        plugin, you should call the `migrate` method on the plugin itself.
+
         If `to_version` is provided, the database will be migrated to that
         specific version, up or down as necessary.
         """
         migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
         async with self.pool.connection() as conn:
             await migrator.migrate(conn, to_version=to_version)
+
+        for plugin in self.plugins:
+            await plugin.migrate(self, to_version=to_version)
 
     @cached_property
     def pool(self):
@@ -122,6 +133,33 @@ class Chancy:
         A list of all queues that are managed by the Chancy application.
         """
         return {p.name: p for p in self.plugins if isinstance(p, Queue)}
+
+    async def notify(
+        self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
+    ):
+        """
+        Notify the cluster of an event.
+
+        .. note::
+
+            This method does not start or end a transaction. It is up to the
+            caller to manage the transaction.
+
+        :param cursor: The cursor to use for the notification.
+        :param event: The event to notify the cluster of.
+        :param payload: The payload to send with the notification.
+        """
+        await cursor.execute(
+            sql.SQL(
+                """
+                SELECT pg_notify(%s, %s)
+                """
+            ),
+            [
+                f"{self.prefix}events",
+                json.dumps({"t": event, **payload}),
+            ],
+        )
 
     def __getitem__(self, queue_name: str):
         return self.queues[queue_name]
