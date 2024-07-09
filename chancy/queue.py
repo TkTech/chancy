@@ -7,7 +7,6 @@ from functools import cached_property
 from psycopg import sql, AsyncConnection, AsyncCursor
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
-from psycopg.errors import UniqueViolation
 
 from chancy.executor import Executor, JobInstance, Limit, Job
 from chancy.executors.process import ProcessExecutor

@@ -1,11 +1,10 @@
 import asyncio
 import json
 import uuid
-from typing import Any
 from asyncio import TaskGroup
 
 from psycopg import sql
-from psycopg import AsyncConnection, AsyncCursor
+from psycopg import AsyncConnection
 
 from chancy.app import Chancy
 from chancy.hub import Hub

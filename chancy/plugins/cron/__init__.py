@@ -98,7 +98,6 @@ class Cron(Plugin):
         table = sql.Identifier(f"{chancy.prefix}cron")
 
         while await self.sleep(self.poll_interval):
-            await self.wait_for_leader(worker)
             async with chancy.pool.connection() as conn:
                 # We need to find every row in the {prefix}_cron table where
                 # the next_run time is less than or equal to the current time,
@@ -136,6 +135,8 @@ class Cron(Plugin):
                                     prefix=chancy.prefix,
                                 )
                             else:
+                                # Otherwise, we're using the generic BaseQueue
+                                # interface which may not even be postgres.
                                 await q.push(chancy, [Job.unpack(job)])
 
                             self.log.debug(
