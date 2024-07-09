@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "chancy"
-version = "0.3.0"
+version = "0.3.1"
 description = ""
 authors = ["Tyler Kennedy <tk@tkte.ch>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 psycopg = {extras = ["pool", "binary"], version = "^3.1.19"}
 
 [tool.poetry.group.dev.dependencies]

@@ -11,7 +11,7 @@ def run_chancy_migrations(host, port, user, dbname, password):
 
     async def main():
         async with Chancy(
-            f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+            dsn=f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
         ) as app:
             await app.migrate()
 

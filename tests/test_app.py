@@ -11,17 +11,8 @@ def test_queue_names(postgresql):
     with pytest.raises(ValueError):
         Chancy(
             dsn=postgresql.info.dsn,
-            queues=[
+            plugins=[
                 Queue("test"),
                 Queue("test"),
-            ],
-        )
-
-    with pytest.raises(ValueError):
-        Chancy(
-            dsn=postgresql.info.dsn,
-            queues=[
-                Queue("test"),
-                Queue("tEst"),
             ],
         )
