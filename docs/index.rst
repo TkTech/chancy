@@ -43,12 +43,24 @@ Chancy is available on PyPI. You can install it with pip:
 
    pip install chancy
 
+From Source
+~~~~~~~~~~~
+
+You can also install Chancy from source by cloning the repository and running
+``pip install .`` in the root directory:
+
+.. code-block:: bash
+
+    git clone https://github.com/TkTech/chancy.git
+    cd chancy
+    pip install .
+
 Usage
 -----
 
 Using Chancy is fairly straightforward. Just like any work queue, you need to
 have a worker that listens for jobs and a client that submits jobs to the queue.
-First, we'll create a file called `worker.py`:
+First, we'll create a file called ``worker.py``:
 
 .. code-block:: python
   :caption: worker.py
@@ -84,7 +96,7 @@ concurrently with a few :doc:`plugins` that help keep the queue running
 smoothly.
 
 Next, we need to create a job that we want to run. Let's create a file called
-`job.py` and add a job that does nothing:
+``job.py`` and add a job that does nothing:
 
 .. code-block:: python
   :caption: job.py
