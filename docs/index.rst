@@ -59,16 +59,18 @@ First, we'll create a file called `worker.py`:
    from chancy.plugins.recovery import Recovery
    from chancy.plugins.leadership import Leadership
 
+   chancy = Chancy(
+       dsn="postgresql://localhost/postgres",
+       plugins=[
+           Queue(name="default", concurrency=10),
+           Pruner(),
+           Recovery(),
+           Leadership()
+       ],
+   )
+
    async def main():
-       async with Chancy(
-           dsn="postgresql://localhost/postgres",
-           plugins=[
-               Queue(name="default", concurrency=10),
-               Pruner(),
-               Recovery(),
-               Leadership()
-           ],
-       ) as chancy:
+       async with chancy:
            await chancy.migrate()
            await Worker(chancy).start()
 
@@ -76,9 +78,10 @@ First, we'll create a file called `worker.py`:
    if __name__ == "__main__":
        asyncio.run(main())
 
-Start up one or more of the workers by running `python worker.py`. This will
+Start up one or more of the workers by running ``python worker.py``. This will
 start a worker that listens on the "default" queue and runs up to 10 jobs
-concurrently with a few plugins that help keep the queue running smoothly.
+concurrently with a few :doc:`plugins` that help keep the queue running
+smoothly.
 
 Next, we need to create a job that we want to run. Let's create a file called
 `job.py` and add a job that does nothing:
@@ -86,34 +89,29 @@ Next, we need to create a job that we want to run. Let's create a file called
 .. code-block:: python
   :caption: job.py
 
-
-  import asyncio
-  from chancy import Chancy, Job, Queue
-
-  def my_dummy_task(name: str):
-      print(f"Hello, {name}!")
-
-  async def main():
-      async with Chancy(
-          dsn="postgresql://localhost/postgres",
-          plugins=[
-              Queue(name="default", concurrency=10),
-          ],
-      ) as chancy:
-          await chancy.migrate()
-          await chancy.push(
-            "default",
-            Job.from_func(my_dummy_task, kwargs={"name": "world"})
-          )
+   import asyncio
+   from chancy import Job
+   from worker import chancy
 
 
-  if __name__ == "__main__":
-      asyncio.run(main())
+   def my_dummy_task(name: str):
+       print(f"Hello, {name}!")
 
 
-When we run this file, we'll see the job get picked up by the worker and run
-in the background. That's it, all done! You can use any function your code
-can import as a Job.
+   async def main():
+       async with chancy:
+           await chancy.push(
+               "default", Job(func="job.my_dummy_task", kwargs={"name": "world"})
+           )
+
+
+   if __name__ == "__main__":
+       asyncio.run(main())
+
+
+When we run this file with ``python job.py``, we'll see the job get picked up
+by the worker and run in the background. That's it, all done! You can use any
+function your code can import as a Job.
 
 
 

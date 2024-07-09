@@ -149,7 +149,7 @@ class Leadership(Plugin):
                         )
                     elif was_leader:
                         self.log.info(
-                            f"Worker has lost leadership of the cluster."
+                            "Worker has lost leadership of the cluster."
                         )
                         worker.is_leader.clear()
                         await worker.hub.emit(

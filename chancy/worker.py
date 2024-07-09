@@ -146,7 +146,7 @@ class Worker:
             match j["t"]:
                 case "pushed":
                     try:
-                        await self[j["q"]].wake_up()
+                        self.chancy[j["q"]].wake_up()
                     except KeyError:
                         # This worker isn't setup to process this queue, so
                         # we'll just ignore it.

@@ -5,7 +5,6 @@ import os
 import resource
 import signal
 import traceback
-import typing
 import threading
 from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
@@ -120,7 +119,12 @@ class ProcessExecutor(Executor):
 
         mod_name, func_name = job.func.rsplit(".", 1)
         mod = __import__(mod_name, fromlist=[func_name])
-        func = getattr(mod, func_name)
+        try:
+            func = getattr(mod, func_name)
+        except AttributeError:
+            raise AttributeError(
+                f"Could not find function {func_name} in module {mod_name}."
+            )
 
         kwargs = job.kwargs or {}
 
