@@ -14,7 +14,7 @@ class V1Migration(Migration):
                 sql.SQL(
                     """
                     CREATE TABLE {jobs} (
-                        id BIGSERIAL PRIMARY KEY,
+                        id UUID PRIMARY KEY,
                         queue TEXT NOT NULL,
                         payload JSON NOT NULL,
                         state VARCHAR (25) NOT NULL DEFAULT 'pending',
@@ -22,7 +22,6 @@ class V1Migration(Migration):
                         attempts INTEGER DEFAULT 0,
                         max_attempts INTEGER DEFAULT 1,
                         taken_by TEXT,
-                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                         started_at TIMESTAMPTZ,
                         completed_at TIMESTAMPTZ,
                         scheduled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

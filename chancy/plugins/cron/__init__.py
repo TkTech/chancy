@@ -7,8 +7,7 @@ from croniter import croniter
 from chancy.plugin import Plugin, PluginScope
 from chancy.worker import Worker
 from chancy.app import Chancy
-from chancy.executor import Job
-from chancy.queue import Queue
+from chancy import Queue, Job
 
 
 class Cron(Plugin):

@@ -8,7 +8,9 @@ from psycopg import AsyncCursor
 from psycopg_pool import AsyncConnectionPool
 
 from chancy.migrate import Migrator
-from chancy.queue import Queue
+from chancy.job import Job
+from chancy.queue import QueuePlugin
+from chancy.job import Reference
 from chancy.plugin import Plugin
 
 
@@ -38,7 +40,9 @@ class Chancy:
 
     def __post_init__(self):
         # Ensure there are no queues with duplicate names
-        queue_names = [p.name for p in self.plugins if isinstance(p, Queue)]
+        queue_names = [
+            p.name for p in self.plugins if isinstance(p, QueuePlugin)
+        ]
         if len(queue_names) != len(set(queue_names)):
             raise ValueError("Duplicate queue names are not allowed.")
 
@@ -114,25 +118,47 @@ class Chancy:
         if not self.pool.closed:
             await self.pool.close()
 
-    async def push(self, queue: str | Queue, *jobs):
+    async def push(self, queue: str | QueuePlugin, job: Job) -> Reference:
+        """
+        Push a single job onto the queue.
+
+        .. note::
+
+            A Job with a `unique_key` will not be pushed if a job with the same
+            `unique_key` is already in the queue. The existing job will be
+            returned instead.
+
+        :param queue: The name or Queue of the queue to push the job onto.
+        :param job: The job to push onto the queue.
+        :return: The reference to the job that was pushed.
+        """
+        q = queue if isinstance(queue, QueuePlugin) else self[queue]
+        return (await q.push(self, [job]))[0]
+
+    async def push_many(
+        self, queue: str | QueuePlugin, *jobs: Job
+    ) -> list[Reference]:
         """
         Push one or more jobs onto a queue.
+
+        .. note::
+
+            A Job with a `unique_key` will not be pushed if a job with the same
+            `unique_key` is already in the queue. The existing job will be
+            returned instead.
 
         :param queue: The name or Queue of the queue to push the job onto.
         :param jobs: The jobs to push onto the queue.
         """
-        if isinstance(queue, Queue):
-            await queue.push(self, list(jobs))
-            return
-
-        await self[queue].push(self, list(jobs))
+        q = queue if isinstance(queue, QueuePlugin) else self[queue]
+        return await q.push(self, list(jobs))
 
     @cached_property
     def queues(self):
         """
         A list of all queues that are managed by the Chancy application.
         """
-        return {p.name: p for p in self.plugins if isinstance(p, Queue)}
+        return {p.name: p for p in self.plugins if isinstance(p, QueuePlugin)}
 
     async def notify(
         self, cursor: AsyncCursor, event: str, payload: dict[str, Any]

@@ -10,7 +10,8 @@ from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
-from chancy.executor import Executor, JobInstance, Limit
+from chancy.executor import Executor
+from chancy.job import JobInstance, Limit
 
 
 class _TimeoutThread(threading.Thread):

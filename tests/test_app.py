@@ -1,6 +1,7 @@
 import pytest
 
-from chancy.app import Chancy, Queue
+from chancy.app import Chancy
+from chancy import Queue
 
 
 def test_queue_names(postgresql):

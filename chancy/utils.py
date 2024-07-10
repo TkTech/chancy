@@ -1,4 +1,5 @@
 import time
+import secrets
 import contextlib
 
 
@@ -46,3 +47,19 @@ def importable_name(obj):
     :return: str
     """
     return f"{obj.__module__}.{obj.__qualname__}"
+
+
+def chancy_uuid() -> str:
+    """
+    Generate a UUID suitable for use as a job ID.
+
+    .. note::
+
+        It's UUID7, kinda, since the draft keeps changing.
+
+    :return: str
+    """
+    t = (time.time_ns() // 100) & 0xFFFFFFFFFFFFFF
+    rand = secrets.randbits(62)
+    uuid = (t << 68) | (7 << 64) | (2 << 62) | rand
+    return f"{uuid:032x}"
