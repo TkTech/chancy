@@ -38,14 +38,6 @@ class Chancy:
     #: database after a connection is lost from the pool.
     poll_reconnect_timeout: int = 60 * 5
 
-    def __post_init__(self):
-        # Ensure there are no queues with duplicate names
-        queue_names = [
-            p.name for p in self.plugins if isinstance(p, QueuePlugin)
-        ]
-        if len(queue_names) != len(set(queue_names)):
-            raise ValueError("Duplicate queue names are not allowed.")
-
     async def migrate(self, *, to_version: int | None = None):
         """
         Migrate the database to the latest schema version.

@@ -1,4 +1,5 @@
 import asyncio
+import secrets
 from typing import AsyncIterator
 
 import pytest_asyncio
@@ -30,6 +31,7 @@ external_postgres = factories.postgresql_noproc(
     user="postgres",
     port=8190,
     load=[run_chancy_migrations],
+    dbname=f"chancy_test_{secrets.token_hex(8)}",
 )
 postgresql = factories.postgresql(
     "external_postgres",
@@ -37,7 +39,7 @@ postgresql = factories.postgresql(
 
 
 @pytest_asyncio.fixture
-async def chancy(postgresql):
+async def chancy(request, postgresql):
     """
     Provides a Chancy application instance with an open connection pool
     to the test database.
@@ -46,7 +48,7 @@ async def chancy(postgresql):
 
     async with Chancy(
         dsn=f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
-        plugins=[],
+        **request.param,
     ) as chancy:
         yield chancy
 
@@ -59,11 +61,16 @@ async def worker(chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
     If the worker is not stopped by the time the test completes, it will be
     cancelled.
     """
-    async with asyncio.TaskGroup() as tg:
-        worker = Worker(chancy)
-        worker_task = tg.create_task(worker.start())
+    worker = Worker(chancy)
+    worker_task = asyncio.create_task(worker.start())
+
+    try:
+        yield worker, worker_task
+    finally:
+        if not worker_task.done():
+            worker_task.cancel()
+
         try:
-            yield worker, worker_task
-        finally:
-            if not worker_task.done():
-                worker_task.cancel()
+            await asyncio.gather(worker_task)
+        except asyncio.CancelledError:
+            pass

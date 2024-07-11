@@ -9,6 +9,7 @@ from psycopg import AsyncConnection
 from chancy.app import Chancy
 from chancy.hub import Hub
 from chancy.plugin import PluginScope
+from chancy.queue import QueuePlugin
 from chancy.logger import PrefixAdapter, logger
 
 
@@ -87,15 +88,23 @@ class Worker:
             await self.announce_worker(conn)
 
         async with TaskGroup() as group:
-            group.create_task(self.maintain_heartbeat())
-            group.create_task(self.maintain_notifications())
+            group.create_task(self.maintain_heartbeat(), name="heartbeat")
+            group.create_task(
+                self.maintain_notifications(),
+                name="notifications",
+            )
 
             for plugin in self.chancy.plugins:
-                match plugin.get_scope():
-                    case PluginScope.WORKER:
-                        group.create_task(plugin.run(self, self.chancy))
-                    case PluginScope.QUEUE:
-                        group.create_task(plugin.run(self, self.chancy))
+                if isinstance(plugin, QueuePlugin):
+                    group.create_task(
+                        plugin.run(self, self.chancy),
+                        name=plugin.name,
+                    )
+                elif plugin.get_scope() == PluginScope.WORKER:
+                    group.create_task(
+                        plugin.run(self, self.chancy),
+                        name=plugin.__class__.__name__,
+                    )
 
     async def maintain_heartbeat(self):
         """
@@ -204,7 +213,7 @@ class Worker:
                 ),
                 [self.worker_id],
             )
-            await self.notify(
+            await self.chancy.notify(
                 cur, "worker.stopped", {"worker_id": self.worker_id}
             )
 

@@ -51,6 +51,8 @@ class Queue(QueuePlugin):
         :param app: The app that is polling the queue.
         :param worker: The worker that is polling the queue.
         """
+        # Skip the first sleep, as we want to start polling immediately.
+        self.wakeup_signal.set()
         while await self.sleep(self.polling_interval):
             async with app.pool.connection() as conn:
                 # If we wouldn't be able to run a job even if we had one, we

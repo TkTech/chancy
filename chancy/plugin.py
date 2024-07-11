@@ -105,20 +105,22 @@ class Plugin(abc.ABC):
         cancel = asyncio.create_task(self.cancel_signal.wait())
         wakeup = asyncio.create_task(self.wakeup_signal.wait())
 
-        done, pending = await asyncio.wait(
-            # As of 3.11, asyncio.wait() no longer accepts coroutines directly,
-            # so we must wrap them in asyncio.create_task().
-            [sleep, cancel, wakeup],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        try:
+            done, pending = await asyncio.wait(
+                [sleep, cancel, wakeup],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
 
-        for task in pending:
-            task.cancel()
+            if cancel in done:
+                return False
+        finally:
+            for task in [sleep, cancel, wakeup]:
+                if not task.done():
+                    task.cancel()
 
-        if cancel in done:
-            raise asyncio.CancelledError()
+            await asyncio.gather(sleep, cancel, wakeup, return_exceptions=True)
+            self.wakeup_signal.clear()
 
-        self.wakeup_signal.clear()
         return True
 
     async def wait_for_leader(self, worker: "Worker") -> None:
