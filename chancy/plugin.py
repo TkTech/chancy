@@ -84,6 +84,17 @@ class Plugin(abc.ABC):
         If `to_version` is provided, the database will be migrated to that
         specific version, up or down as necessary.
         """
+        migrator = self.migrator(chancy)
+        if migrator is None:
+            return
+
+        async with chancy.pool.connection() as conn:
+            await migrator.migrate(conn, to_version=to_version)
+
+    def migrator(self, chancy: "Chancy") -> Migrator | None:
+        """
+        Get a migrator for this plugin, if it has any migration scripts.
+        """
         key = self.migrate_key()
         if key is None:
             return
@@ -92,9 +103,7 @@ class Plugin(abc.ABC):
         if package is None:
             return
 
-        migrator = Migrator(key, package, prefix=chancy.prefix)
-        async with chancy.pool.connection() as conn:
-            await migrator.migrate(conn, to_version=to_version)
+        return Migrator(key, package, prefix=chancy.prefix)
 
     async def sleep(self, seconds: int) -> bool:
         """

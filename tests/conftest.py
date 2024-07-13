@@ -2,10 +2,11 @@ import asyncio
 import secrets
 from typing import AsyncIterator
 
+import pytest
 import pytest_asyncio
 from pytest_postgresql import factories
 
-from chancy import Chancy, Worker
+from chancy import Chancy, Worker, Queue
 
 
 def run_chancy_migrations(host, port, user, dbname, password):
@@ -48,9 +49,11 @@ async def chancy(request, postgresql):
 
     async with Chancy(
         dsn=f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
-        **request.param,
+        **getattr(request, "param", {}),
     ) as chancy:
+        await chancy.migrate()
         yield chancy
+        await chancy.migrate(to_version=0)
 
 
 @pytest_asyncio.fixture
@@ -74,3 +77,11 @@ async def worker(chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
             await asyncio.gather(worker_task)
         except asyncio.CancelledError:
             pass
+
+
+@pytest_asyncio.fixture
+async def worker_no_start(chancy) -> Worker:
+    """
+    Returns a Worker instance that has not been started.
+    """
+    return Worker(chancy)

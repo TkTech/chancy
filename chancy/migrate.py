@@ -10,7 +10,7 @@ import re
 import abc
 import importlib.resources
 
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, AsyncCursor
 from psycopg import sql
 
 VERSION_R = re.compile(r"v(\d+)\.py")
@@ -29,11 +29,11 @@ class Migration(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def up(self, migrator: "Migrator", conn: AsyncConnection):
+    async def up(self, migrator: "Migrator", cursor: AsyncCursor):
         pass
 
     @abc.abstractmethod
-    async def down(self, migrator: "Migrator", conn: AsyncConnection):
+    async def down(self, migrator: "Migrator", cursor: AsyncCursor):
         pass
 
 
@@ -114,44 +114,49 @@ class Migrator:
         If `to_version` is not provided, the database will be migrated to the
         highest available version.
         """
-        current_version = await self.get_current_version(conn)
         migrations = self.discover_all_migrations()
         to_version = len(migrations) if to_version is None else to_version
 
-        if current_version == to_version:
-            return False
+        async with conn.cursor() as cursor:
+            async with conn.transaction():
+                current_version = await self.get_current_version(cursor)
 
-        if to_version > len(migrations):
-            raise MigrationError(
-                f"Migration {to_version} does not exist for {self.key}"
-            )
+                if current_version == to_version:
+                    return False
 
-        while current_version != to_version:
-            if current_version < to_version:
-                current_version += 1
-                await migrations[current_version - 1].up(self, conn)
-                await self.set_current_version(conn, current_version)
-            else:
-                await migrations[current_version - 1].down(self, conn)
-                await self.set_current_version(conn, current_version - 1)
-                current_version -= 1
+                if to_version > len(migrations):
+                    raise MigrationError(
+                        f"Migration {to_version} does not exist for {self.key}"
+                    )
+
+                while current_version != to_version:
+                    if current_version < to_version:
+                        current_version += 1
+                        await migrations[current_version - 1].up(self, cursor)
+                        await self.set_current_version(cursor, current_version)
+                    else:
+                        await migrations[current_version - 1].down(self, cursor)
+                        await self.set_current_version(
+                            cursor, current_version - 1
+                        )
+                        current_version -= 1
 
         return True
 
-    async def is_migration_required(self, conn: AsyncConnection) -> bool:
+    async def is_migration_required(self, cursor: AsyncCursor) -> bool:
         """
         Check if a newer schema version is available.
         """
-        await self.upsert_version_table(conn)
-        current_version = await self.get_current_version(conn)
+        await self.upsert_version_table(cursor)
+        current_version = await self.get_current_version(cursor)
         migrations = self.discover_all_migrations()
         return current_version < len(migrations)
 
-    async def upsert_version_table(self, conn: AsyncConnection):
+    async def upsert_version_table(self, cursor: AsyncCursor):
         """
         Create the schema_version table if it doesn't exist.
         """
-        await conn.execute(
+        await cursor.execute(
             sql.SQL(
                 """
                 CREATE TABLE IF NOT EXISTS {prefix} (
@@ -162,22 +167,21 @@ class Migrator:
             ).format(prefix=sql.Identifier(f"{self.prefix}schema_version"))
         )
 
-    async def get_current_version(self, conn: AsyncConnection) -> int:
+    async def get_current_version(self, cursor: AsyncCursor) -> int:
         """
         Get the current schema version from the database.
         """
-        await self.upsert_version_table(conn)
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL(
-                    "SELECT version FROM {prefix} WHERE version_of = %s"
-                ).format(prefix=sql.Identifier(f"{self.prefix}schema_version")),
-                [self.key],
-            )
-            result = await cursor.fetchone()
-            return 0 if result is None else result[0]
+        await self.upsert_version_table(cursor)
+        await cursor.execute(
+            sql.SQL(
+                "SELECT version FROM {prefix} WHERE version_of = %s"
+            ).format(prefix=sql.Identifier(f"{self.prefix}schema_version")),
+            [self.key],
+        )
+        result = await cursor.fetchone()
+        return 0 if result is None else result[0]
 
-    async def set_current_version(self, conn: AsyncConnection, version: int):
+    async def set_current_version(self, cursor: AsyncCursor, version: int):
         """
         Set the current schema version in the database.
 
@@ -186,8 +190,8 @@ class Migrator:
             This does not perform any sanity checks nor does it run any
             migrations. It simply sets the version in the database.
         """
-        await self.upsert_version_table(conn)
-        await conn.execute(
+        await self.upsert_version_table(cursor)
+        await cursor.execute(
             sql.SQL(
                 """
                 INSERT INTO {prefix} (version_of, version) VALUES

@@ -19,9 +19,11 @@ Submodules
    chancy.app
    chancy.executor
    chancy.hub
-   chancy.logger
    chancy.migrate
    chancy.queue
-   chancy.utils
    chancy.worker
    chancy.plugin
+   chancy.queues
+   chancy.job
+   chancy.logger
+   chancy.utils

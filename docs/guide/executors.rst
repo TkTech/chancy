@@ -1,7 +1,7 @@
 Executors
 =========
 
-Once a :class:`~chancy.executor.Job` has been received off of a
+Once a :class:`~chancy.job.Job` has been received off of a
 :class:`~chancy.queue.Queue`, it needs to be executed. This is where Executors
 come in. Executors are responsible for running the job's task function and
 handling any necessary setup and teardown.

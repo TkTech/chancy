@@ -1,7 +1,7 @@
 Jobs
 ====
 
-Every unit of work in Chancy is called a :class:`~chancy.executor.Job`. Jobs
+Every unit of work in Chancy is called a :class:`~chancy.job.Job`. Jobs
 are created by clients and submitted to a queue, where they are picked up
 by workers and executed.
 

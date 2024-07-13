@@ -197,7 +197,7 @@ class Cron(Plugin):
         Schedule one or more jobs to run at specific times and intervals.
 
         All jobs that are scheduled with this feature *must* be using a
-        :attr:`~chancy.executor.Job.unique_key` to ensure that only one
+        :attr:`~chancy.job.Job.unique_key` to ensure that only one
         copy of the job is scheduled at a time. Scheduling a job with the same
         unique key as an existing job will update the existing job with the new
         schedule, job, and queue name.

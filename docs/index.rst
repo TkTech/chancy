@@ -92,7 +92,7 @@ First, we'll create a file called ``worker.py``:
 
 Start up one or more of the workers by running ``python worker.py``. This will
 start a worker that listens on the "default" queue and runs up to 10 jobs
-concurrently with a few :doc:`plugins` that help keep the queue running
+concurrently with a few :doc:`guide/plugins` that help keep the queue running
 smoothly.
 
 Next, we need to create a job that we want to run. Let's create a file called
@@ -132,9 +132,7 @@ function your code can import as a Job.
    :caption: Contents:
    :hidden:
 
-   jobs
-   plugins
-   executors
+   guide/index
    advanced/index
    chancy
 
