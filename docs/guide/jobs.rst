@@ -1,9 +1,15 @@
 Jobs
 ====
 
-Every unit of work in Chancy is called a :class:`~chancy.job.Job`. Jobs
-are created by clients and submitted to a queue, where they are picked up
+Every unit of work in Chancy is called a :class:`~chancy.job.Job`. Jobs are
+created by clients and submitted to :doc:`queues`, where they are picked up
 by workers and executed.
+
+Chancy guarantees that a job will be executed **at least once**, but it may be
+executed more than once in the event of a worker crash or other failure
+that requires the job to be retried. You should always write your jobs to
+be idempotent, that is, they should be safe to run multiple times without
+causing any problems.
 
 Creating Jobs
 -------------
