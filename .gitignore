@@ -165,3 +165,6 @@ poetry.lock
 
 # PyCharm
 .idea/
+
+node_modules
+.parcel-cache

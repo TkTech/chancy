@@ -66,7 +66,7 @@ class Worker:
         #: The number of seconds before a worker is considered to have lost
         #: connection to the cluster.
         self.heartbeat_timeout = heartbeat_timeout
-        #: An event hub for tracing and debugging.
+        #: An event hub with cluster and local telemetry, useful for plugins.
         self.hub = Hub()
         #: An event that is set when the worker is the leader.
         #: This functionality is not enabled by default - a leadership plugin
@@ -151,16 +151,16 @@ class Worker:
         self.logger.info("Started listening for realtime notifications.")
         async for notification in connection.notifies():
             j = json.loads(notification.payload)
-            match j["t"]:
-                case "pushed":
-                    try:
-                        self.chancy[j["q"]].wake_up()
-                    except KeyError:
-                        # This worker isn't setup to process this queue, so
-                        # we'll just ignore it.
-                        continue
-                case _:
-                    await self.hub.emit(j["t"], j)
+            event = j.pop("t")
+            if event == "pushed":
+                try:
+                    self.chancy[j["q"]].wake_up()
+                except KeyError:
+                    # This worker isn't setup to process this queue, so
+                    # we'll just ignore it.
+                    pass
+
+            await self.hub.emit(event, j)
 
     async def announce_worker(self, conn: AsyncConnection):
         """
@@ -187,10 +187,8 @@ class Worker:
                 [self.worker_id],
             )
             await self.chancy.notify(
-                cur, "worker.started", {"worker_id": self.worker_id}
+                cur, "worker.announced", {"worker_id": self.worker_id}
             )
-
-        await self.hub.emit("worker.started")
 
     async def revoke_worker(self, conn: AsyncConnection):
         """
@@ -216,8 +214,6 @@ class Worker:
             await self.chancy.notify(
                 cur, "worker.stopped", {"worker_id": self.worker_id}
             )
-
-        await self.hub.emit("worker.stopped")
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"

@@ -71,11 +71,14 @@ class Queue(QueuePlugin):
                     prefix=app.prefix,
                     worker_id=worker.worker_id,
                 )
+
                 await worker.hub.emit(
                     "queue.polled",
-                    fetched=len(jobs),
-                    worker_id=worker.worker_id,
-                    queue=self.name,
+                    {
+                        "fetched": len(jobs),
+                        "worker_id": worker.worker_id,
+                        "queue": self.name,
+                    },
                 )
 
                 for job in jobs:

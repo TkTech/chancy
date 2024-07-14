@@ -1,4 +1,4 @@
-from psycopg import AsyncConnection
+from psycopg import AsyncCursor
 from psycopg import sql
 
 from chancy.app import Chancy
@@ -93,27 +93,29 @@ class Pruner(Plugin):
         while await self.sleep(self.poll_interval):
             await self.wait_for_leader(worker)
             async with chancy.pool.connection() as conn:
-                with timed_block() as chancy_time:
-                    rows_removed = await self.prune(worker, chancy, conn)
-                    self.log.info(
-                        f"Pruner removed {rows_removed} row(s) from the"
-                        f" database. Took {chancy_time.elapsed:.2f} seconds."
-                    )
-                    await worker.hub.emit(
-                        "pruner.removed",
-                        elapsed=chancy_time.elapsed,
-                        rows_removed=rows_removed,
-                    )
+                async with conn.cursor() as cursor:
+                    with timed_block() as chancy_time:
+                        rows_removed = await self.prune(chancy, cursor)
+                        self.log.info(
+                            f"Pruner removed {rows_removed} row(s) from the"
+                            f" database. Took {chancy_time.elapsed:.2f}"
+                            f" seconds."
+                        )
+                        await chancy.notify(
+                            cursor,
+                            "pruner.removed",
+                            {
+                                "elapsed": chancy_time.elapsed,
+                                "rows_removed": rows_removed,
+                            },
+                        )
 
-    async def prune(
-        self, worker: Worker, chancy: Chancy, conn: AsyncConnection
-    ) -> int:
+    async def prune(self, chancy: Chancy, cursor: AsyncCursor) -> int:
         """
         Prune stale records from the database.
 
-        :param worker: The worker that is running the pruner.
         :param chancy: The Chancy application.
-        :param conn: The database connection.
+        :param cursor: The database cursor to use for the operation.
         :return: The number of rows removed from the database
         """
         job_query = sql.SQL(
@@ -134,7 +136,5 @@ class Pruner(Plugin):
             maximum_to_prune=sql.Literal(self.maximum_to_prune),
         )
 
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(job_query)
-                return cursor.rowcount
+        await cursor.execute(job_query)
+        return cursor.rowcount

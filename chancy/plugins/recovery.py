@@ -1,4 +1,4 @@
-from psycopg import AsyncConnection
+from psycopg import AsyncCursor
 from psycopg import sql
 
 from chancy.app import Chancy
@@ -44,20 +44,28 @@ class Recovery(Plugin):
         while await self.sleep(self.poll_interval):
             await self.wait_for_leader(worker)
             async with chancy.pool.connection() as conn:
-                with timed_block() as chancy_time:
-                    rows_recovered = await self.recover(worker, chancy, conn)
-                    self.log.info(
-                        f"Recovery recovered {rows_recovered} row(s) from the"
-                        f" database. Took {chancy_time.elapsed:.2f} seconds."
-                    )
-                    await worker.hub.emit(
-                        "recovery.recovered",
-                        elapsed=chancy_time.elapsed,
-                        rows_recovered=rows_recovered,
-                    )
+                async with conn.cursor() as cursor:
+                    with timed_block() as chancy_time:
+                        rows_recovered = await self.recover(
+                            worker, chancy, cursor
+                        )
+                        self.log.info(
+                            f"Recovery recovered {rows_recovered} row(s) from"
+                            f" the database. Took {chancy_time.elapsed:.2f}"
+                            f" seconds."
+                        )
+                        await chancy.notify(
+                            cursor,
+                            "recovery.recovered",
+                            {
+                                "elapsed": chancy_time.elapsed,
+                                "rows_recovered": rows_recovered,
+                            },
+                        )
 
+    @classmethod
     async def recover(
-        self, worker: Worker, chancy: Chancy, conn: AsyncConnection
+        cls, worker: Worker, chancy: Chancy, cursor: AsyncCursor
     ) -> int:
         """
         Recover jobs that were running when the worker was unexpectedly
@@ -65,7 +73,7 @@ class Recovery(Plugin):
 
         :param worker: The worker that is running the recovery.
         :param chancy: The Chancy application.
-        :param conn: The database connection.
+        :param cursor: The cursor to use for database operations.
         :return: The number of rows recovered from the database
         """
         query = sql.SQL(
@@ -95,7 +103,5 @@ class Recovery(Plugin):
             interval=sql.Literal(worker.heartbeat_timeout),
         )
 
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(query)
-                return cursor.rowcount
+        await cursor.execute(query)
+        return cursor.rowcount

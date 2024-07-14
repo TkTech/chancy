@@ -24,9 +24,25 @@ class Hub:
         except ValueError:
             pass
 
-    async def emit(self, event: str, *args, **kwargs):
+    async def emit(self, event: str, body):
         """
-        Emit an event with the given arguments to all registered handlers.
+        Emit an event with the given body.
         """
         for handler in self._handlers.get(event, []):
-            await handler(*args, **kwargs)
+            await handler(body)
+
+        # Emit wildcard handlers.
+        if "*" in self._handlers:
+            for handler in self._handlers["*"]:
+                await handler(event, body)
+
+    def off(self, event: str, callback: Callable[..., Awaitable[None]]):
+        """
+        Remove a callback from an event.
+
+        :param event: The event to remove the callback from.
+        :param callback: The callback to remove.
+        """
+        self._handlers[event] = [
+            h for h in self._handlers[event] if h != callback
+        ]

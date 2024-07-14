@@ -1,6 +1,9 @@
+import datetime
+import uuid
 import time
 import secrets
 import contextlib
+import json
 
 
 @contextlib.contextmanager
@@ -63,3 +66,22 @@ def chancy_uuid() -> str:
     rand = secrets.randbits(62)
     uuid = (t << 68) | (7 << 64) | (2 << 62) | rand
     return f"{uuid:032x}"
+
+
+def json_dumps(obj, **kwargs):
+    """
+    Serialize an object to a JSON formatted str with support for UUIDs.
+
+    :param obj: The object to serialize.
+    :param kwargs: Additional arguments to pass to `json.dumps`.
+    :return: str
+    """
+
+    def _dump(o):
+        if isinstance(o, uuid.UUID):
+            return str(o)
+        elif isinstance(o, datetime.datetime):
+            return o.isoformat()
+        raise TypeError
+
+    return json.dumps(obj, default=_dump, **kwargs)

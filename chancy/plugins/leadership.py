@@ -127,10 +127,10 @@ class Leadership(Plugin):
                             f"Worker has renewed its leadership of the cluster"
                             f" until {expires}."
                         )
-                        await worker.hub.emit(
+                        await chancy.notify(
+                            cur,
                             "leadership.renewed",
                             {
-                                "expires": expires,
                                 "worker_id": worker.worker_id,
                             },
                         )
@@ -140,10 +140,10 @@ class Leadership(Plugin):
                             f" until {expires}."
                         )
                         worker.is_leader.set()
-                        await worker.hub.emit(
+                        await chancy.notify(
+                            cur,
                             "leadership.gained",
                             {
-                                "expires": expires,
                                 "worker_id": worker.worker_id,
                             },
                         )
@@ -152,7 +152,8 @@ class Leadership(Plugin):
                             "Worker has lost leadership of the cluster."
                         )
                         worker.is_leader.clear()
-                        await worker.hub.emit(
+                        await chancy.notify(
+                            cur,
                             "leadership.lost",
                             {
                                 "worker_id": worker.worker_id,
