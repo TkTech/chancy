@@ -34,7 +34,7 @@ class QueuePlugin(Plugin, abc.ABC):
         *,
         concurrency: int = 1,
         executor: Callable[["QueuePlugin"], Executor] | None = None,
-        polling_interval: int | None = 5,
+        polling_interval: int | None = 1,
     ):
         super().__init__()
         self.name = name

@@ -176,13 +176,15 @@ class Worker:
                 sql.SQL(
                     """
                     INSERT INTO {workers}
-                        (worker_id, last_seen)
-                    VALUES (%s, NOW())
+                        (worker_id, last_seen, expires_at)
+                    VALUES (%s, NOW(), NOW() + INTERVAL {timeout})
                     ON CONFLICT (worker_id) DO UPDATE
-                        SET last_seen = NOW()
+                        SET last_seen = NOW(),
+                            expires_at = NOW() + INTERVAL {timeout}
                     """
                 ).format(
-                    workers=sql.Identifier(f"{self.chancy.prefix}workers")
+                    workers=sql.Identifier(f"{self.chancy.prefix}workers"),
+                    timeout=sql.Literal(f"{self.heartbeat_timeout} seconds"),
                 ),
                 [self.worker_id],
             )

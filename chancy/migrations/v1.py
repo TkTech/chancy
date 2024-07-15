@@ -67,7 +67,8 @@ class V1Migration(Migration):
                 """
                 CREATE UNLOGGED TABLE {workers} (
                     worker_id TEXT NOT NULL PRIMARY KEY,
-                    last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    expires_at TIMESTAMPTZ NOT NULL
                 );
                 """
             ).format(workers=sql.Identifier(f"{migrator.prefix}workers"))

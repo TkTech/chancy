@@ -24,7 +24,7 @@ class Queue(QueuePlugin):
         *,
         concurrency: int = 1,
         executor: Callable[["Queue"], Executor] | None = None,
-        polling_interval: int | None = 5,
+        polling_interval: int | None = 1,
     ):
         super().__init__(
             name,
