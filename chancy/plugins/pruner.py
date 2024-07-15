@@ -25,24 +25,24 @@ class Pruner(Plugin):
 
     .. code-block:: python
 
-        from chancy.plugins.rule import AgeRule
-        Pruner(AgeRule(60))
+        from chancy.plugins.rule import Age
+        Pruner(Age() > 60)
 
     Or to prune jobs that are older than 60 seconds and are in the "default"
     queue:
 
     .. code-block:: python
 
-        from chancy.plugins.rule import AgeRule, QueueRule
-        Pruner(QueueRule("default") + AgeRule(60))
+        from chancy.plugins.rule import Age, Queue
+        Pruner(Queue("default") + (Age() > 60))
 
     Or to prune jobs that are older than 60 seconds and are in the "default"
     queue, or instantly deleted if the job is `update_cache`:
 
     .. code-block:: python
 
-        from chancy.plugins.rule import AgeRule, QueueRule, JobRule
-        Pruner((QueueRule("default") + AgeRule(60)) | JobRule("update_cache"))
+        from chancy.plugins.rule import Age, Queue, Job
+        Pruner((Queue("default") + (Age() > 60)) | Job("update_cache"))
 
     By default, the pruner will run every 60 seconds and will remove up to
     10,000 jobs in a single run that have been completed for more than 60
@@ -50,7 +50,7 @@ class Pruner(Plugin):
 
     .. note::
 
-        By default, only an AgeRule will be covered by an index. If you use
+        By default, only an Age rule will be covered by an index. If you use
         multiple rules, you may need to create additional indexes to improve
         performance on busy queues.
 
