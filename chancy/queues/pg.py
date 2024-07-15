@@ -223,7 +223,11 @@ class Queue(QueuePlugin):
                         )
 
     async def push_jobs(
-        self, cursor: AsyncCursor, jobs: list[Job], prefix: str = "chancy_"
+        self,
+        cursor: AsyncCursor,
+        jobs: list[Job],
+        prefix: str = "chancy_",
+        suppress_notify: bool = False,
     ) -> list[Reference]:
         """
         Push one or more jobs onto the queue.
@@ -234,9 +238,17 @@ class Queue(QueuePlugin):
         created, like running onboarding for a new user only if the user is
         successfully created.
 
+        After pushing the jobs, the queue will notify the cluster of the new
+        jobs, allowing workers to wake up and start processing them immediately.
+        This isn't always desirable in busy queues, so you can suppress the
+        notification by setting `suppress_notify` to `True`. This is safe to
+        do since the jobs will be picked up by the next poll.
+
         :param cursor: The database cursor to use.
         :param jobs: The jobs to push onto the queue.
         :param prefix: The prefix to use for the database tables.
+        :param suppress_notify: If `True`, the queue will not notify the cluster
+                                of the new jobs.
         """
 
         # We used to use a single executemany() here, but switched to doing
@@ -298,12 +310,15 @@ class Queue(QueuePlugin):
 
         # Notify the cluster that new jobs have been pushed, allowing workers
         # to wake up and start processing them immediately.
-        await cursor.execute(
-            sql.SQL("SELECT pg_notify({events}, {event});").format(
-                events=sql.Literal(f"{prefix}events"),
-                event=sql.Literal(json.dumps({"t": "pushed", "q": self.name})),
+        if not suppress_notify:
+            await cursor.execute(
+                sql.SQL("SELECT pg_notify({events}, {event});").format(
+                    events=sql.Literal(f"{prefix}events"),
+                    event=sql.Literal(
+                        json.dumps({"t": "pushed", "q": self.name})
+                    ),
+                )
             )
-        )
 
         return references
 
