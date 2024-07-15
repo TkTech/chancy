@@ -9,7 +9,7 @@ from psycopg.types.json import Json
 from chancy.executor import Executor
 from chancy.job import Job, Reference, JobInstance
 from chancy.queue import QueuePlugin
-from chancy.utils import chancy_uuid
+from chancy.utils import chancy_uuid, chunked
 from chancy.app import Chancy
 
 
@@ -214,8 +214,13 @@ class Queue(QueuePlugin):
     async def push(self, app, jobs: list[Job]) -> list[Reference]:
         async with app.pool.connection() as conn:
             async with conn.cursor() as cursor:
-                async with conn.transaction():
-                    return await self.push_jobs(cursor, jobs, prefix=app.prefix)
+                # Excessive numbers of jobs will cause the transaction to throw
+                # memory errors, so we need to chunk them.
+                for chunk in chunked(jobs, 1000):
+                    async with conn.transaction():
+                        return await self.push_jobs(
+                            cursor, list(chunk), prefix=app.prefix
+                        )
 
     async def push_jobs(
         self, cursor: AsyncCursor, jobs: list[Job], prefix: str = "chancy_"

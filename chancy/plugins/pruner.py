@@ -4,7 +4,7 @@ from psycopg import sql
 from chancy.app import Chancy
 from chancy.worker import Worker
 from chancy.plugin import Plugin, PluginScope
-from chancy.plugins.rule import RuleT, AgeRule
+from chancy.plugins.rule import Age, SQLAble
 from chancy.utils import timed_block
 
 
@@ -75,7 +75,7 @@ class Pruner(Plugin):
 
     def __init__(
         self,
-        rule: RuleT = AgeRule(60),
+        rule: SQLAble = Age() > 60,
         *,
         maximum_to_prune: int = 10000,
         poll_interval: int = 60,

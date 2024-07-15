@@ -1,9 +1,10 @@
 import datetime
 import uuid
 import time
-import secrets
-import contextlib
 import json
+import secrets
+import itertools
+import contextlib
 
 
 @contextlib.contextmanager
@@ -85,3 +86,18 @@ def json_dumps(obj, **kwargs):
         raise TypeError
 
     return json.dumps(obj, default=_dump, **kwargs)
+
+
+def chunked(iterable, size):
+    """
+    Yield chunks of `size` from `iterable`.
+
+    :param iterable: The iterable to chunk.
+    :param size: The size of each chunk.
+    """
+    it = iter(iterable)
+    while True:
+        chunk = list(itertools.islice(it, size))
+        if not chunk:
+            break
+        yield chunk

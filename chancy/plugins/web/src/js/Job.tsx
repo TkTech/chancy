@@ -34,6 +34,10 @@ export function Job() {
               <td>{jobData.state}</td>
             </tr>
             <tr>
+              <td>Created</td>
+              <td>{jobData.created_at}</td>
+            </tr>
+            <tr>
               <td>Started</td>
               <td>{jobData.started_at}</td>
             </tr>

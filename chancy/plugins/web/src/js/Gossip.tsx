@@ -34,7 +34,7 @@ export function Gossip() {
       <p className={"subtitle mb-4"}>Peek into the internal Chancy event bus.</p>
       <div className={"columns"}>
         <div className={'column'}>
-          <table className={'table is-fullwidth'}>
+          <table className={'table is-bordered is-striped is-fullwidth'}>
             <thead>
             <tr>
               <th>When</th>

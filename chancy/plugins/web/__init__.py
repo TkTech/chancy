@@ -15,6 +15,7 @@ from psycopg import AsyncConnection
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin, PluginScope
 from chancy.logger import logger
+from chancy.plugins.rule import State
 from chancy.utils import json_dumps
 
 
@@ -30,10 +31,10 @@ class Web(Plugin):
 
         The web interface is not secure and should not be exposed to the
         public internet. It is intended for use in a secure environment, such
-        as a private network or a VPN.
+        as a private network or a VPN where only trusted users have access.
 
     The UI is a single-page application that uses the REST API to communicate
-    with the Chancy cluster, build with Parcel, Bulma, and htmlx
+    with the Chancy cluster, build with Parcel, Bulma and React.
 
     :param port: The port to listen on.
     :param host: The host to listen on.
@@ -130,9 +131,10 @@ class Web(Plugin):
         """
         Returns a list of known jobs and their current status.
         """
-        before = request.query_params.get("before", None)
         state = request.query_params.get("state", "running")
-        limit = request.query_params.get("limit", 20)
+        limit = min(int(request.query_params.get("limit", 20)), 200)
+
+        rules = State() == state
 
         async with chancy.pool.connection() as conn:
             conn: AsyncConnection
@@ -145,17 +147,25 @@ class Web(Plugin):
                         FROM
                             {jobs}
                         WHERE
-                            (%(before)s::uuid IS NULL OR id < %(before)s)
-                            AND (%(state)s::text IS NULL OR state = %(state)s)
+                            ({rule})
                         ORDER BY
-                            id DESC
+                            {ordering}
                         LIMIT %(limit)s
                         """
-                    ).format(jobs=sql.Identifier(f"{chancy.prefix}jobs")),
+                    ).format(
+                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
+                        rule=rules.to_sql(),
+                        ordering={
+                            "running": sql.SQL("started_at ASC"),
+                            "failed": sql.SQL("completed_at DESC"),
+                            "succeeded": sql.SQL("completed_at DESC"),
+                        }.get(state, sql.SQL("created_at DESC")),
+                    ),
                     {
-                        "before": before,
                         "state": state,
-                        "limit": limit,
+                        # We fetch one more than the limit to see if there are
+                        # more jobs available for pagination.
+                        "limit": limit + 1,
                     },
                 )
                 jobs = await cursor.fetchall()
@@ -191,7 +201,7 @@ class Web(Plugin):
         cls, request: Request, chancy: Chancy, worker: Worker
     ):
         """
-        Returns a list of known states and their current status.
+        Returns a list of known states.
         """
         return JSONResponse(
             [

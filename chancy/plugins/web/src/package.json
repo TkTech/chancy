@@ -6,7 +6,7 @@
 	},
 	"scripts": {
 		"start": "parcel index.html",
-		"build": "parcel build index.html --dist-dir ../static --public-url /static/"
+		"build": "rm -rf ../static/* && parcel build index.html --dist-dir ../static --public-url /static/"
 	},
 	"dependencies": {
 		"@tanstack/react-query": "^5.51.1",

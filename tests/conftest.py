@@ -2,11 +2,10 @@ import asyncio
 import secrets
 from typing import AsyncIterator
 
-import pytest
 import pytest_asyncio
 from pytest_postgresql import factories
 
-from chancy import Chancy, Worker, Queue
+from chancy import Chancy, Worker
 
 
 def run_chancy_migrations(host, port, user, dbname, password):

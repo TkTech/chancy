@@ -3,98 +3,120 @@ Utilities for creating dynamic rules that can be used when configuring the
 conditions of a Plugin.
 """
 
-import abc
-from typing import Union
-
+from typing import Any
 from psycopg import sql
 
-OpT = Union["Conditional", "Operator"]
+
+class SQLAble:
+    def to_sql(self) -> sql.Composable:
+        raise NotImplementedError
 
 
-class SQLAble(abc.ABC):
-    @abc.abstractmethod
-    def to_sql(self) -> sql.Composed:
-        """
-        Convert this object to an SQL expression.
-        """
+class Rule:
+    def __init__(self, field: str):
+        self.field = field
+
+    def __eq__(self, other: Any) -> "Condition":
+        return Condition(self.field, "=", other)
+
+    def __ne__(self, other: Any) -> "Condition":
+        return Condition(self.field, "!=", other)
+
+    def __lt__(self, other: Any) -> "Condition":
+        return Condition(self.field, "<", other)
+
+    def __le__(self, other: Any) -> "Condition":
+        return Condition(self.field, "<=", other)
+
+    def __gt__(self, other: Any) -> "Condition":
+        return Condition(self.field, ">", other)
+
+    def __ge__(self, other: Any) -> "Condition":
+        return Condition(self.field, ">=", other)
 
 
-class Operator(SQLAble, abc.ABC):
-    def __init__(self, left: OpT, right: OpT):
+class Condition(SQLAble):
+    def __init__(self, field: str, op: str, value: Any):
+        self.field = field
+        self.op = op
+        self.value = value
+
+    def __or__(self, other: "Condition") -> "OrCondition":
+        return OrCondition(self, other)
+
+    def __and__(self, other: "Condition") -> "AndCondition":
+        return AndCondition(self, other)
+
+    def to_sql(self) -> sql.Composable:
+        return sql.SQL("{field} {op} {value}").format(
+            field=sql.Identifier(self.field),
+            op=sql.SQL(self.op),
+            value=sql.Literal(self.value),
+        )
+
+
+class OrCondition(SQLAble):
+    def __init__(self, left: SQLAble, right: SQLAble):
         self.left = left
         self.right = right
 
-    def __or__(self, other: OpT) -> "Or":
-        return Or(self, other)
+    def __or__(self, other: SQLAble) -> "OrCondition":
+        return OrCondition(self, other)
 
-    def __add__(self, other: OpT) -> "And":
-        return And(self, other)
+    def __and__(self, other: SQLAble) -> "AndCondition":
+        return AndCondition(self, other)
 
-
-class Or(Operator):
-    def to_sql(self) -> sql.Composed:
+    def to_sql(self) -> sql.Composable:
         return sql.SQL("({left}) OR ({right})").format(
             left=self.left.to_sql(), right=self.right.to_sql()
         )
 
 
-class And(Operator):
-    def to_sql(self) -> sql.Composed:
+class AndCondition(SQLAble):
+    def __init__(self, left: SQLAble, right: SQLAble):
+        self.left = left
+        self.right = right
+
+    def __or__(self, other: Condition) -> OrCondition:
+        return OrCondition(self, other)
+
+    def __and__(self, other: Condition) -> "AndCondition":
+        return AndCondition(self, other)
+
+    def to_sql(self) -> sql.Composable:
         return sql.SQL("({left}) AND ({right})").format(
             left=self.left.to_sql(), right=self.right.to_sql()
         )
 
 
-class Conditional(SQLAble, abc.ABC):
-    """
-    A conditional is a rule that can be applied to a pruner.
-    """
+class Age(Rule):
+    def __init__(self):
+        super().__init__("age")
 
-    def __or__(self, other: OpT) -> Or:
-        return Or(self, other)
-
-    def __add__(self, other: OpT) -> And:
-        return And(self, other)
+    def to_sql(self) -> sql.Composable:
+        return sql.SQL("NOW() - created_at")
 
 
-class QueueRule(Conditional):
-    """
-    A conditional that matches jobs based on their queue.
-    """
-
-    def __init__(self, queue: str):
-        self.queue = queue
-
-    def to_sql(self) -> sql.Composed:
-        return sql.SQL("queue = {queue}").format(queue=sql.Literal(self.queue))
+class Queue(Rule):
+    def __init__(self):
+        super().__init__("queue")
 
 
-class AgeRule(Conditional):
-    """
-    A conditional that matches jobs based on their age.
-    """
-
-    def __init__(self, age: int):
-        self.age = age
-
-    def to_sql(self) -> sql.Composed:
-        return sql.SQL(
-            "scheduled_at < NOW() - INTERVAL '{age} seconds'"
-        ).format(age=sql.Literal(self.age))
+class Job(Rule):
+    def __init__(self):
+        super().__init__("payload->>'func'")
 
 
-class JobRule(Conditional):
-    """
-    A conditional that matches jobs based on their job name.
-    """
-
-    def __init__(self, job: str):
-        self.job = job
-
-    def to_sql(self) -> sql.Composed:
-        return sql.SQL("payload->>'func' = {job}").format(
-            job=sql.Literal(self.job)
-        )
+class State(Rule):
+    def __init__(self):
+        super().__init__("state")
 
 
-RuleT = Union[SQLAble, list[SQLAble]]
+class CreatedAt(Rule):
+    def __init__(self):
+        super().__init__("created_at")
+
+
+class ScheduledAt(Rule):
+    def __init__(self):
+        super().__init__("scheduled_at")

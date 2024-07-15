@@ -21,6 +21,7 @@ class V1Migration(Migration):
                     attempts INTEGER DEFAULT 0,
                     max_attempts INTEGER DEFAULT 1,
                     taken_by TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     started_at TIMESTAMPTZ,
                     completed_at TIMESTAMPTZ,
                     scheduled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {useQuery} from '@tanstack/react-query';
+import {useQuery, keepPreviousData} from '@tanstack/react-query';
 import {Link, useSearchParams} from 'react-router-dom';
 import {TimeBlock, TimeSinceBlock} from './components/Time';
 
@@ -10,18 +10,32 @@ import {TimeBlock, TimeSinceBlock} from './components/Time';
  */
 export function JobTable({ state }) {
   const [params, setParams] = useState(() => new URLSearchParams({
-    state: state
+    state: state,
+    limit: "20"
   }));
+
+  const [limit, setLimit] = useState(20);
 
   useEffect(() => {
     if (state) {
+      if (state !== params.get('state')) {
+        setLimit(20);
+      }
+
       setParams((prevParams) => {
         const newParams = new URLSearchParams(prevParams);
         newParams.set('state', state);
         return newParams;
       });
     }
-  }, [state]);
+    if (limit) {
+      setParams((prevParams) => {
+        const newParams = new URLSearchParams(prevParams);
+        newParams.set('limit', limit.toString());
+        return newParams;
+      });
+    }
+  }, [state, limit]);
 
   const { data, isLoading} = useQuery({
     queryKey: ['jobs', params.toString()],
@@ -29,8 +43,9 @@ export function JobTable({ state }) {
       const response = await fetch(`/api/jobs?${params.toString()}`);
       return response.json();
     },
-    refetchInterval: 1000
-  })
+    refetchInterval: 1000,
+    placeholderData: keepPreviousData
+  });
 
   if (isLoading) {
     return <p>Loading...</p>;
@@ -80,6 +95,17 @@ export function JobTable({ state }) {
           </div>
         </div>
       ))}
+      {data && data.length > 20 && (
+        <div className={'panel-block'}>
+          <button
+            className={
+              `button is-primary is-fullwidth is-outlined is-disabled ${limit >= 200 ? 'is-disabled' : ''}`
+            }
+            onClick={() => setLimit(limit + 20)}
+            disabled={limit >= 200}
+          >Load More</button>
+        </div>
+      )}
     </article>
   );
 }
