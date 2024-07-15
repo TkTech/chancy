@@ -22,7 +22,8 @@ from chancy.utils import json_dumps
 class Web(Plugin):
     """
     A plugin that starts a web server for monitoring and debugging of a
-    Chancy cluster.
+    Chancy cluster. Enables a basic UI, an API, and a WebSocket for listening
+    to cluster gossip.
 
     The web interface can run on every worker, or you may want to run it on a
     dedicated worker where the Web plugin is the only plugin enabled.
@@ -32,9 +33,6 @@ class Web(Plugin):
         The web interface is not secure and should not be exposed to the
         public internet. It is intended for use in a secure environment, such
         as a private network or a VPN where only trusted users have access.
-
-    The UI is a single-page application that uses the REST API to communicate
-    with the Chancy cluster, build with Parcel, Bulma and React.
 
     :param port: The port to listen on.
     :param host: The host to listen on.
@@ -111,19 +109,26 @@ class Web(Plugin):
             conn: AsyncConnection
             async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(
-                    sql.SQL("SELECT * FROM {workers}").format(
-                        workers=sql.Identifier(f"{chancy.prefix}workers")
+                    sql.SQL(
+                        """
+                        SELECT
+                            *,
+                            EXISTS (
+                                SELECT 1
+                                FROM {leader}
+                                WHERE {leader}.worker_id = {workers}.worker_id
+                            ) AS is_leader
+                        FROM {workers}
+                        ORDER BY last_seen DESC
+                        """
+                    ).format(
+                        workers=sql.Identifier(f"{chancy.prefix}workers"),
+                        leader=sql.Identifier(f"{chancy.prefix}leader"),
                     )
                 )
                 workers = await cursor.fetchall()
-                return JSONResponse(
-                    [
-                        {
-                            "worker_id": worker["worker_id"],
-                            "last_seen": worker["last_seen"].isoformat(),
-                        }
-                        for worker in workers
-                    ]
+                return Response(
+                    json_dumps(workers), media_type="application/json"
                 )
 
     @classmethod
