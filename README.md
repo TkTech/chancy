@@ -4,19 +4,21 @@
 
 A postgres-backed task queue for Python.
 
-This project is currently in the early stages of development. Use at your own
-risk. It's guaranteed to be buggy and incomplete.
+## Key Features
 
-## Features
-
-- Fully-featured Jobs, with priorities, retries, timeouts, memory limits, future
-  scheduling, and more.
-- Transactional job queueing. Jobs are only inserted into the database if the
-  transaction they were created in is committed.
+- Fully-featured jobs support priorities, retries, timeouts, memory limits,
+  future scheduling, and more.
 - Completed jobs stick around in the database for easy debugging and job
-  tracking, with configurable retention policies.
-- Dependency-free except for psycopg3.
-- Multi-tenant support with prefixes for all database tables.
+  tracking, with configurable retention policies. Inspect your jobs with plain
+  old SQL, an HTTP API, or the dashboard.
+- Core is dependency-free except for psycopg3, but plugins can add additional
+  dependencies.
+- Optional transactional job queueing - only queue a job if your transaction
+  commits successfully.
+- asyncio-based worker, can be run in-process with your web server on small
+  projects or as a standalone worker on larger projects.
+- Statically declare your queues or create and manage them on-the-fly,
+  assigning them to workers based on tags.
 
 ## Documentation
 
