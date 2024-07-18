@@ -9,7 +9,7 @@ from psycopg_pool import AsyncConnectionPool
 
 from chancy.migrate import Migrator
 from chancy.job import Job
-from chancy.queue import QueuePlugin
+from chancy.queue import Queue
 from chancy.job import Reference
 from chancy.plugin import Plugin
 
@@ -37,6 +37,9 @@ class Chancy:
     #: The number of seconds to wait before attempting to reconnect to the
     #: database after a connection is lost from the pool.
     poll_reconnect_timeout: int = 60 * 5
+    #: If set, the Chancy application will emit notifications for various
+    #: events.
+    notifications: bool = True
 
     async def migrate(self, *, to_version: int | None = None):
         """
@@ -88,9 +91,8 @@ class Chancy:
 
         .. code-block:: python
 
-                async with Chancy(...) as chancy:
-                    ...
-
+            async with Chancy(...) as chancy:
+                ...
         """
         await self.pool.open()
 
@@ -104,13 +106,13 @@ class Chancy:
 
         .. code-block:: python
 
-                    async with Chancy(...) as chancy:
-                        ...
+            async with Chancy(...) as chancy:
+                ...
         """
         if not self.pool.closed:
             await self.pool.close()
 
-    async def push(self, queue: str | QueuePlugin, job: Job) -> Reference:
+    async def push(self, queue: str, job: Job) -> Reference:
         """
         Push a single job onto the queue.
 
@@ -120,16 +122,13 @@ class Chancy:
             `unique_key` is already in the queue. The existing job will be
             returned instead.
 
-        :param queue: The name or Queue of the queue to push the job onto.
+        :param queue: The name of the queue to push the job onto.
         :param job: The job to push onto the queue.
         :return: The reference to the job that was pushed.
         """
-        q = queue if isinstance(queue, QueuePlugin) else self[queue]
-        return (await q.push(self, [job]))[0]
+        return (await Queue(queue).push(self, [job]))[0]
 
-    async def push_many(
-        self, queue: str | QueuePlugin, *jobs: Job
-    ) -> list[Reference]:
+    async def push_many(self, queue: str, *jobs: Job) -> list[Reference]:
         """
         Push one or more jobs onto a queue.
 
@@ -139,18 +138,10 @@ class Chancy:
             `unique_key` is already in the queue. The existing job will be
             returned instead.
 
-        :param queue: The name or Queue of the queue to push the job onto.
+        :param queue: The name of the queue to push the jobs onto.
         :param jobs: The jobs to push onto the queue.
         """
-        q = queue if isinstance(queue, QueuePlugin) else self[queue]
-        return await q.push(self, list(jobs))
-
-    @cached_property
-    def queues(self):
-        """
-        A list of all queues that are managed by the Chancy application.
-        """
-        return {p.name: p for p in self.plugins if isinstance(p, QueuePlugin)}
+        return await Queue(queue).push(self, list(jobs))
 
     async def notify(
         self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
@@ -167,6 +158,9 @@ class Chancy:
         :param event: The event to notify the cluster of.
         :param payload: The payload to send with the notification.
         """
+        if not self.notifications:
+            return
+
         await cursor.execute(
             sql.SQL(
                 """
@@ -179,5 +173,10 @@ class Chancy:
             ],
         )
 
-    def __getitem__(self, queue_name: str):
-        return self.queues[queue_name]
+    async def declare(self, queue: Queue, *, upsert: bool = False):
+        """
+        Declare a queue for the cluster to process.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                await queue.declare(self, cursor, upsert=upsert)

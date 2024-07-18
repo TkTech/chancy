@@ -17,26 +17,29 @@ class Rule:
         self.field = field
 
     def __eq__(self, other: Any) -> "Condition":
-        return Condition(self.field, "=", other)
+        return Condition(self.to_sql(), "=", other)
 
     def __ne__(self, other: Any) -> "Condition":
-        return Condition(self.field, "!=", other)
+        return Condition(self.to_sql(), "!=", other)
 
     def __lt__(self, other: Any) -> "Condition":
-        return Condition(self.field, "<", other)
+        return Condition(self.to_sql(), "<", other)
 
     def __le__(self, other: Any) -> "Condition":
-        return Condition(self.field, "<=", other)
+        return Condition(self.to_sql(), "<=", other)
 
     def __gt__(self, other: Any) -> "Condition":
-        return Condition(self.field, ">", other)
+        return Condition(self.to_sql(), ">", other)
 
     def __ge__(self, other: Any) -> "Condition":
-        return Condition(self.field, ">=", other)
+        return Condition(self.to_sql(), ">=", other)
+
+    def to_sql(self) -> sql.Composable:
+        return sql.Identifier(self.field)
 
 
 class Condition(SQLAble):
-    def __init__(self, field: str, op: str, value: Any):
+    def __init__(self, field: sql.Composable, op: str, value: Any):
         self.field = field
         self.op = op
         self.value = value
@@ -49,7 +52,7 @@ class Condition(SQLAble):
 
     def to_sql(self) -> sql.Composable:
         return sql.SQL("{field} {op} {value}").format(
-            field=sql.Identifier(self.field),
+            field=self.field,
             op=sql.SQL(self.op),
             value=sql.Literal(self.value),
         )
@@ -94,7 +97,7 @@ class Age(Rule):
         super().__init__("age")
 
     def to_sql(self) -> sql.Composable:
-        return sql.SQL("NOW() - created_at")
+        return sql.SQL("EXTRACT(EPOCH FROM (NOW() - created_at))")
 
 
 class Queue(Rule):

@@ -53,6 +53,18 @@ def importable_name(obj):
     return f"{obj.__module__}.{obj.__qualname__}"
 
 
+def import_string(name):
+    """
+    Import an object from a string.
+
+    :param name: The importable name of the object.
+    :return: Any
+    """
+    mod_name, _, func_name = name.rpartition(".")
+    mod = __import__(mod_name, fromlist=[func_name])
+    return getattr(mod, func_name)
+
+
 def chancy_uuid() -> str:
     """
     Generate a UUID suitable for use as a job ID.

@@ -9,6 +9,6 @@ __all__ = (
 )
 
 from chancy.app import Chancy
-from chancy.queues.pg import Queue
+from chancy.queue import Queue
 from chancy.worker import Worker
 from chancy.job import Limit, Job, JobInstance, Reference

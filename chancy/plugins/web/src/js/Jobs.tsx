@@ -52,61 +52,54 @@ export function JobTable({ state }) {
   }
 
   return (
-    <article className={'panel is-primary'}>
-      <p className={'panel-heading'}>
-        Jobs - {state}
-      </p>
+    <div className={'card mb-4'}>
+      <div className={'card-header text-bg-info'}>
+        Showing <strong>{state}</strong> jobs
+      </div>
       {data && data.length === 0 && (
-        <div className={'panel-block is-info'}>
-          No matching jobs found.
+        <div className={"card-body"}>
+          <div className={"text-muted"}>
+            No matching jobs found.
+          </div>
         </div>
       )}
-      {data && data.map((job) => (
-        <div key={job.id} className={'panel-block level mb-2'}>
-          <div className={'level-left'}>
-            <div className={'level-item'}>
-              <div className={"is-flex-direction-column is-align-content-start"}>
-                <div className={"has-text-weight-bold"}>
-                  <Link to={`/jobs/${job.id}`}>
-                    {job.payload.func}
-                  </Link>
-                </div>
-                <div>
-                  {job.attempts} / {job.max_attempts} <code>{JSON.stringify(job.payload.kwargs)}</code>
+      <ul className={"list-group list-group-flush"}>
+        {data && data.map((job) => {
+          return (
+            <li key={job.id} className={'list-group-item'}>
+              <div className={'d-flex w-100 justify-content-between'}>
+                <Link
+                  className={"text-decoration-none"}
+                  to={`/jobs/${job.id}`}>{job.payload.func}</Link>
+                <div className={'d-inline-block'}>
+                  <div className={'badge text-bg-info mr-2'}>
+                    <abbr title={"Queue Name"}>{job.queue}</abbr>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-          <div className={'level-right'}>
-            <div className={'level-item'}>
-              <span className={"tag"}>
-                {job.queue}
-              </span>
-            </div>
-            <div className={'level-item'}>
-              <span className={"tag"}>
-                {job.state === "running" ? (
-                  <TimeSinceBlock datetime={job.started_at}/>
-                ) : (
-                  <TimeBlock datetime={job.completed_at}/>
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
-      ))}
+              <div className={'d-flex w-100 justify-content-between mt-2'}>
+                <code>{JSON.stringify(job.payload.kwargs)}</code>
+                <div className={"text-muted small"}>
+                  <TimeSinceBlock datetime={job.created_at} />
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
       {data && data.length > 20 && (
-        <div className={'panel-block'}>
-          <button
-            className={
-              `button is-primary is-fullwidth is-outlined is-disabled ${limit >= 200 ? 'is-disabled' : ''}`
-            }
-            onClick={() => setLimit(limit + 20)}
-            disabled={limit >= 200}
-          >Load More</button>
+        <div className={"card-footer"}>
+          <div className={"d-grid gap-2"}>
+            <button
+              className={"btn btn-primary"}
+              type={"button"}
+              onClick={() => setLimit(limit + 20)}
+              disabled={limit >= 200}
+            >Load More</button>
+          </div>
         </div>
       )}
-    </article>
+    </div>
   );
 }
 
@@ -131,36 +124,35 @@ export function Jobs () {
     }
   });
 
+  if (statesIsLoading) {
+    return (
+      <div className="d-flex justify-content-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
-      <div className={"mb-4"}>
-        <h1 className={'title'}>Jobs</h1>
-        <p className={"subtitle"}>Search waiting, running, and finished jobs.</p>
-      </div>
-      <div className={"columns"}>
-        <div className={'column is-3'}>
-          <aside className={"menu"}>
-            <p className={"menu-label"}>
-              States
-            </p>
-            <ul className={"menu-list"}>
-              {stateData && stateData.map((state: any) => (
-                <li key={state.name}>
-                  <Link
-                    to={`/jobs/?state=${state.name}`}
-                    className={state.name === searchParams.get('state') ? 'is-active' : ''}
-                  >
-                    {state.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </aside>
-        </div>
-        <div className={'column'}>
-          <JobTable state={searchParams.get('state')}/>
+    <div className={"row"}>
+      <div className={"col col-3"}>
+        <h5>States</h5>
+        <div className={"list-group"}>
+          {stateData && stateData.map((state) => (
+            <Link
+              key={state.name}
+              to={`/jobs?state=${state.name}`}
+              className={`list-group-item ${searchParams.get('state') === state.name ? 'active' : ''}`}
+            >
+              {state.name}
+            </Link>
+          ))}
         </div>
       </div>
-    </>
+      <div className={'col'}>
+        <JobTable state={searchParams.get('state')}/>
+      </div>
+    </div>
   );
 }

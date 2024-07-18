@@ -5,12 +5,13 @@
 		"process": "^0.11.10"
 	},
 	"scripts": {
-		"start": "parcel index.html",
+		"start": "parcel index.html --hmr-port 1236",
 		"build": "rm -rf ../static/* && parcel build index.html --dist-dir ../static --public-url /static/"
 	},
 	"dependencies": {
+		"@tanstack/react-form": "^0.26.4",
 		"@tanstack/react-query": "^5.51.1",
-		"bulma": "^1.0.1",
+		"bootstrap": "5.3.3",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
 		"react-router-dom": "^6.24.1"

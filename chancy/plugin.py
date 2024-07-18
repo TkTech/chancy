@@ -16,8 +16,6 @@ if typing.TYPE_CHECKING:
 class PluginScope(enum.Enum):
     #: The plugin is a general worker plugin.
     WORKER = "worker"
-    #: The plugin implements a queue provider.
-    QUEUE = "queue"
 
 
 class Plugin(abc.ABC):

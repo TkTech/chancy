@@ -76,6 +76,12 @@ class Web(Plugin):
                         Route("/states", _r(self.states_view)),
                         Route("/jobs", _r(self.jobs_view)),
                         Route("/jobs/{job_id}", _r(self.job_view)),
+                        Route("/queues", _r(self.queues_view)),
+                        Route(
+                            "/queues/{queue_name}",
+                            _r(self.get_queue_view),
+                            methods=["GET"],
+                        ),
                     ],
                 ),
                 WebSocketRoute("/ws-gossip", _r(self.ws_gossip_view)),
@@ -90,7 +96,7 @@ class Web(Plugin):
             app=app,
             host=self.host,
             port=self.port,
-            log_level=logger.level,
+            log_level="error",
         )
         server = uvicorn.Server(config=config)
         await server.serve()
@@ -161,10 +167,10 @@ class Web(Plugin):
                         jobs=sql.Identifier(f"{chancy.prefix}jobs"),
                         rule=rules.to_sql(),
                         ordering={
-                            "running": sql.SQL("started_at ASC"),
-                            "failed": sql.SQL("completed_at DESC"),
-                            "succeeded": sql.SQL("completed_at DESC"),
-                        }.get(state, sql.SQL("created_at DESC")),
+                            "running": sql.SQL("started_at ASC, id"),
+                            "failed": sql.SQL("completed_at DESC, id"),
+                            "succeeded": sql.SQL("completed_at DESC, id"),
+                        }.get(state, sql.SQL("created_at DESC, id")),
                     ),
                     {
                         "state": state,
@@ -200,6 +206,65 @@ class Web(Plugin):
                 )
                 job = await cursor.fetchone()
                 return Response(json_dumps(job), media_type="application/json")
+
+    @classmethod
+    async def queues_view(
+        cls, request: Request, chancy: Chancy, worker: Worker
+    ):
+        """
+        Returns a list of known queues and their current status.
+        """
+        async with chancy.pool.connection() as conn:
+            conn: AsyncConnection
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            *
+                        FROM
+                            {queues}
+                        """
+                    ).format(queues=sql.Identifier(f"{chancy.prefix}queues"))
+                )
+                queues = await cursor.fetchall()
+                return Response(
+                    json_dumps(queues), media_type="application/json"
+                )
+
+    @classmethod
+    async def get_queue_view(
+        cls, request: Request, chancy: Chancy, worker: Worker
+    ):
+        """
+        Returns details for a single queue.
+        """
+        queue_name = request.path_params["queue_name"]
+        async with chancy.pool.connection() as conn:
+            conn: AsyncConnection
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT *
+                        FROM {queues}
+                        WHERE name = %(name)s
+                        """
+                    ).format(queues=sql.Identifier(f"{chancy.prefix}queues")),
+                    {"name": queue_name},
+                )
+
+                queue = await cursor.fetchone()
+                if queue is None:
+                    return Response(
+                        json_dumps({"error": "Queue not found"}),
+                        media_type="application/json",
+                        status_code=404,
+                    )
+
+                return Response(
+                    json_dumps(queue), media_type="application/json"
+                )
 
     @classmethod
     async def states_view(

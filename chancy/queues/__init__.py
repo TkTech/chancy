@@ -1,3 +1,0 @@
-"""
-Backend-specific Queue implementations.
-"""
