@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime, timezone, timedelta
 from typing import TYPE_CHECKING, Any
 from functools import cached_property
 
@@ -19,7 +20,14 @@ if TYPE_CHECKING:
 
 class Queue(Plugin):
     """
-    A postgres-backed queue that uses the database to store jobs.
+    Queues are global, meaning that every worker can see every available queue.
+    Worker tags are used to determine which workers will process which queues,
+    such as `has-gpu=true` or `hostname=worker1`.
+
+    By default, the queue will poll for new jobs every second, but this can be
+    adjusted using the `polling_interval` attribute. The queue can also be
+    triggered immediately on new jobs when new jobs are pushed to the queue if
+    notifications are enabled (the default).
     """
 
     class QueueState:
@@ -45,6 +53,7 @@ class Queue(Plugin):
         executor: str | None = None,
         executor_options: dict[str, Any] | None = None,
         polling_interval: int = 1,
+        sync_interval: int = 30,
         tags: set | None = None,
     ):
         super().__init__()
@@ -54,17 +63,18 @@ class Queue(Plugin):
         self.state = state
         #: The number of jobs that can be processed concurrently per worker.
         self.concurrency = concurrency
-        #: The executor to use for processing jobs in this queue.
-        self._executor = executor or "chancy.executors.process.ProcessExecutor"
-        #: Options to pass to the executor.
-        self._executor_options = executor_options or {}
         #: The number of seconds to wait between polling the queue for new jobs.
         self.polling_interval = polling_interval or 1
-        # A queue of pending updates to jobs that need to be applied on the
-        # next fetch.
-        self.pending_updates = asyncio.Queue()
-        # Only workers that match these tags will actively process this queue.
+        #: The number of seconds to wait between syncing the queue's settings
+        #: with the database.
+        self.sync_interval = sync_interval
+        #: Only workers that match these tags will actively process this queue.
         self.tags = tags or {"*"}
+
+        self._pending_updates = asyncio.Queue()
+        self._executor = executor or "chancy.executors.process.ProcessExecutor"
+        self._executor_options = executor_options or {}
+        self._last_synced = datetime.min.replace(tzinfo=timezone.utc)
 
     @cached_property
     def executor(self) -> Executor:
@@ -90,16 +100,22 @@ class Queue(Plugin):
         while await self.sleep(self.polling_interval):
             async with app.pool.connection() as conn:
                 async with conn.cursor() as cursor:
-                    await self.declare(app, cursor)
+                    now = datetime.now(tz=timezone.utc)
+                    exp = now - timedelta(seconds=self.sync_interval)
+                    if self._last_synced < exp:
+                        await self.declare(app, cursor, upsert=True)
+                        self._last_synced = now
 
                 # If we wouldn't be able to run a job even if we had one, we
                 # should just wait. Pre-fetching can be advantageous, but
                 # IMO it causes more headache (as seen with Celery and future
                 # scheduled tasks) than it's worth.
                 maximum_jobs_to_poll = self.concurrency - len(self.executor)
-                if maximum_jobs_to_poll <= 0:
-                    self.log.debug("No capacity for new jobs, skipping poll.")
-                    await asyncio.sleep(self.polling_interval)
+                if maximum_jobs_to_poll <= 0 and self._pending_updates.empty():
+                    continue
+
+                if self.state == self.QueueState.PAUSED:
+                    self.log.debug("Queue is paused, skipping poll.")
                     continue
 
                 jobs = await self.fetch_jobs(
@@ -148,12 +164,14 @@ class Queue(Plugin):
 
         async with conn.cursor(row_factory=dict_row) as cursor:
             async with conn.transaction():
-                if not self.pending_updates.empty():
+                if not self._pending_updates.empty():
                     # Gather all pending updates and apply them to the jobs
                     # table before fetching new jobs.
                     pending_updates = []
-                    while not self.pending_updates.empty():
-                        pending_updates.append(await self.pending_updates.get())
+                    while not self._pending_updates.empty():
+                        pending_updates.append(
+                            await self._pending_updates.get()
+                        )
 
                     try:
                         await cursor.executemany(
@@ -183,7 +201,7 @@ class Queue(Plugin):
                         # If we were unable to apply the updates, we should
                         # re-queue them for the next poll.
                         for update in pending_updates:
-                            await self.pending_updates.put(update)
+                            await self._pending_updates.put(update)
                         raise
 
                 await cursor.execute(
@@ -246,7 +264,7 @@ class Queue(Plugin):
         instead they are batched and updated the next time the worker polls
         the queue.
         """
-        await self.pending_updates.put(job)
+        await self._pending_updates.put(job)
 
     async def push(self, app: "Chancy", jobs: list[Job]) -> list[Reference]:
         async with app.pool.connection() as conn:
