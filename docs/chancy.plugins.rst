@@ -17,3 +17,4 @@ Submodules
    chancy.plugins.recovery
    chancy.plugins.cron
    chancy.plugins.rule
+   chancy.plugins.web

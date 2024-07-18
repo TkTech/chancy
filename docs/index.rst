@@ -14,25 +14,24 @@ Why
 
 The goal is to provide a simple, easy-to-use task queue that can be used in a
 wide variety of projects where the only infrastructure requirement is a postgres
-server that you're probably already using anyway. Its features are added
-as needed by the author's projects, so it may not be suitable for all use cases.
-You shouldn't need RabbitMQ/Redis + celery to send a few emails or run a few
-background tasks.
+server that you're probably already using anyway.
 
-Features
---------
+Key Features
+------------
 
-- Jobs support priorities, retries, timeouts, memory limits, future scheduling,
-  and more.
+- Fully-featured jobs support priorities, retries, timeouts, memory limits,
+  future scheduling, and more.
 - Completed jobs stick around in the database for easy debugging and job
   tracking, with configurable retention policies. Inspect your jobs with plain
-  old SQL.
-- Dependency-free except for psycopg3.
-- Multi-tenant support with prefixes for all database tables.
+  old SQL, an HTTP API, or the dashboard.
+- Core is dependency-free except for psycopg3, but plugins can add additional
+  dependencies.
 - Optional transactional job queueing - only queue a job if your transaction
   commits successfully.
 - asyncio-based worker, can be run in-process with your web server on small
   projects or as a standalone worker on larger projects.
+- Statically declare your queues or create and manage them on-the-fly,
+  assigning them to workers based on tags.
 
 Installation
 ------------
@@ -70,20 +69,22 @@ First, we'll create a file called ``worker.py``:
    from chancy.plugins.pruner import Pruner
    from chancy.plugins.recovery import Recovery
    from chancy.plugins.leadership import Leadership
+   from chancy.plugins.web import Web
 
    chancy = Chancy(
        dsn="postgresql://localhost/postgres",
        plugins=[
-           Queue(name="default", concurrency=10),
            Pruner(),
            Recovery(),
-           Leadership()
+           Leadership(),
+           Web(),
        ],
    )
 
    async def main():
        async with chancy:
            await chancy.migrate()
+           await chancy.declare(Queue(name="default", concurrency=10))
            await Worker(chancy).start()
 
 
@@ -93,7 +94,8 @@ First, we'll create a file called ``worker.py``:
 Start up one or more of the workers by running ``python worker.py``. This will
 start a worker that listens on the "default" queue and runs up to 10 jobs
 concurrently with a few :doc:`guide/plugins` that help keep the queue running
-smoothly.
+smoothly. The ``Web()`` plugin also enables an API and dashboard that you can
+access at ``http://localhost:8000`` by default.
 
 Next, we need to create a job that we want to run. Let's create a file called
 ``job.py`` and add a job that does nothing:
@@ -126,6 +128,25 @@ by the worker and run in the background. That's it, all done! You can use any
 function your code can import as a Job.
 
 
+Similar Projects
+----------------
+
+- celery_ is the most popular task queue for Python, but is also heavyweight
+  and suffers from some design quirks that can make it difficult to use, like
+  future scheduled tasks using up all worker memory.
+- oban_ is a postgres-backed task queue for Elixir that inspired quite a few
+  design decisions in Chancy. The oban section of the Elixir forum is a
+  fantastic resource for finding the common pitfalls and uses of a
+  postgres-backed task queue.
+- river_ is a postgres-backed task queue for Go.
+- procastinate_ is a postgres-backed task queue for Python that has been around
+  for a long time and offers strong django integration.
+
+
+.. _celery: https://docs.celeryproject.org/en/stable/
+.. _oban: https://hexdocs.pm/oban/Oban.html
+.. _river: https://github.com/riverqueue/river
+.. _procastinate: https://procrastinate.readthedocs.io/
 
 .. toctree::
    :maxdepth: 4

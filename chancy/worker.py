@@ -139,11 +139,11 @@ class Worker:
         Will run indefinitely, polling the queues for new jobs and running any
         configured plugins.
         """
-        await self.manager.add(self.maintain_queues(), name="queues")
-        await self.manager.add(self.maintain_heartbeat(), name="heartbeat")
+        await self.manager.add(self._maintain_queues(), name="queues")
+        await self.manager.add(self._maintain_heartbeat(), name="heartbeat")
         if self.chancy.notifications:
             await self.manager.add(
-                self.maintain_notifications(), name="notifications"
+                self._maintain_notifications(), name="notifications"
             )
 
         for plugin in self.chancy.plugins:
@@ -158,7 +158,7 @@ class Worker:
         except asyncio.CancelledError:
             await self.manager.shutdown()
 
-    async def maintain_queues(self):
+    async def _maintain_queues(self):
         """
         Maintain the queues that the worker is processing.
 
@@ -186,7 +186,7 @@ class Worker:
 
             await asyncio.sleep(self.queue_change_poll_interval)
 
-    async def maintain_heartbeat(self):
+    async def _maintain_heartbeat(self):
         """
         Announces the worker to the cluster, and maintains a periodic heartbeat
         to ensure that the worker is still alive.
@@ -203,7 +203,7 @@ class Worker:
                     await self.announce_worker(conn)
             await asyncio.sleep(self.heartbeat_poll_interval)
 
-    async def maintain_notifications(self):
+    async def _maintain_notifications(self):
         """
         Listen for notifications from the database.
 

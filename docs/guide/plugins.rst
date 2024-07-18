@@ -15,6 +15,8 @@ themselves:
   were running when a worker crashed or otherwise disappeared.
 - :class:`chancy.plugins.cron.Cron` - Provides a way to define
   jobs that run on a schedule using cron syntax.
+- :class:`chancy.plugins.web.Web` - Provides a web interface and
+  API for managing jobs and queues.
 
 To enable these plugins, simply pass them to the
 :class:`~chancy.app.Chancy` constructor:
@@ -32,7 +34,6 @@ To enable these plugins, simply pass them to the
         async with Chancy(
             dsn="postgresql://localhost/postgres",
             plugins=[
-                Queue(name="default", concurrency=10),
                 Pruner(),
                 Recovery(),
                 Leadership(),
@@ -52,7 +53,7 @@ and only delete jobs that are older than 1 hour, we could pass a
 
     import asyncio
     from chancy import Chancy, Worker, Queue
-    from chancy.plugins.rule import AgeRule
+    from chancy.plugins.rule import Age
     from chancy.plugins.pruner import Pruner
 
     async def main():
@@ -60,7 +61,7 @@ and only delete jobs that are older than 1 hour, we could pass a
             dsn="postgresql://localhost/postgres",
             plugins=[
                 Queue(name="default", concurrency=10),
-                Pruner(AgeRule(60 * 60), poll_interval=10),
+                Pruner(Age() > 60 * 60, poll_interval=10),
             ],
         ) as chancy:
            ...

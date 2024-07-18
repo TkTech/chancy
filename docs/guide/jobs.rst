@@ -68,13 +68,9 @@ Once you've got a job, you can submit it to a queue:
    hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
 
    async def main():
-       async with Chancy(
-           dsn="postgresql://localhost/postgres",
-           plugins=[
-               Queue(name="default", concurrency=10),
-           ],
-       ) as chancy:
+       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
            await chancy.migrate()
+           await chancy.declare(Queue(name="default", concurrency=10))
            await chancy.push("default", hello_world)
 
 
@@ -110,13 +106,9 @@ were received.
    hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
 
    async def main():
-       async with Chancy(
-           dsn="postgresql://localhost/postgres",
-           plugins=[
-               Queue(name="default", concurrency=10),
-           ],
-       ) as chancy:
+       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
            await chancy.migrate()
+           await chancy.declare(Queue(name="default", concurrency=10))
            await chancy.push("default", hello_world)
            await chancy.push("default", hello_world.with_priority(10))
            await chancy.push("default", hello_world.with_priority(-10))
@@ -167,13 +159,9 @@ Jobs can be scheduled to run at a specific time in the future
    hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
 
    async def main():
-       async with Chancy(
-           dsn="postgresql://localhost/postgres",
-           plugins=[
-               Queue(name="default", concurrency=10),
-           ],
-       ) as chancy:
+       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
            await chancy.migrate()
+           await chancy.declare(Queue(name="default", concurrency=10))
            await chancy.push(
                "default",
                hello_world.with_scheduled_at(
@@ -217,7 +205,6 @@ for up to 60 seconds. When these limits are set, the executor will enforce
 them when running the job, and if the job exceeds the limits a standard
 `MemoryError` or `TimeoutError` will be raised.
 
-
 .. warning::
 
    It's very important to note that these limits should only be considered
@@ -254,3 +241,30 @@ ignored.
    Globally unique jobs should be treated as truly "global", that is they will
    be unique *across all queues*. You can always use the queue's name as part
    of your unique key to scope it to a specific queue.
+
+
+References
+----------
+
+Anytime a job is pushed onto a queue, it's given a unique identifier which
+can be used to reference the job later. Functions like
+:meth:`~chancy.app.Chancy.push` will return a :class:`~chancy.job.Reference`
+object that can be used to retrieve the job or wait until it's finished.
+
+.. code-block:: python
+   :caption: worker.py
+
+    import asyncio
+    from chancy import Chancy, Worker, Queue
+
+    chancy = Chancy(dsn="postgresql://localhost/postgres")
+
+    async def main():
+        async with chancy:
+            await chancy.declare(Queue(name="default", concurrency=10))
+            reference = await chancy.push(my_task, "world")
+            job = await reference.wait()
+            print(f"Job finished with status {job.state}")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
