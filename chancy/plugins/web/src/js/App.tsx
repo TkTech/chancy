@@ -27,8 +27,6 @@ export function App() {
   const crumbs = matches.filter((match) => Boolean(match.handle?.crumb))
     .map((match) => match.handle.crumb(match))
 
-  // <img src={logoURL} alt={'Chancy Logo'}/>
-
   const menu = [
     {to: '/jobs', label: 'Jobs'},
     {to: '/workers', label: 'Workers'},
