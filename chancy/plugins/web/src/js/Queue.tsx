@@ -183,28 +183,34 @@ export function Queue() {
           <h2 className={'h5'}>Workers</h2>
           <p className={"text-muted"}>Workers that are currently processing jobs from this queue.</p>
           <hr />
-          <table className="table table-striped table-bordered mt-3">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Worker Tags</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queue.workers.map((worker) => (
-                <tr key={worker.worker_id}>
-                  <td>{worker.worker_id}</td>
-                  <td>
-                    {worker.tags.sort().map((tag: string) => (
-                      <li className={"list-inline-item"} key={tag}>
-                        <span className={"badge text-bg-secondary"}>{tag}</span>
-                      </li>
-                    ))}
-                  </td>
+          {queue.workers.length === 0 ? (
+            <div className="alert alert-info" role="alert">
+              No workers are currently processing jobs from this queue.
+            </div>
+          ) : (
+            <table className="table table-striped table-bordered mt-3">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Worker Tags</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {queue.workers.map((worker) => (
+                  <tr key={worker.worker_id}>
+                    <td>{worker.worker_id}</td>
+                    <td>
+                      {worker.tags.sort().map((tag: string) => (
+                        <li className={"list-inline-item"} key={tag}>
+                          <span className={"badge text-bg-secondary"}>{tag}</span>
+                        </li>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </>

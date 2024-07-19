@@ -3,7 +3,7 @@ import asyncio
 import json
 import uuid
 import socket
-from asyncio import TaskGroup, Task
+import platform
 
 from psycopg import sql
 from psycopg import AsyncConnection
@@ -56,12 +56,8 @@ class TaskManager:
                 self.tasks.remove(task)
                 try:
                     task.result()
-                except asyncio.CancelledError as exc:
+                except asyncio.CancelledError:
                     logger.debug(f"Task {task.get_name()} was cancelled.")
-                except Exception:
-                    logger.exception(
-                        f"Task {task.get_name()} raised an exception."
-                    )
 
     async def shutdown(self):
         """
@@ -107,6 +103,7 @@ class Worker:
         heartbeat_poll_interval: int = 30,
         heartbeat_timeout: int = 90,
         queue_change_poll_interval: int = 10,
+        tags: set[str] | None = None,
     ):
         #: The Chancy application that the worker is associated with.
         self.chancy = chancy
@@ -128,6 +125,8 @@ class Worker:
         #: This functionality is not enabled by default - a leadership plugin
         #: must be used to enable this event.
         self.is_leader = asyncio.Event()
+        # Extra tags to associate with the worker.
+        self._extra_tags = tags or set()
 
         self._queues: dict[str, Queue] = {}
         self.manager = TaskManager()
@@ -139,8 +138,14 @@ class Worker:
         Will run indefinitely, polling the queues for new jobs and running any
         configured plugins.
         """
+        # As a QoL, we sync the queues first thing to ensure they're up-to-
+        # date before the heartbeat runs.
+        await self._sync_queues()
         await self.manager.add(self._maintain_queues(), name="queues")
         await self.manager.add(self._maintain_heartbeat(), name="heartbeat")
+
+        # pgbouncer and other connection pools may not support LISTEN/NOTIFY
+        # properly, so this needs to remain an optional (but default) feature.
         if self.chancy.notifications:
             await self.manager.add(
                 self._maintain_notifications(), name="notifications"
@@ -172,18 +177,7 @@ class Worker:
             run when the worker is started.
         """
         while True:
-            added, removed = await self.queue_changes()
-            for queue in added:
-                self.logger.info(f"Adding queue {queue.name!r}.")
-                self._queues[queue.name] = queue
-                await self.manager.add(
-                    queue.run(self, self.chancy), name=f"queue.{queue.name}"
-                )
-
-            for queue in removed:
-                self.logger.info(f"Removing queue {queue.name!r}.")
-                del self._queues[queue.name]
-
+            await self._sync_queues()
             await asyncio.sleep(self.queue_change_poll_interval)
 
     async def _maintain_heartbeat(self):
@@ -332,73 +326,97 @@ class Worker:
         Tags are used to limit which Queues get assigned to a worker, and
         may also be used by some plugins.
 
-        :return: A list of tags associated with the worker.
+        :return: A set of tags associated with the worker.
         """
         return {
             "*",
             f"hostname={socket.gethostname()}",
             f"worker_id={self.worker_id}",
+            f"python={platform.python_version()}",
+            f"os={platform.system()}",
+            f"arch={platform.machine()}",
+            *self._extra_tags,
         }
 
-    async def queue_changes(self) -> tuple[list[Queue], list[Queue]]:
+    async def queue_changes(
+        self, conn: AsyncConnection
+    ) -> tuple[list[Queue], list[Queue]]:
         """
         Check the database for any changes to the queues that this worker
         should be processing, returning a list of queues that were added and
         a list of queues that were removed.
 
+        :param conn: The connection to use for the query.
         :return: A tuple containing a list of queues that were added and a
                  list of queues that were removed.
         """
         added = []
         removed = []
 
-        async with self.chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    sql.SQL("SELECT * FROM {queues}").format(
-                        queues=sql.Identifier(f"{self.chancy.prefix}queues")
-                    ),
-                    {
-                        "tags": list(self.worker_tags()),
-                    },
-                )
-                results = {}
-                worker_tags = self.worker_tags()
-                for queue in await cursor.fetchall():
-                    if any(
-                        any(
-                            tag == worker_tag or re.match(tag, worker_tag)
-                            for worker_tag in worker_tags
-                        )
-                        for tag in queue["tags"]
-                    ):
-                        results[queue["name"]] = queue
-
-                # Find all queues which are not currently assigned to
-                # this worker.
-                existing = set(self._queues.keys())
-                new = set(results.keys())
-
-                # Remove any queues that are no longer assigned to this
-                # worker.
-                for queue in existing - new:
-                    q = self._queues.get(queue)
-                    if q:
-                        removed.append(q)
-
-                # Add any new queues that are assigned to this worker.
-                for queue in new - existing:
-                    q = results[queue]
-                    added.append(
-                        Queue(
-                            name=q["name"],
-                            concurrency=q["concurrency"],
-                            tags=q["tags"],
-                            state=q["state"],
-                            executor=q["executor"],
-                            executor_options=q["executor_options"],
-                            polling_interval=q["polling_interval"],
-                        )
+        async with conn.cursor(row_factory=dict_row) as cursor:
+            await cursor.execute(
+                sql.SQL("SELECT * FROM {queues}").format(
+                    queues=sql.Identifier(f"{self.chancy.prefix}queues")
+                ),
+                {
+                    "tags": list(self.worker_tags()),
+                },
+            )
+            results = {}
+            worker_tags = self.worker_tags()
+            for queue in await cursor.fetchall():
+                if any(
+                    any(
+                        tag == worker_tag or re.match(tag, worker_tag)
+                        for worker_tag in worker_tags
                     )
+                    for tag in queue["tags"]
+                ):
+                    results[queue["name"]] = queue
+
+            # Find all queues which are not currently assigned to
+            # this worker.
+            existing = set(self._queues.keys())
+            new = set(results.keys())
+
+            # Remove any queues that are no longer assigned to this
+            # worker.
+            for queue in existing - new:
+                q = self._queues.get(queue)
+                if q:
+                    removed.append(q)
+
+            # Add any new queues that are assigned to this worker.
+            for queue in new - existing:
+                q = results[queue]
+                added.append(
+                    Queue(
+                        name=q["name"],
+                        concurrency=q["concurrency"],
+                        tags=q["tags"],
+                        state=q["state"],
+                        executor=q["executor"],
+                        executor_options=q["executor_options"],
+                        polling_interval=q["polling_interval"],
+                    )
+                )
 
         return added, removed
+
+    async def _sync_queues(self):
+        async with self.chancy.pool.connection() as conn:
+            added, removed = await self.queue_changes(conn)
+            for queue in added:
+                self.logger.info(f"Adding queue {queue.name!r}.")
+                self._queues[queue.name] = queue
+                await self.manager.add(
+                    queue.run(self, self.chancy), name=f"queue.{queue.name}"
+                )
+
+            for queue in removed:
+                self.logger.info(f"Removing queue {queue.name!r}.")
+                del self._queues[queue.name]
+
+            async with conn.cursor() as cursor:
+                for queue in self._queues.values():
+                    await queue.declare(self.chancy, cursor)

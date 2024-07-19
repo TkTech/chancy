@@ -1,6 +1,5 @@
 import asyncio
 import json
-from datetime import datetime, timezone, timedelta
 from typing import TYPE_CHECKING, Any
 from functools import cached_property
 
@@ -65,16 +64,12 @@ class Queue(Plugin):
         self.concurrency = concurrency
         #: The number of seconds to wait between polling the queue for new jobs.
         self.polling_interval = polling_interval or 1
-        #: The number of seconds to wait between syncing the queue's settings
-        #: with the database.
-        self.sync_interval = sync_interval
         #: Only workers that match these tags will actively process this queue.
         self.tags = tags or {"*"}
 
         self._pending_updates = asyncio.Queue()
         self._executor = executor or "chancy.executors.process.ProcessExecutor"
         self._executor_options = executor_options or {}
-        self._last_synced = datetime.min.replace(tzinfo=timezone.utc)
 
     @cached_property
     def executor(self) -> Executor:
@@ -99,13 +94,6 @@ class Queue(Plugin):
         self.wakeup_signal.set()
         while await self.sleep(self.polling_interval):
             async with app.pool.connection() as conn:
-                async with conn.cursor() as cursor:
-                    now = datetime.now(tz=timezone.utc)
-                    exp = now - timedelta(seconds=self.sync_interval)
-                    if self._last_synced < exp:
-                        await self.declare(app, cursor, upsert=True)
-                        self._last_synced = now
-
                 # If we wouldn't be able to run a job even if we had one, we
                 # should just wait. Pre-fetching can be advantageous, but
                 # IMO it causes more headache (as seen with Celery and future
@@ -115,7 +103,9 @@ class Queue(Plugin):
                     continue
 
                 if self.state == self.QueueState.PAUSED:
-                    self.log.debug("Queue is paused, skipping poll.")
+                    self.log.debug(
+                        f"Queue {self.name!r} is paused, skipping polling."
+                    )
                     continue
 
                 jobs = await self.fetch_jobs(

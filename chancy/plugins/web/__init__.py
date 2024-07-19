@@ -14,7 +14,6 @@ from psycopg import AsyncConnection
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin, PluginScope
-from chancy.logger import logger
 from chancy.plugins.rule import State
 from chancy.utils import json_dumps
 
@@ -27,6 +26,13 @@ class Web(Plugin):
 
     The web interface can run on every worker, or you may want to run it on a
     dedicated worker where the Web plugin is the only plugin enabled.
+
+    Running this plugin requires a few additional dependencies, you can install
+    them with:
+
+    .. code-block:: bash
+
+        pip install chancy[web]
 
     .. warning::
 

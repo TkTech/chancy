@@ -74,6 +74,7 @@ First, we'll create a file called ``worker.py``:
    chancy = Chancy(
        dsn="postgresql://localhost/postgres",
        plugins=[
+           Queue(name="default", concurrency=10),
            Pruner(),
            Recovery(),
            Leadership(),
@@ -84,7 +85,6 @@ First, we'll create a file called ``worker.py``:
    async def main():
        async with chancy:
            await chancy.migrate()
-           await chancy.declare(Queue(name="default", concurrency=10))
            await Worker(chancy).start()
 
 
