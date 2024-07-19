@@ -123,7 +123,7 @@ class Leadership(Plugin):
                     was_leader = worker.is_leader.is_set()
 
                     if is_leader and was_leader:
-                        self.log.debug(
+                        chancy.log.debug(
                             f"Worker has renewed its leadership of the cluster"
                             f" until {expires}."
                         )
@@ -135,7 +135,7 @@ class Leadership(Plugin):
                             },
                         )
                     elif is_leader:
-                        self.log.info(
+                        chancy.log.info(
                             f"Worker has become the leader of the cluster"
                             f" until {expires}."
                         )
@@ -148,7 +148,7 @@ class Leadership(Plugin):
                             },
                         )
                     elif was_leader:
-                        self.log.info(
+                        chancy.log.info(
                             "Worker has lost leadership of the cluster."
                         )
                         worker.is_leader.clear()

@@ -3,6 +3,7 @@ import asyncio
 import json
 import uuid
 import socket
+import logging
 import platform
 
 from psycopg import sql
@@ -12,7 +13,6 @@ from psycopg.rows import dict_row
 from chancy.app import Chancy
 from chancy.hub import Hub
 from chancy.queue import Queue
-from chancy.logger import PrefixAdapter, logger
 
 
 class TaskManager:
@@ -44,7 +44,7 @@ class TaskManager:
         task.cancel()
         self.tasks.remove(task)
 
-    async def run(self):
+    async def run(self, *, logger: logging.Logger):
         """
         Run all tasks until they are complete.
         """
@@ -109,8 +109,6 @@ class Worker:
         self.chancy = chancy
         #: The ID of the worker, which must be globally unique.
         self.worker_id = worker_id or str(uuid.uuid4())
-        #: The logger used by an active worker.
-        self.logger = PrefixAdapter(logger, {"prefix": "Worker"})
         #: The number of seconds between heartbeat poll intervals.
         self.heartbeat_poll_interval = heartbeat_poll_interval
         #: The number of seconds before a worker is considered to have lost
@@ -156,10 +154,12 @@ class Worker:
                 plugin.run(self, self.chancy),
                 name=plugin.__class__.__name__,
             )
-            self.logger.info(f"Started plugin {plugin.__class__.__name__!r}")
+            self.chancy.log.info(
+                f"Started plugin {plugin.__class__.__name__!r}"
+            )
 
         try:
-            await self.manager.run()
+            await self.manager.run(logger=self.chancy.log)
         except asyncio.CancelledError:
             await self.manager.shutdown()
 
@@ -193,7 +193,7 @@ class Worker:
         while True:
             async with self.chancy.pool.connection() as conn:
                 async with conn.transaction():
-                    self.logger.debug("Announcing worker to the cluster.")
+                    self.chancy.log.debug("Announcing worker to the cluster.")
                     await self.announce_worker(conn)
             await asyncio.sleep(self.heartbeat_poll_interval)
 
@@ -222,7 +222,7 @@ class Worker:
                 channel=sql.Identifier(f"{self.chancy.prefix}events")
             )
         )
-        self.logger.info("Started listening for realtime notifications.")
+        self.chancy.log.info("Started listening for realtime notifications.")
         async for notification in connection.notifies():
             j = json.loads(notification.payload)
             event = j.pop("t")
@@ -407,14 +407,14 @@ class Worker:
         async with self.chancy.pool.connection() as conn:
             added, removed = await self.queue_changes(conn)
             for queue in added:
-                self.logger.info(f"Adding queue {queue.name!r}.")
+                self.chancy.log.info(f"Adding queue {queue.name!r}.")
                 self._queues[queue.name] = queue
                 await self.manager.add(
                     queue.run(self, self.chancy), name=f"queue.{queue.name}"
                 )
 
             for queue in removed:
-                self.logger.info(f"Removing queue {queue.name!r}.")
+                self.chancy.log.info(f"Removing queue {queue.name!r}.")
                 del self._queues[queue.name]
 
             async with conn.cursor() as cursor:

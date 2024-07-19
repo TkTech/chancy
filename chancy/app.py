@@ -1,7 +1,8 @@
 import json
+import logging
 import dataclasses
-from functools import cached_property
 from typing import Any
+from functools import cached_property
 
 from psycopg import sql
 from psycopg import AsyncCursor
@@ -12,6 +13,22 @@ from chancy.job import Job
 from chancy.queue import Queue
 from chancy.job import Reference
 from chancy.plugin import Plugin
+
+
+def _setup_default_logger():
+    logger = logging.getLogger("chancy")
+    logger.setLevel(logging.INFO)
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s • %(levelname)s • %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+
+    logger.addHandler(handler)
+    return logger
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -40,6 +57,10 @@ class Chancy:
     #: If set, the Chancy application will emit notifications for various
     #: events.
     notifications: bool = True
+    #: The logger to use for the application.
+    log: logging.Logger = dataclasses.field(
+        default_factory=_setup_default_logger
+    )
 
     async def migrate(self, *, to_version: int | None = None):
         """

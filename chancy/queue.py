@@ -75,7 +75,7 @@ class Queue(Plugin):
     def executor(self) -> Executor:
         return import_string(self._executor)(self, **self._executor_options)
 
-    async def run(self, worker: "Worker", app: "Chancy"):
+    async def run(self, worker: "Worker", chancy: "Chancy"):
         """
         Continuously polls the queue for new jobs.
 
@@ -87,13 +87,13 @@ class Queue(Plugin):
             If you want to pull jobs from the queue to process them yourself,
             you can use the :meth:`fetch()` method directly.
 
-        :param app: The app that is polling the queue.
         :param worker: The worker that is polling the queue.
+        :param chancy: The app that is polling the queue.
         """
         # Skip the first sleep, as we want to start polling immediately.
         self.wakeup_signal.set()
         while await self.sleep(self.polling_interval):
-            async with app.pool.connection() as conn:
+            async with chancy.pool.connection() as conn:
                 # If we wouldn't be able to run a job even if we had one, we
                 # should just wait. Pre-fetching can be advantageous, but
                 # IMO it causes more headache (as seen with Celery and future
@@ -103,7 +103,7 @@ class Queue(Plugin):
                     continue
 
                 if self.state == self.QueueState.PAUSED:
-                    self.log.debug(
+                    chancy.log.debug(
                         f"Queue {self.name!r} is paused, skipping polling."
                     )
                     continue
@@ -111,7 +111,7 @@ class Queue(Plugin):
                 jobs = await self.fetch_jobs(
                     conn,
                     up_to=maximum_jobs_to_poll,
-                    prefix=app.prefix,
+                    prefix=chancy.prefix,
                     worker_id=worker.worker_id,
                 )
 
@@ -125,7 +125,9 @@ class Queue(Plugin):
                 )
 
                 for job in jobs:
-                    self.log.debug(f"Found job {job.id}, pushing to executor.")
+                    chancy.log.debug(
+                        f"Found job {job.id}, pushing to executor."
+                    )
                     await self.executor.push(job)
 
     async def fetch_jobs(

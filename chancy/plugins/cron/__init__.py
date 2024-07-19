@@ -138,7 +138,7 @@ class Cron(Plugin):
                                 # interface which may not even be postgres.
                                 await q.push(chancy, [Job.unpack(job)])
 
-                            self.log.debug(
+                            chancy.log.debug(
                                 f"Pushed scheduled cron job {unique_key!r}"
                                 f" onto queue {queue_name!r}."
                             )

@@ -2,10 +2,7 @@ import abc
 import enum
 import asyncio
 import typing
-import logging
-from functools import cached_property
 
-from chancy.logger import logger, PrefixAdapter
 from chancy.migrate import Migrator
 
 if typing.TYPE_CHECKING:
@@ -43,10 +40,6 @@ class Plugin(abc.ABC):
         gracefully.
         """
         self.cancel_signal.set()
-
-    @cached_property
-    def log(self) -> logging.LoggerAdapter:
-        return PrefixAdapter(logger, {"prefix": self.__class__.__name__})
 
     @classmethod
     @abc.abstractmethod

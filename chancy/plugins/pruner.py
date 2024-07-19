@@ -96,7 +96,7 @@ class Pruner(Plugin):
                 async with conn.cursor() as cursor:
                     with timed_block() as chancy_time:
                         rows_removed = await self.prune(chancy, cursor)
-                        self.log.info(
+                        chancy.log.info(
                             f"Pruner removed {rows_removed} row(s) from the"
                             f" database. Took {chancy_time.elapsed:.2f}"
                             f" seconds."

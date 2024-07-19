@@ -49,7 +49,7 @@ class Recovery(Plugin):
                         rows_recovered = await self.recover(
                             worker, chancy, cursor
                         )
-                        self.log.info(
+                        chancy.log.info(
                             f"Recovery recovered {rows_recovered} row(s) from"
                             f" the database. Took {chancy_time.elapsed:.2f}"
                             f" seconds."
