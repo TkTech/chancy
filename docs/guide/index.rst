@@ -13,7 +13,7 @@ more.
    :caption: Contents:
 
    jobs
-   workers
    queues
+   workers
    plugins
    executors

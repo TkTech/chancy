@@ -9,96 +9,46 @@ A postgres-backed task queue for Python.
   API may change often. Use at your own risk. It's practically guaranteed
   to have bugs and missing features.
 
-Why
----
 
-The goal is to provide a simple, easy-to-use task queue that can be used in a
-wide variety of projects where the only infrastructure requirement is a postgres
-server that you're probably already using anyway.
+Key Features:
+-------------
 
-Key Features
-------------
+- Postgres-backed for reliability and familiarity
+- Support for job priorities, retries, timeouts, and scheduling
+- Configurable job retention for easy debugging and tracking
+- Minimal dependencies (only psycopg3 required)
+- Optional transactional job queueing
+- asyncio-based worker for efficient processing
 
-- Fully-featured jobs support priorities, retries, timeouts, memory limits,
-  future scheduling, and more.
-- Completed jobs stick around in the database for easy debugging and job
-  tracking, with configurable retention policies. Inspect your jobs with plain
-  old SQL, an HTTP API, or the dashboard.
-- Core is dependency-free except for psycopg3, but plugins can add additional
-  dependencies.
-- Optional transactional job queueing - only queue a job if your transaction
-  commits successfully.
-- asyncio-based worker, can be run in-process with your web server on small
-  projects or as a standalone worker on larger projects.
-- Statically declare your queues or create and manage them on-the-fly,
-  assigning them to workers based on tags.
+Quick Start
+-----------
 
-Installation
-------------
-
-Chancy is available on PyPI. You can install it with pip:
+1. Install Chancy:
 
 .. code-block:: bash
 
-   pip install chancy
+   $ pip install chancy
 
-From Source
-~~~~~~~~~~~
-
-You can also install Chancy from source by cloning the repository and running
-``pip install .`` in the root directory:
-
-.. code-block:: bash
-
-    git clone https://github.com/TkTech/chancy.git
-    cd chancy
-    pip install .
-
-Usage
------
-
-Using Chancy is fairly straightforward. Just like any work queue, you need to
-have a worker that listens for jobs and a client that submits jobs to the queue.
-First, we'll create a file called ``worker.py``:
+2. Setup a basic worker (worker.py):
 
 .. code-block:: python
   :caption: worker.py
 
    import asyncio
    from chancy import Chancy, Worker, Queue
-   from chancy.plugins.pruner import Pruner
-   from chancy.plugins.recovery import Recovery
-   from chancy.plugins.leadership import Leadership
-   from chancy.plugins.web import Web
 
-   chancy = Chancy(
-       dsn="postgresql://localhost/postgres",
-       plugins=[
-           Queue(name="default", concurrency=10),
-           Pruner(),
-           Recovery(),
-           Leadership(),
-           Web(),
-       ],
-   )
+   chancy = Chancy(dsn="postgresql://localhost/postgres")
 
    async def main():
        async with chancy:
            await chancy.migrate()
+           await chancy.declare(Queue("default"))
            await Worker(chancy).start()
-
 
    if __name__ == "__main__":
        asyncio.run(main())
 
-Start up one or more of the workers by running ``python worker.py``. This will
-start a worker that listens on the "default" queue and runs up to 10 jobs
-concurrently with a few :doc:`guide/plugins` that help keep the queue running
-smoothly. The ``Web()`` plugin also enables an API and dashboard that you can
-access at ``http://localhost:8000`` by default.
-
-Next, we need to create a job that we want to run. Let's create a file called
-``job.py`` and add a job that does nothing:
+3. Create and queue a job (job.py):
 
 .. code-block:: python
   :caption: job.py
@@ -107,25 +57,41 @@ Next, we need to create a job that we want to run. Let's create a file called
    from chancy import Job
    from worker import chancy
 
-
    def my_dummy_task(name: str):
        print(f"Hello, {name}!")
 
-
    async def main():
        async with chancy:
-           await chancy.push(
-               "default", Job(func="job.my_dummy_task", kwargs={"name": "world"})
-           )
-
+           job = Job(func="job.my_dummy_task", kwargs={"name": "world"}
+           await chancy.push("default", job)
 
    if __name__ == "__main__":
        asyncio.run(main())
 
+4. Run the worker in one terminal:
 
-When we run this file with ``python job.py``, we'll see the job get picked up
-by the worker and run in the background. That's it, all done! You can use any
-function your code can import as a Job.
+.. code-block:: bash
+
+   $ python worker.py
+
+5. Push the job in another terminal:
+
+.. code-block:: bash
+
+   $ python job.py
+
+
+Congratulations! You've just run your first Chancy job.
+
+Next Steps
+----------
+
+- Learn about :doc:`Jobs <guide/jobs>` in detail
+- Understand how :doc:`Queues <guide/queues>` work
+- Explore :doc:`Workers <guide/workers>` and their configuration
+- Dive into :doc:`Plugins <guide/plugins>` for extending Chancy's functionality
+- Read the :doc:`chancy` module documentation for a complete reference of
+  Chancy's API.
 
 
 Similar Projects
@@ -154,7 +120,6 @@ Similar Projects
    :hidden:
 
    guide/index
-   advanced/index
    chancy
 
 

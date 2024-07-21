@@ -1,270 +1,181 @@
 Jobs
 ====
 
-Every unit of work in Chancy is called a :class:`~chancy.job.Job`. Jobs are
-created by clients and submitted to :doc:`queues`, where they are picked up
-by workers and executed.
+In Chancy, a Job represents a unit of work to be executed asynchronously.
+Understanding how to create, configure, and manage jobs is crucial for
+effectively using Chancy.
 
-Chancy guarantees that a job will be executed **at least once**, but it may be
-executed more than once in the event of a worker crash or other failure
-that requires the job to be retried. You should always write your jobs to
-be idempotent, that is, they should be safe to run multiple times without
-causing any problems.
+Creating a Job
+--------------
 
-Creating Jobs
--------------
+There are two main ways to create a job:
 
-Create a new Job instance with the function you want to run:
+1. From a Python function:
 
-.. code-block:: python
-   :caption: job.py
+   .. code-block:: python
 
-   from chancy import Job
+      from chancy import Job
 
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
+      def greet(name: str):
+          print(f"Hello, {name}!")
 
-   hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
+      job = Job.from_func(greet, kwargs={"name": "Alice"})
 
+2. From a string import path:
 
-A Job is just a dataclass that holds the import path for a function, its
-arguments, and anything else needed to run the function. You can also create a
-Job from a string import path:
+   .. code-block:: python
 
-.. code-block:: python
-   :caption: job.py
-
-   from chancy import Job
-
-   hello_world = Job(func="my_module.my_dummy_task", kwargs={"name": "world"})
+      job = Job(func="mymodule.greet", kwargs={"name": "Bob"})
 
 
-A job is immutable once created, but you can create a new job based on an
-existing job with different arguments by using the `with_` methods:
+Jobs are immutable once created - use the `with_` methods on a Job to create
+a new job with modified properties.
 
-.. code-block:: python
-   :caption: job.py
-
-   from chancy import Job
-
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
-
-   hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
-   hello_bob = hello_world.with_kwargs({"name": "bob"})
-
-
-Once you've got a job, you can submit it to a queue:
-
-.. code-block:: python
-   :caption: job.py
-
-   import asyncio
-   from chancy import Job, Queue, Chancy
-
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
-
-   hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
-
-   async def main():
-       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-           await chancy.migrate()
-           await chancy.declare(Queue(name="default", concurrency=10))
-           await chancy.push("default", hello_world)
-
-
-You can push as many jobs as you want to a queue with a single push:
-
-.. code-block:: python
-   :caption: job.py
-
-   await chancy.push("default", hello_world, hello_bob, hello_world)
-
-
-The default, postgres-backed Queue will efficiently push these jobs together
-in a single transaction.
 
 Priority
---------
+^^^^^^^^
 
-Jobs can have a priority, which is used to determine the order in which they
-are executed. By default, jobs have a priority of 0, but you can set it to any
-integer value. Lower values are executed first, and higher values are executed
-later. If two jobs have the same priority, they are executed in the order they
-were received.
+Priority determines the order of execution. Lower values run first:
 
 .. code-block:: python
-   :caption: job.py
 
-   import asyncio
-   from chancy import Job, Queue, Chancy
+   high_priority_job = job.with_priority(-10)
+   low_priority_job = job.with_priority(10)
 
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
+Retry Attempts
+^^^^^^^^^^^^^^
 
-   hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
-
-   async def main():
-       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-           await chancy.migrate()
-           await chancy.declare(Queue(name="default", concurrency=10))
-           await chancy.push("default", hello_world)
-           await chancy.push("default", hello_world.with_priority(10))
-           await chancy.push("default", hello_world.with_priority(-10))
-
-
-Retries
--------
-
-Jobs can be retried a certain number of times if they fail. By default, jobs are
-retried 0 times, but you can set the number of retries when creating the job.
+Specify how many times a job should be retried if it fails:
 
 .. code-block:: python
-   :caption: job.py
 
-   import asyncio
-   from chancy import Job, Queue, Chancy
+   Job.from_func(greet, kwargs={"name": "Charlie"}, max_attempts=3)
 
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
-       raise ValueError("Oops!")
+Scheduled Execution
+^^^^^^^^^^^^^^^^^^^
 
-   hello_world = Job.from_func(
-      my_dummy_task,
-      kwargs={"name": "world"},
-      max_attempts=3
-   )
-
-If any unhandled exception occurs when running this job, the worker running it
-dies, or some other unforeseen event happens, the job will be retried up to 3
-times. If the job still fails after the last retry, it is marked as failed and
-can be inspected later.
-
-Future Work
------------
-
-Jobs can be scheduled to run at a specific time in the future
+Schedule a job to run some time in the future:
 
 .. code-block:: python
-   :caption: job.py
 
-   import asyncio
-   from datetime import datetime, timezone, timedelta
-   from chancy import Job, Queue, Chancy
+   from datetime import datetime, timedelta, timezone
 
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
-
-   hello_world = Job.from_func(my_dummy_task, kwargs={"name": "world"})
-
-   async def main():
-       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-           await chancy.migrate()
-           await chancy.declare(Queue(name="default", concurrency=10))
-           await chancy.push(
-               "default",
-               hello_world.with_scheduled_at(
-                   datetime.now(timezone.utc) + timedelta(days=1)
-               )
-           )
-
-This job will be stored in the queue and will not be picked up by a worker until
-the scheduled time has passed. There's no guarantee that the job will be picked
-up at **exactly** the scheduled time, but it will be picked up as soon as
-possible after that time.
-
-Resource Limits
----------------
-
-Some job :class:`~chancy.executor.Executor` backends, like the default
-:class:`~chancy.executors.process.ProcessExecutor`, can use host features
-to limit the amount of resources a job can use. For example, you can limit
-the amount of memory a job can use, or the time it can run for.
-
-.. code-block:: python
-   :caption: job.py
-
-   import asyncio
-   from chancy import Job, Queue, Chancy, Limit
-
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
-
-   hello_world = Job.from_func(
-      my_dummy_task,
-      kwargs={"name": "world"},
-      limits=[
-          Limit(Limit.Type.MEMORY, 1024 * 1024 * 1024),
-          Limit(Limit.Type.TIME, 60),
-      ]
-   )
-
-Each instance of this job would be allowed to use up to 1GB of memory and run
-for up to 60 seconds. When these limits are set, the executor will enforce
-them when running the job, and if the job exceeds the limits a standard
-`MemoryError` or `TimeoutError` will be raised.
-
-.. warning::
-
-   It's very important to note that these limits should only be considered
-   advisory, and not a security boundary. An executor that supports these
-   limits will do its best to enforce them, but untrusted code can always
-   find a way to disable them.
-
-
-Globally unique jobs
---------------------
-
-It's possible to give a job a globally unique identifier, which can be used to
-prevent the same job from being pushed to the queue more than once. For
-example, an expensive "Generate Report" job could be given a unique ID based
-on the parameters of the report, and if the same report is requested again
-before the first one is finished, the second request will just be silently
-ignored.
-
-.. code-block:: python
-   :caption: job.py
-
-   import asyncio
-   from chancy import Job
-
-   user_id = 1234
-   hello_world = Job(
-      func="my_reports.generate_report",
-      kwargs={"user_id": user_id},
-      unique_key=f"hello_world_{user_id}"
+   future_job = Job.from_func(greet, kwargs={"name": "David"})
+   future_job = future_job.with_scheduled_at(
+       datetime.now(timezone.utc) + timedelta(hours=1)
    )
 
 .. note::
 
-   Globally unique jobs should be treated as truly "global", that is they will
-   be unique *across all queues*. You can always use the queue's name as part
-   of your unique key to scope it to a specific queue.
+    Scheduled jobs are guaranteed to run *at* or *after* the scheduled time,
+    but not *exactly* at that time.
 
+If you need recurring jobs, take a look at the
+:class:`chancy.plugins.cron.Cron` plugin.
 
-References
-----------
+Resource Limits
+^^^^^^^^^^^^^^^
 
-Anytime a job is pushed onto a queue, it's given a unique identifier which
-can be used to reference the job later. Functions like
-:meth:`~chancy.app.Chancy.push` will return a :class:`~chancy.job.Reference`
-object that can be used to retrieve the job or wait until it's finished.
+Set memory and time limits for job execution:
 
 .. code-block:: python
-   :caption: worker.py
 
-    import asyncio
-    from chancy import Chancy, Worker, Queue
+   from chancy import Limit
 
-    chancy = Chancy(dsn="postgresql://localhost/postgres")
+   limited_job = Job.from_func(
+       greet,
+       kwargs={"name": "Eve"},
+       limits=[
+           Limit(Limit.Type.MEMORY, 1024 * 1024 * 1024),  # 1GB
+           Limit(Limit.Type.TIME, 60),  # 60 seconds
+       ]
+   )
 
-    async def main():
-        async with chancy:
-            await chancy.declare(Queue(name="default", concurrency=10))
-            reference = await chancy.push(my_task, "world")
-            job = await reference.wait()
-            print(f"Job finished with status {job.state}")
+Queueing a Job
+--------------
 
-    if __name__ == "__main__":
-        asyncio.run(main())
+Once you've created a job, queue it for execution:
+
+.. code-block:: python
+
+   async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+       await chancy.push("default", job)
+
+Queue multiple jobs at once:
+
+.. code-block:: python
+
+   await chancy.push_many("default", job1, job2, job3)
+
+Unique Jobs
+-----------
+
+Prevent duplicate job execution by assigning a unique key:
+
+.. code-block:: python
+
+   user_id = 1234
+   unique_job = Job(
+      func="generate_report",
+      kwargs={"user_id": user_id},
+      unique_key=f"report_{user_id}"
+   )
+
+.. note::
+
+  Unique jobs ensure only one job with the same ``unique_key`` is
+  queued or running at a time, but any number can be completed or
+  failed.
+
+Example
+-------
+
+Here's an example that puts it all together:
+
+.. code-block:: python
+
+   import asyncio
+   from datetime import datetime, timedelta, timezone
+   from chancy import Chancy, Job, Limit
+
+   async def process_order(order_id: int):
+       # Simulating order processing
+       print(f"Processing order {order_id}")
+       # ... actual processing logic here ...
+       print(f"Order {order_id} processed successfully")
+
+   async def main():
+       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+           # Create a job
+           job = Job.from_func(
+               process_order,
+               kwargs={"order_id": 12345},
+               max_attempts=3,
+               limits=[
+                   Limit(Limit.Type.MEMORY, 512 * 1024 * 1024),  # 512MB
+                   Limit(Limit.Type.TIME, 300),  # 5 minutes
+               ]
+           )
+
+           # Schedule it for 1 hour from now
+           scheduled_job = job.with_scheduled_at(
+               datetime.now(timezone.utc) + timedelta(hours=1)
+           )
+
+           # Queue the job
+           reference = await chancy.push("default", scheduled_job)
+
+           # Wait for job completion (in a real scenario, you might
+           # not wait synchronously)
+           completed_job = await reference.wait()
+           print(f"Final job status: {completed_job.state}")
+
+   if __name__ == "__main__":
+       asyncio.run(main())
+
+Next Steps
+----------
+- Explore :doc:`queues` to see how jobs are organized and distributed
+- Dive into :doc:`workers` to understand how jobs are processed
+- Check out :doc:`executors` to learn about different ways of running jobs
+- Discover :doc:`plugins` to extend Chancy's functionality

@@ -24,5 +24,4 @@ Submodules
    chancy.worker
    chancy.plugin
    chancy.job
-   chancy.logger
    chancy.utils

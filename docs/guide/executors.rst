@@ -1,53 +1,65 @@
 Executors
 =========
 
-Once a :class:`~chancy.job.Job` has been received off of a
-:class:`~chancy.queue.Queue`, it needs to be executed. This is where Executors
-come in. Executors are responsible for running the job's task function and
-handling any necessary setup and teardown.
+In Chancy, an Executor is responsible for running a :class:`~chancy.job.Job`
+that has been received from a :class:`~chancy.queue.Queue`. Executors handle
+the actual execution of the job's task function, including any necessary
+setup and teardown.
 
-Chancy comes with a built-in executors that should cover most use cases:
+Key Concepts
+------------
 
-- :class:`chancy.executors.process.ProcessExecutor` - Runs the job in a separate
-  process pool. This is the default executor and is the most flexible, but also
-  has the highest overhead.
+- Each Queue uses an executor to run jobs
+- Executors determine how jobs are run (e.g., in a separate process)
+- Executors manage job limits, such as timeouts and memory restrictions
+- Custom executors can be created for specific needs
 
-The :class:`~chancy.executors.process.ProcessExecutor` is the default, since it
-provides decent default isolation and can handle most use cases without
-needing to think about it.
+Built-in Executor
+-----------------
 
-Changing Executors
-------------------
+Chancy comes with a built-in executor that covers most use cases:
 
-Each Queue you define can have its own executor, and you can even write your
-own custom executors if you need to.
+- :class:`chancy.executors.process.ProcessExecutor` - Runs jobs in separate
+  process pools. This is the default executor, providing good isolation and
+  flexibility, albeit with some overhead.
 
-To use a different executor, simply pass it to the Queue constructor:
+Using Executors
+---------------
+
+By default, queues use the :class:`~chancy.executors.process.ProcessExecutor`.
+The executor is specified when creating a Queue:
 
 .. code-block:: python
    :caption: worker.py
 
    import asyncio
    from chancy import Chancy, Queue, Worker
-   from chancy.executors.process import ProcessExecutor
 
    async def main():
-       async with Chancy(
-           dsn="postgresql://localhost/postgres",
-           plugins=[
-               Queue(name="default", concurrency=10, executor=ProcessExecutor),
-           ],
-       ) as chancy:
+       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
            await chancy.migrate()
+           await chancy.declare(
+               Queue(
+                  name="default",
+                  concurrency=10,
+                  executor='chancy.executors.process.ProcessExecutor',
+                  executor_options={"maximum_jobs_per_worker": 1000}
+               )
+           )
            await Worker(chancy).start()
 
-If you need to customize the executor's options, you can use a lambda to pass
-arguments to the executor's constructor:
+   if __name__ == "__main__":
+       asyncio.run(main())
 
-.. code-block:: python
+.. note::
 
-   Queue(
-       name="default",
-       concurrency=10,
-       executor=lambda queue: ProcessExecutor(queue, maximum_jobs_per_worker=1000),
-   ),
+   We specify the executor class as a string and its options as a dictionary
+   because they'll be serialized and stored in the database.
+
+
+Next Steps
+----------
+- Learn about :doc:`jobs` to understand the core unit of work in Chancy
+- Explore :doc:`queues` to see how jobs are organized and distributed
+- Dive into :doc:`workers` to understand how jobs are processed
+- Discover :doc:`plugins` to extend Chancy's functionality
