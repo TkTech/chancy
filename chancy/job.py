@@ -8,7 +8,7 @@ from chancy.utils import importable_name
 
 if TYPE_CHECKING:
     from chancy.app import Chancy
-    from chancy.queue import QueuePlugin
+    from chancy.queue import Queue
 
 
 class Reference:
@@ -20,7 +20,7 @@ class Reference:
     job in the queue and refer to it later.
     """
 
-    def __init__(self, queue: "QueuePlugin", identifier: str):
+    def __init__(self, queue: "Queue", identifier: str):
         self.queue = queue
         self.identifier = identifier
 
@@ -175,7 +175,7 @@ class JobInstance(Job):
         RETRYING = "retrying"
         SUCCEEDED = "succeeded"
 
-    id: int
+    id: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     attempts: int = 0

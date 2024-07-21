@@ -65,7 +65,7 @@ class Queue(Plugin):
         #: The number of seconds to wait between polling the queue for new jobs.
         self.polling_interval = polling_interval or 1
         #: Only workers that match these tags will actively process this queue.
-        self.tags = tags or {"*"}
+        self.tags = tags or {r".*"}
 
         self._pending_updates = asyncio.Queue()
         self._executor = executor or "chancy.executors.process.ProcessExecutor"

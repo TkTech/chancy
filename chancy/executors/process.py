@@ -9,6 +9,7 @@ import threading
 from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
+from datetime import datetime, timezone
 
 from chancy.executor import Executor
 from chancy.job import JobInstance, Limit
@@ -157,11 +158,11 @@ class ProcessExecutor(Executor):
 
     def job_completed(self, future: Future, loop: asyncio.AbstractEventLoop):
         """
-        Handles the completion of a job future.
+        Called when a job has completed.
 
-        This method is called when a job future completes, and is responsible
-        for cleaning up the job and notifying the queue that the job has
-        completed.
+        This method should be called by the executor when a job has completed
+        execution. It will update the job's state in the queue and handle
+        retries if necessary.
         """
         job = self.processes.pop(future)
         exc = future.exception()
@@ -179,10 +180,11 @@ class ProcessExecutor(Executor):
                 attempts=job.attempts + 1,
             )
         else:
+            now = datetime.now(tz=timezone.utc)
             new_state = dataclasses.replace(
                 job,
                 state=JobInstance.State.SUCCEEDED,
-                completed_at=job.started_at,
+                completed_at=now,
             )
 
         f = asyncio.run_coroutine_threadsafe(

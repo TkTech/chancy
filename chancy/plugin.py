@@ -22,24 +22,12 @@ class Plugin(abc.ABC):
     Plugins are used to extend the functionality of the worker. When a worker
     starts, it will call :meth:`run` on all plugins that have a scope that
     matches the worker's scope.
-
     """
 
     def __init__(self):
-        #: An asyncio.Event that can be used to cancel the plugin.
-        self.cancel_signal = asyncio.Event()
         #: An asyncio.Event that can be used to wake up the plugin if it's
         #: sleeping.
         self.wakeup_signal = asyncio.Event()
-
-    async def cancel(self) -> None:
-        """
-        Cancel the plugin.
-
-        Wakes up the plugin if it's sleeping and attempts to have it exit
-        gracefully.
-        """
-        self.cancel_signal.set()
 
     @classmethod
     @abc.abstractmethod
@@ -99,53 +87,32 @@ class Plugin(abc.ABC):
     async def sleep(self, seconds: int) -> bool:
         """
         Sleep for a specified number of seconds, but allow the plugin to be
-        cancelled during the sleep by calling :meth:`cancel`.
+        woken up early.
         """
-        sleep = asyncio.create_task(asyncio.sleep(seconds))
-        cancel = asyncio.create_task(self.cancel_signal.wait())
         wakeup = asyncio.create_task(self.wakeup_signal.wait())
 
-        try:
-            done, pending = await asyncio.wait(
-                [sleep, cancel, wakeup],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-
-            if cancel in done:
-                return False
-        finally:
-            for task in [sleep, cancel, wakeup]:
-                if not task.done():
-                    task.cancel()
-
-            await asyncio.gather(sleep, cancel, wakeup, return_exceptions=True)
-            self.wakeup_signal.clear()
-
-        return True
-
-    async def wait_for_leader(self, worker: "Worker") -> None:
-        """
-        Wait until the worker running this plugin is the leader.
-
-        This function will return immediately if the worker is already the
-        leader. If the plugin's :meth:`cancel` method is called, this function
-        will raise an asyncio.CancelledError.
-        """
-        cancel = asyncio.create_task(self.cancel_signal.wait())
-        leader = asyncio.create_task(worker.is_leader.wait())
-
         done, pending = await asyncio.wait(
-            [cancel, leader],
+            [wakeup],
+            timeout=seconds,
             return_when=asyncio.FIRST_COMPLETED,
         )
 
         for task in pending:
             task.cancel()
 
-        if cancel in done:
-            raise asyncio.CancelledError()
+        self.wakeup_signal.clear()
+        return True
+
+    async def wait_for_leader(self, worker: "Worker") -> None:
+        """
+        Wait until the worker running this plugin is the leader.
+        """
+        return await worker.is_leader.wait()
 
     def wake_up(self):
+        """
+        Wake up the plugin if it's sleeping.
+        """
         self.wakeup_signal.set()
 
     def __repr__(self):

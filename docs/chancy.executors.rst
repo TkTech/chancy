@@ -13,3 +13,4 @@ Submodules
    :maxdepth: 4
 
    chancy.executors.process
+   chancy.executors.async_

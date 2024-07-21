@@ -2,7 +2,7 @@ import json
 import logging
 import dataclasses
 from typing import Any
-from functools import cached_property
+from functools import cached_property, cache
 
 from psycopg import sql
 from psycopg import AsyncCursor
@@ -15,6 +15,7 @@ from chancy.job import Reference
 from chancy.plugin import Plugin
 
 
+@cache
 def _setup_default_logger():
     logger = logging.getLogger("chancy")
     logger.setLevel(logging.INFO)

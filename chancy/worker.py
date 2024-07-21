@@ -59,14 +59,31 @@ class TaskManager:
                 except asyncio.CancelledError:
                     logger.debug(f"Task {task.get_name()} was cancelled.")
 
-    async def shutdown(self):
+    async def shutdown(self, *, timeout: int | None = None) -> bool:
         """
         Cancel all tasks and wait for them to complete.
+
+        :param timeout: The number of seconds to wait for a clean shutdown
+                        before forcing the tasks to stop.
+        :return: False if a timeout occurred trying to cancel the tasks, True
+                 if shutdown was successful.
         """
         for task in self.tasks:
             task.cancel()
-        await asyncio.gather(*self.tasks, return_exceptions=True)
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*self.tasks, return_exceptions=True),
+                timeout=timeout,
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            self.tasks = {task for task in self.tasks if not task.done()}
+            return False
+        except asyncio.CancelledError:
+            pass
+
         self.tasks.clear()
+        return True
 
 
 class Worker:
@@ -93,6 +110,11 @@ class Worker:
     :param heartbeat_timeout: The number of seconds before a worker is
                               considered to have lost connection to the
                               cluster.
+    :param queue_change_poll_interval: The number of seconds between checks for
+                                       changes to the queues that the worker
+                                       should be processing.
+    :param shutdown_timeout: The number of seconds to wait for a clean shutdown
+                                before forcing the worker to stop.
     """
 
     def __init__(
@@ -103,6 +125,7 @@ class Worker:
         heartbeat_poll_interval: int = 30,
         heartbeat_timeout: int = 90,
         queue_change_poll_interval: int = 10,
+        shutdown_timeout: int = 30,
         tags: set[str] | None = None,
     ):
         #: The Chancy application that the worker is associated with.
@@ -114,6 +137,9 @@ class Worker:
         #: The number of seconds before a worker is considered to have lost
         #: connection to the cluster.
         self.heartbeat_timeout = heartbeat_timeout
+        #: The number of seconds to wait for a clean shutdown before forcing
+        #: the worker to stop.
+        self.shutdown_timeout = shutdown_timeout
         #: How frequently to check for changes to the queues that this worker
         #: should be processing.
         self.queue_change_poll_interval = queue_change_poll_interval
@@ -150,10 +176,7 @@ class Worker:
             )
 
         for plugin in self.chancy.plugins:
-            await self.manager.add(
-                plugin.run(self, self.chancy),
-                name=plugin.__class__.__name__,
-            )
+            await self.add_plugin(plugin)
             self.chancy.log.info(
                 f"Started plugin {plugin.__class__.__name__!r}"
             )
@@ -161,7 +184,23 @@ class Worker:
         try:
             await self.manager.run(logger=self.chancy.log)
         except asyncio.CancelledError:
-            await self.manager.shutdown()
+            clean = await self.manager.shutdown(timeout=self.shutdown_timeout)
+            if not clean:
+                self.chancy.log.error(
+                    f"Failed to shutdown worker tasks within"
+                    f" {self.shutdown_timeout} seconds."
+                )
+
+    async def add_plugin(self, plugin):
+        """
+        Add a plugin to the worker.
+
+        :param plugin: The plugin to add.
+        """
+        await self.manager.add(
+            plugin.run(self, self.chancy),
+            name=plugin.__class__.__name__,
+        )
 
     async def _maintain_queues(self):
         """
