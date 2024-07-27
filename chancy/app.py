@@ -134,9 +134,9 @@ class Chancy:
         if not self.pool.closed:
             await self.pool.close()
 
-    async def push(self, queue: str, job: Job) -> Reference:
+    async def push(self, job: Job) -> Reference:
         """
-        Push a single job onto the queue.
+        Push a single job.
 
         .. note::
 
@@ -144,15 +144,14 @@ class Chancy:
             `unique_key` is already in the queue. The existing job will be
             returned instead.
 
-        :param queue: The name of the queue to push the job onto.
-        :param job: The job to push onto the queue.
+        :param job: The job to push.
         :return: The reference to the job that was pushed.
         """
-        return (await Queue(queue).push(self, [job]))[0]
+        return (await Queue(job.queue).push(self, [job]))[0]
 
-    async def push_many(self, queue: str, *jobs: Job) -> list[Reference]:
+    async def push_many(self, *jobs: Job) -> list[Reference]:
         """
-        Push one or more jobs onto a queue.
+        Push one or more jobs.
 
         .. note::
 
@@ -160,10 +159,18 @@ class Chancy:
             `unique_key` is already in the queue. The existing job will be
             returned instead.
 
-        :param queue: The name of the queue to push the jobs onto.
-        :param jobs: The jobs to push onto the queue.
+        :param jobs: The jobs to push.
         """
-        return await Queue(queue).push(self, list(jobs))
+        # Group all jobs by their queue.
+        queue_jobs = {}
+        for job in jobs:
+            queue_jobs.setdefault(job.queue, []).append(job)
+
+        return [
+            reference
+            for queue, jobs in queue_jobs.items()
+            for reference in await Queue(queue).push(self, jobs)
+        ]
 
     async def notify(
         self, cursor: AsyncCursor, event: str, payload: dict[str, Any]

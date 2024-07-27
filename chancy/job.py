@@ -88,6 +88,8 @@ class Job:
     #: An importable name for the function that should be executed when this
     #: job is run. Ex: my_module.my_function
     func: str
+    #: The queue to which this job should be pushed.
+    queue: str = "default"
     #: The keyword arguments to pass to the job function when it is executed.
     kwargs: dict[str, Any] | None = dataclasses.field(default_factory=dict)
     #: The priority of this job. Jobs with higher priority values will be
@@ -129,6 +131,9 @@ class Job:
     def with_unique_key(self, unique_key: str) -> "Job":
         return dataclasses.replace(self, unique_key=unique_key)
 
+    def with_queue(self, queue: str) -> "Job":
+        return dataclasses.replace(self, queue=queue)
+
     def pack(self) -> dict:
         """
         Pack the job into a dictionary that can be serialized and used to
@@ -142,6 +147,7 @@ class Job:
             "s": self.scheduled_at.timestamp(),
             "l": [limit.serialize() for limit in self.limits],
             "u": self.unique_key,
+            "q": self.queue,
         }
 
     @classmethod
@@ -157,6 +163,7 @@ class Job:
             scheduled_at=datetime.fromtimestamp(data["s"], tz=timezone.utc),
             limits=[Limit.deserialize(limit) for limit in data["l"]],
             unique_key=data["u"],
+            queue=data["q"],
         )
 
 
@@ -195,6 +202,7 @@ class JobInstance(Job):
             max_attempts=data["max_attempts"],
             state=data["state"],
             unique_key=data["unique_key"],
+            queue=data["queue"],
             limits=[
                 Limit.deserialize(limit) for limit in data["payload"]["limits"]
             ],
