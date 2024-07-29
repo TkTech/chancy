@@ -1,4 +1,6 @@
+import asyncio
 import datetime
+import logging
 import uuid
 import time
 import json
@@ -113,3 +115,74 @@ def chunked(iterable, size):
         if not chunk:
             break
         yield chunk
+
+
+class TaskManager:
+    """
+    A simple task manager that keeps track of tasks.
+
+    The asyncio.TaskGroup is not used here for a couple of reasons, but mostly
+    because it's only available in Python 3.11+ and we want to maintain
+    compatibility with earlier versions.
+    """
+
+    def __init__(self):
+        self.tasks: set[asyncio.Task] = set()
+
+    async def add(self, coro, *, name: str | None = None) -> asyncio.Task:
+        """
+        Add a task to the manager.
+        """
+        task = asyncio.create_task(coro)
+        self.tasks.add(task)
+        if name:
+            task.set_name(name)
+        return task
+
+    async def remove(self, task: asyncio.Task):
+        """
+        Remove a task from the manager.
+        """
+        task.cancel()
+        self.tasks.remove(task)
+
+    async def run(self, *, logger: logging.Logger):
+        """
+        Run all tasks until they are complete.
+        """
+        while self.tasks:
+            done, pending = await asyncio.wait(
+                self.tasks, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in done:
+                self.tasks.remove(task)
+                try:
+                    task.result()
+                except asyncio.CancelledError:
+                    logger.debug(f"Task {task.get_name()} was cancelled.")
+
+    async def shutdown(self, *, timeout: int | None = None) -> bool:
+        """
+        Cancel all tasks and wait for them to complete.
+
+        :param timeout: The number of seconds to wait for a clean shutdown
+                        before forcing the tasks to stop.
+        :return: False if a timeout occurred trying to cancel the tasks, True
+                 if shutdown was successful.
+        """
+        for task in self.tasks:
+            task.cancel()
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*self.tasks, return_exceptions=True),
+                timeout=timeout,
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            self.tasks = {task for task in self.tasks if not task.done()}
+            return False
+        except asyncio.CancelledError:
+            pass
+
+        self.tasks.clear()
+        return True

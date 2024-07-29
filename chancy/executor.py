@@ -2,9 +2,10 @@ import abc
 import typing
 
 from chancy.job import JobInstance
+from chancy.queue import Queue
 
 if typing.TYPE_CHECKING:
-    from chancy.queue import QueuePlugin
+    from chancy.worker import Worker
 
 
 class Executor(abc.ABC):
@@ -13,7 +14,8 @@ class Executor(abc.ABC):
     pool.
     """
 
-    def __init__(self, queue: "QueuePlugin"):
+    def __init__(self, worker: "Worker", queue: "Queue"):
+        self.worker = worker
         self.queue = queue
 
     @abc.abstractmethod

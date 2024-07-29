@@ -1,24 +1,26 @@
 import json
 import logging
 import dataclasses
-from typing import Any
+from typing import Any, Iterator
 from functools import cached_property, cache
 
 from psycopg import sql
 from psycopg import AsyncCursor
+from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
+from psycopg.types.json import Json
 
 from chancy.migrate import Migrator
-from chancy.job import Job
 from chancy.queue import Queue
-from chancy.job import Reference
+from chancy.job import Reference, Job, JobInstance
 from chancy.plugin import Plugin
+from chancy.utils import chancy_uuid, chunked
 
 
 @cache
 def _setup_default_logger():
     logger = logging.getLogger("chancy")
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     handler = logging.StreamHandler()
     handler.setFormatter(
@@ -134,62 +136,16 @@ class Chancy:
         if not self.pool.closed:
             await self.pool.close()
 
-    async def push(self, job: Job) -> Reference:
-        """
-        Push a single job.
-
-        .. note::
-
-            A Job with a `unique_key` will not be pushed if a job with the same
-            `unique_key` is already in the queue. The existing job will be
-            returned instead.
-
-        :param job: The job to push.
-        :return: The reference to the job that was pushed.
-        """
-        return (await Queue(job.queue).push(self, [job]))[0]
-
-    async def push_many(self, *jobs: Job) -> list[Reference]:
-        """
-        Push one or more jobs.
-
-        .. note::
-
-            A Job with a `unique_key` will not be pushed if a job with the same
-            `unique_key` is already in the queue. The existing job will be
-            returned instead.
-
-        :param jobs: The jobs to push.
-        """
-        # Group all jobs by their queue.
-        queue_jobs = {}
-        for job in jobs:
-            queue_jobs.setdefault(job.queue, []).append(job)
-
-        return [
-            reference
-            for queue, jobs in queue_jobs.items()
-            for reference in await Queue(queue).push(self, jobs)
-        ]
-
     async def notify(
         self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
     ):
         """
         Notify the cluster of an event.
 
-        .. note::
-
-            This method does not start or end a transaction. It is up to the
-            caller to manage the transaction.
-
         :param cursor: The cursor to use for the notification.
         :param event: The event to notify the cluster of.
         :param payload: The payload to send with the notification.
         """
-        if not self.notifications:
-            return
-
         await cursor.execute(
             sql.SQL(
                 """
@@ -202,10 +158,243 @@ class Chancy:
             ],
         )
 
-    async def declare(self, queue: Queue, *, upsert: bool = False):
+    async def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
         """
-        Declare a queue for the cluster to process.
+        Declare the queue to the cluster, returning a new Queue with any
+        updated values.
+
+        :param queue: The queue to declare.
+        :param upsert: If set, the queue will be updated if it already exists
+                       with the values provided.
         """
         async with self.pool.connection() as conn:
             async with conn.cursor() as cursor:
-                await queue.declare(self, cursor, upsert=upsert)
+                await self.declare_ex(cursor, queue, upsert=upsert)
+        return queue
+
+    async def declare_ex(
+        self, cursor: AsyncCursor, queue: Queue, *, upsert: bool = False
+    ) -> Queue:
+        """
+        Declare the queue to the cluster.
+        """
+        action = sql.SQL(
+            """
+            UPDATE SET
+                name = EXCLUDED.name
+            """
+        )
+        if upsert:
+            action = sql.SQL(
+                """
+                UPDATE SET
+                    state = EXCLUDED.state,
+                    concurrency = EXCLUDED.concurrency,
+                    tags = EXCLUDED.tags,
+                    executor = EXCLUDED.executor,
+                    executor_options = EXCLUDED.executor_options,
+                    polling_interval = EXCLUDED.polling_interval
+                """
+            )
+
+        await cursor.execute(
+            sql.SQL(
+                """
+                INSERT INTO {queues} (
+                    name,
+                    state,
+                    concurrency,
+                    tags,
+                    executor,
+                    executor_options,
+                    polling_interval
+                ) VALUES (
+                    %(name)s,
+                    %(state)s,
+                    %(concurrency)s,
+                    %(tags)s,
+                    %(executor)s,
+                    %(executor_options)s,
+                    %(polling_interval)s
+                )
+                ON CONFLICT (name) DO
+                    {action}
+                RETURNING (
+                    state,
+                    concurrency,
+                    tags,
+                    polling_interval,
+                    executor,
+                    executor_options
+                )
+                """
+            ).format(
+                queues=sql.Identifier(f"{self.prefix}queues"),
+                action=action,
+            ),
+            {
+                "name": queue.name,
+                "state": queue.state,
+                "concurrency": queue.concurrency,
+                "tags": list(queue.tags),
+                "executor": queue.executor,
+                "executor_options": Json(queue.executor_options),
+                "polling_interval": queue.polling_interval,
+            },
+        )
+
+        result = await cursor.fetchone()
+        return Queue(
+            name=queue.name,
+            state=result[0],
+            concurrency=result[1],
+            tags=set(result[2]),
+            polling_interval=result[3],
+            executor=result[4],
+            executor_options=result[5],
+        )
+
+    async def push(self, job: Job) -> Reference:
+        """
+        Push a single job onto the queue.
+
+        :param job: The job to push onto the queue.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                return (await self.push_many_ex(cursor, [job]))[0]
+
+    async def push_many(
+        self, jobs: list[Job], *, batch_size: int = 1000
+    ) -> Iterator[Reference]:
+        """
+        Push one or more jobs onto the queue.
+
+        Yields a reference for each job pushed after its containing transaction
+        has been committed.
+
+        :param jobs: The jobs to push onto the queue.
+        :param batch_size: The number of jobs to push in a single transaction.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                for chunk in chunked(jobs, batch_size):
+                    async with conn.transaction():
+                        refs = await self.push_many_ex(cursor, chunk)
+
+                    for ref in refs:
+                        yield ref
+
+    async def push_many_ex(
+        self,
+        cursor: AsyncCursor,
+        jobs: list[Job],
+    ) -> list[Reference]:
+        """
+        Push one or more jobs onto the queue.
+
+        This advanced method can be used to push jobs to the database
+        within an existing transaction. This is very useful when you want to
+        push jobs to the queue only if related objects are successfully
+        created, like running onboarding for a new user only if the user is
+        successfully created.
+
+        :param cursor: The database cursor to use.
+        :param jobs: The jobs to push onto the queue.
+        """
+
+        # We used to use a single executemany() here, but switched to doing
+        # several inserts to better support the RETURNING clause with
+        # unique jobs. This allows us to return a reference to the existing
+        # job when a conflict occurs, trading performance for convenience.
+        references = []
+        for job in jobs:
+            await cursor.execute(
+                # The DO UPDATE clause is used to trick Postgres into returning
+                # the existing ID. Otherwise, since no row was touched, the
+                # RETURNING clause would get ignored. This isn't ideal - it
+                # causes an unnecessary write, but in any normal usage this
+                # should be a non-issue.
+                sql.SQL(
+                    """
+                    INSERT INTO
+                        {jobs} (
+                            id,
+                            queue,
+                            payload,
+                            priority,
+                            max_attempts,
+                            scheduled_at,
+                            unique_key
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (unique_key)
+                    WHERE
+                        unique_key IS NOT NULL
+                            AND state NOT IN ('succeeded', 'failed')
+                    DO UPDATE
+                       SET
+                           state = EXCLUDED.state
+                    RETURNING id;
+                    """
+                ).format(
+                    jobs=sql.Identifier(f"{self.prefix}jobs"),
+                ),
+                (
+                    chancy_uuid(),
+                    job.queue,
+                    Json(
+                        {
+                            "func": job.func,
+                            "kwargs": job.kwargs or {},
+                            "limits": [
+                                limit.serialize() for limit in job.limits
+                            ],
+                        }
+                    ),
+                    job.priority,
+                    job.max_attempts,
+                    job.scheduled_at,
+                    job.unique_key,
+                ),
+            )
+            record = await cursor.fetchone()
+            references.append(Reference(self, record[0]))
+
+        # Notify the cluster that new jobs have been pushed, allowing workers
+        # to wake up and start processing them immediately.
+        if self.notifications:
+            for queue in set(job.queue for job in jobs):
+                await self.notify(
+                    cursor,
+                    "queue.pushed",
+                    {"q": queue},
+                )
+
+        return references
+
+    async def get_job(self, ref: Reference) -> JobInstance:
+        """
+        Retrieve a job from the queue without locking it.
+
+        :param ref: The reference to the job to retrieve.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            *
+                        FROM
+                            {jobs}
+                        WHERE
+                            id = %s
+                        """
+                    ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
+                    [ref.identifier],
+                )
+                record = await cursor.fetchone()
+                if record is None:
+                    raise KeyError(f"Job {ref.identifier} not found.")
+
+                return JobInstance.unpack(record)

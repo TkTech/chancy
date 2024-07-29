@@ -8,7 +8,6 @@ from chancy.utils import importable_name
 
 if TYPE_CHECKING:
     from chancy.app import Chancy
-    from chancy.queue import Queue
 
 
 class Reference:
@@ -20,19 +19,17 @@ class Reference:
     job in the queue and refer to it later.
     """
 
-    def __init__(self, queue: "Queue", identifier: str):
-        self.queue = queue
+    def __init__(self, app: "Chancy", identifier: str):
+        self.app = app
         self.identifier = identifier
 
-    async def get(self, chancy: "Chancy") -> "JobInstance":
+    async def get(self) -> "JobInstance":
         """
         Get the job instance referenced by this reference.
         """
-        return await self.queue.get_job(chancy, self)
+        return await self.app.get_job(self)
 
-    async def wait(
-        self, chancy: "Chancy", *, interval: int = 1
-    ) -> "JobInstance":
+    async def wait(self, *, interval: int = 1) -> "JobInstance":
         """
         Wait for the job instance referenced by this reference to complete.
 
@@ -41,11 +38,10 @@ class Reference:
             "Completed" in this case means the job has either succeeded or
             failed.
 
-        :param chancy: The Chancy application.
         :param interval: The interval at which to poll the job for completion.
         """
         while True:
-            job = await self.get(chancy)
+            job = await self.get()
             if job.state in (
                 JobInstance.State.FAILED,
                 JobInstance.State.SUCCEEDED,
@@ -54,7 +50,7 @@ class Reference:
             await asyncio.sleep(interval)
 
     def __repr__(self):
-        return f"<Reference({self.queue.name!r}, {self.identifier!r})>"
+        return f"<Reference({self.identifier!r})>"
 
 
 @dataclasses.dataclass

@@ -57,12 +57,12 @@ class ProcessExecutor(Executor):
                                     can run before being replaced.
     """
 
-    def __init__(self, queue, *, maximum_jobs_per_worker: int = 100):
-        super().__init__(queue)
+    def __init__(self, worker, queue, *, maximum_jobs_per_worker: int = 100):
+        super().__init__(worker, queue)
 
         self.processes: dict[Future, JobInstance] = {}
         self.pool = ProcessPoolExecutor(
-            max_workers=self.queue.concurrency,
+            max_workers=queue.concurrency,
             max_tasks_per_child=maximum_jobs_per_worker,
         )
 
@@ -188,7 +188,7 @@ class ProcessExecutor(Executor):
             )
 
         f = asyncio.run_coroutine_threadsafe(
-            self.queue.push_job_update(new_state),
+            self.worker.push_update(new_state),
             loop,
         )
         f.result()

@@ -19,12 +19,10 @@ class AsyncExecutor(Executor):
     without the high overhead of new processes or threads. However, it is not
     suitable for CPU-bound jobs, as it will block the main event loop and
     prevent other jobs & queues from running.
-
-    :param queue: The queue that this executor is associated with.
     """
 
-    def __init__(self, queue):
-        super().__init__(queue)
+    def __init__(self, worker, queue):
+        super().__init__(worker, queue)
         self.running_jobs: Dict[str, asyncio.Task] = {}
 
     async def push(self, job: JobInstance) -> Future:
@@ -100,4 +98,4 @@ class AsyncExecutor(Executor):
                 completed_at=now,
             )
 
-        await self.queue.push_job_update(new_state)
+        await self.worker.push_update(new_state)
