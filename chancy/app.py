@@ -177,6 +177,18 @@ class Chancy:
     ) -> Queue:
         """
         Declare the queue to the cluster.
+
+        This advanced method can be used to declare a queue within an existing
+        transaction.
+
+        .. note::
+
+            The cursor given to this function should be a dictionary cursor.
+
+        :param cursor: The database cursor to use.
+        :param queue: The queue to declare.
+        :param upsert: If set, the queue will be updated if it already exists
+                          with the values provided.
         """
         action = sql.SQL(
             """
@@ -219,14 +231,13 @@ class Chancy:
                 )
                 ON CONFLICT (name) DO
                     {action}
-                RETURNING (
+                RETURNING 
                     state,
                     concurrency,
                     tags,
                     polling_interval,
                     executor,
                     executor_options
-                )
                 """
             ).format(
                 queues=sql.Identifier(f"{self.prefix}queues"),

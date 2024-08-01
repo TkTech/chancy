@@ -143,6 +143,7 @@ class Worker:
         accordingly.
         """
         while True:
+            self.chancy.log.debug("Polling for queue changes.")
             async with self.chancy.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cursor:
                     tags = self.worker_tags()
