@@ -1,3 +1,4 @@
+import inspect
 from typing import Callable, Awaitable
 
 
@@ -29,12 +30,19 @@ class Hub:
         Emit an event with the given body.
         """
         for handler in self._handlers.get(event, []):
-            await handler(body)
+            # Check if the handler is async
+            if inspect.iscoroutinefunction(handler):
+                await handler(body)
+            else:
+                handler(body)
 
         # Emit wildcard handlers.
         if "*" in self._handlers:
             for handler in self._handlers["*"]:
-                await handler(event, body)
+                if inspect.iscoroutinefunction(handler):
+                    await handler(event, body)
+                else:
+                    handler(event, body)
 
     def off(self, event: str, callback: Callable[..., Awaitable[None]]):
         """

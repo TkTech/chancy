@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import inspect
 import logging
 import uuid
 import time
@@ -46,18 +47,24 @@ def importable_name(obj):
 
     .. note::
 
-        This will not work for objects that are not defined in a module,
-        such as lambdas, REPL functions, functions-in-functions, etc...
+        This will only work for objects that are actually importable,
+        i.e. they are defined in a module. Lambdas, for example, will not
+        have an importable name.
 
     :param obj: The object to get the importable name for.
     :return: str
     """
+    if obj.__class__.__module__ == "__main__":
+        module = inspect.getmodule(obj)
+        return f"{module.__spec__.name}.{obj.__qualname__}"
+
     return f"{obj.__module__}.{obj.__qualname__}"
 
 
 def import_string(name):
     """
-    Import an object from a string.
+    Import an object from a string previously created using
+    :func:`importable_name`.
 
     :param name: The importable name of the object.
     :return: Any
