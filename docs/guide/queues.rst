@@ -1,11 +1,9 @@
 Queues
 ======
 
-A Queue in Chancy provides a way to push, pull, and manage :doc:`jobs <jobs>`. The
-default, and only officially supported queue, is the postgres-backed
-:class:`~chancy.queue.Queue`. You can have as many queues as you want,
-each with their own executor, concurrency, polling intervals,
-and other settings.
+A Queue in Chancy provides a way to push, pull, and manage :doc:`jobs <jobs>`
+You can have as many queues as you want, each with their own executor,
+concurrency, polling intervals, and other settings.
 
 Key Concepts
 ------------

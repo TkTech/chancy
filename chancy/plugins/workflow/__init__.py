@@ -59,6 +59,73 @@ class WorkflowPlugin(Plugin):
     similar tools. This can be a helpful debugging and validation tool for
     complex workflows.
 
+    Events
+    ------
+
+    The WorkflowPlugin reacts to the following events:
+
+    - ``workflow.created``: Triggered when a new workflow is created.
+
+    Example
+    -------
+
+    .. code-block:: python
+       :caption: example_workflow.py
+
+        import asyncio
+        from chancy import Job, Chancy
+        from chancy.plugins.workflow import (
+            Workflow,
+            WorkflowStep,
+            WorkflowPlugin
+        )
+
+        async def top():
+            print(f"Top")
+
+        async def left():
+            print(f"Left")
+
+        async def right():
+            print(f"Right")
+
+        async def bottom():
+            print(f"Bottom")
+
+        async def main():
+            async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+                workflow = Workflow("example")
+
+                workflow += WorkflowStep(
+                    job=Job.from_func(top),
+                    step_id="top",
+                )
+                workflow += WorkflowStep(
+                    job=Job.from_func(left),
+                    step_id="left",
+                    dependencies=["top"],
+                )
+                workflow += WorkflowStep(
+                    job=Job.from_func(right),
+                    step_id="right",
+                    dependencies=["top"],
+                )
+                workflow += WorkflowStep(
+                    job=Job.from_func(bottom),
+                    step_id="bottom",
+                    dependencies=["left", "right"],
+                )
+
+                await WorkflowPlugin.push(chancy, workflow)
+
+        if __name__ == "__main__":
+            asyncio.run(main())
+
+    If we visualize our newly created workflow using :func:`generate_dot`, we
+    get:
+
+    .. graphviz:: _static/workflow.dot
+
     :param polling_interval: The interval at which to poll for new workflows.
     :param max_workflows_per_run: The maximum number of workflows to process
                                   in a single run of the plugin.

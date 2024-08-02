@@ -19,6 +19,7 @@ Key Features:
 - Minimal dependencies (only psycopg3 required)
 - Optional transactional job queueing
 - asyncio-based worker for efficient processing
+- Plugins for a dashboard, workflows, and more
 
 Quick Start
 -----------
@@ -42,7 +43,7 @@ Quick Start
    async def main():
        async with chancy:
            await chancy.migrate()
-           await chancy.declare(Queue("default"))
+           await chancy.declare(Queue("default", concurrency=10))
            await Worker(chancy).start()
 
    if __name__ == "__main__":
@@ -55,14 +56,17 @@ Quick Start
 
    import asyncio
    from chancy import Job
-   from worker import chancy
 
    def my_dummy_task(name: str):
        print(f"Hello, {name}!")
 
    async def main():
-       async with chancy:
-           job = Job(func="job.my_dummy_task", kwargs={"name": "world"}
+       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+           job = Job.from_func(
+               my_dummy_task,
+               kwargs={"name": "world"},
+               queue="default"
+           )
            await chancy.push("default", job)
 
    if __name__ == "__main__":

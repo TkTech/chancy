@@ -22,7 +22,7 @@ Chancy comes with a built-in executor that covers most use cases:
 - :class:`chancy.executors.process.ProcessExecutor` - Runs jobs in separate
   process pools. This is the default executor, providing good isolation and
   flexibility, albeit with some overhead.
-- :class:`chancy.executors.async_.AsyncExecutor` - Runs jobs in the same
+- :class:`chancy.executors.asyncex.AsyncExecutor` - Runs jobs in the same
   process & event loop as the worker. Useful for I/O-bound tasks that don't
   require long CPU-bound processing, like making HTTP requests.
 

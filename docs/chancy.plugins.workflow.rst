@@ -1,7 +1,17 @@
 chancy.plugins.workflow module
 ==============================
 
-.. automodule:: chancy.plugins.workflow
+.. autoclass:: chancy.plugins.workflow.WorkflowPlugin
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: chancy.plugins.workflow.Workflow
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: chancy.plugins.workflow.WorkflowStep
    :members:
    :undoc-members:
    :show-inheritance:

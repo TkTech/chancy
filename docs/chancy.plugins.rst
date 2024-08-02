@@ -18,3 +18,4 @@ Submodules
    chancy.plugins.cron
    chancy.plugins.rule
    chancy.plugins.web
+   chancy.plugins.workflow
