@@ -36,6 +36,13 @@ Cron
 
 Provides a way to define jobs that run on a schedule using cron syntax.
 
+Workflows
+---------
+
+:class:`chancy.plugins.workflow.Workflow`
+
+Allows you to define complex job workflows with dependencies between jobs.
+
 Web
 ---
 
