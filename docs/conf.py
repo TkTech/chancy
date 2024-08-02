@@ -15,9 +15,9 @@ author = "Tyler Kennedy"
 
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.viewcode",
     "sphinx.ext.todo",
     "sphinx.ext.graphviz",
+    "sphinx.ext.linkcode",
 ]
 
 templates_path = ["_templates"]
@@ -37,3 +37,14 @@ html_title = "Chancy"
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
 
 todo_include_todos = True
+
+
+def linkcode_resolve(domain, info):
+    if domain != "py":
+        return None
+
+    if not info["module"]:
+        return None
+
+    filename = info["module"].replace(".", "/")
+    return f"https://github.com/tktech/chancy/blob/main/{filename}.py"

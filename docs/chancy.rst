@@ -23,5 +23,6 @@ Submodules
    chancy.queue
    chancy.worker
    chancy.plugin
+   chancy.rule
    chancy.job
    chancy.utils

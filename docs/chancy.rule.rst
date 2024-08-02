@@ -1,7 +1,7 @@
 chancy.plugins.rule module
 ==========================
 
-.. automodule:: chancy.plugins.rule
+.. automodule:: chancy.rule
    :members:
    :undoc-members:
    :show-inheritance:

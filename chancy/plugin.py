@@ -115,5 +115,18 @@ class Plugin(abc.ABC):
         """
         self.wakeup_signal.set()
 
+    async def cleanup(self, chancy: "Chancy") -> int | None:
+        """
+        Clean up any resources used by the plugin.
+
+        Should return either None, if no work was done, or the number of
+        rows cleaned up.
+
+        .. note::
+
+            Normally, you don't need to call this yourself. The Pruner plugin
+            will call the cleanup method of all other registered plugins.
+        """
+
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"

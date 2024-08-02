@@ -92,34 +92,34 @@ class AndCondition(SQLAble):
         )
 
 
-class Age(Rule):
-    def __init__(self):
-        super().__init__("age")
+class JobRules:
+    """
+    A collection of rules that can be used to filter the main job table.
+    """
 
-    def to_sql(self) -> sql.Composable:
-        return sql.SQL("EXTRACT(EPOCH FROM (NOW() - created_at))")
+    class Age(Rule):
+        def __init__(self):
+            super().__init__("age")
 
+        def to_sql(self) -> sql.Composable:
+            return sql.SQL("EXTRACT(EPOCH FROM (NOW() - created_at))")
 
-class Queue(Rule):
-    def __init__(self):
-        super().__init__("queue")
+    class Queue(Rule):
+        def __init__(self):
+            super().__init__("queue")
 
+    class Job(Rule):
+        def __init__(self):
+            super().__init__("payload->>'func'")
 
-class Job(Rule):
-    def __init__(self):
-        super().__init__("payload->>'func'")
+    class State(Rule):
+        def __init__(self):
+            super().__init__("state")
 
+    class CreatedAt(Rule):
+        def __init__(self):
+            super().__init__("created_at")
 
-class State(Rule):
-    def __init__(self):
-        super().__init__("state")
-
-
-class CreatedAt(Rule):
-    def __init__(self):
-        super().__init__("created_at")
-
-
-class ScheduledAt(Rule):
-    def __init__(self):
-        super().__init__("scheduled_at")
+    class ScheduledAt(Rule):
+        def __init__(self):
+            super().__init__("scheduled_at")

@@ -14,7 +14,7 @@ from psycopg import AsyncConnection
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin, PluginScope
-from chancy.plugins.rule import State
+from chancy.rule import JobRules
 from chancy.utils import json_dumps
 
 
@@ -151,7 +151,7 @@ class Web(Plugin):
         state = request.query_params.get("state", "running")
         limit = min(int(request.query_params.get("limit", 20)), 200)
 
-        rules = State() == state
+        rules = JobRules.State() == state
 
         async with chancy.pool.connection() as conn:
             conn: AsyncConnection

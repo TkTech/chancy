@@ -4,7 +4,7 @@ from psycopg import sql
 from chancy.app import Chancy
 from chancy.worker import Worker
 from chancy.plugin import Plugin, PluginScope
-from chancy.plugins.rule import Age, SQLAble
+from chancy.rule import SQLAble, JobRules
 from chancy.utils import timed_block
 
 
@@ -25,24 +25,24 @@ class Pruner(Plugin):
 
     .. code-block:: python
 
-        from chancy.plugins.rule import Age
-        Pruner(Age() > 60)
+        Pruner(Pruner.Rules.Age() > 60)
 
     Or to prune jobs that are older than 60 seconds and are in the "default"
     queue:
 
     .. code-block:: python
 
-        from chancy.plugins.rule import Age, Queue
-        Pruner(Queue("default") + (Age() > 60))
+        Pruner(Pruner.Rules.Queue("default") + (Pruner.Rules.Age() > 60))
 
     Or to prune jobs that are older than 60 seconds and are in the "default"
     queue, or instantly deleted if the job is `update_cache`:
 
     .. code-block:: python
 
-        from chancy.plugins.rule import Age, Queue, Job
-        Pruner((Queue("default") + (Age() > 60)) | Job("update_cache"))
+        Pruner(
+            (Pruner.Rules.Queue("default") + (Pruner.Rules.Age() > 60)) |
+            Pruner.Rules.Job("update_cache")
+        )
 
     By default, the pruner will run every 60 seconds and will remove up to
     10,000 jobs in a single run that have been completed for more than 60
@@ -73,9 +73,11 @@ class Pruner(Plugin):
                           pruner.
     """
 
+    Rules = JobRules
+
     def __init__(
         self,
-        rule: SQLAble = Age() > 60,
+        rule: SQLAble = Rules.Age() > 60,
         *,
         maximum_to_prune: int = 10000,
         poll_interval: int = 60,
@@ -101,6 +103,7 @@ class Pruner(Plugin):
                             f" database. Took {chancy_time.elapsed:.2f}"
                             f" seconds."
                         )
+
                         await chancy.notify(
                             cursor,
                             "pruner.removed",
@@ -109,6 +112,16 @@ class Pruner(Plugin):
                                 "rows_removed": rows_removed,
                             },
                         )
+
+            for plugin in chancy.plugins:
+                rows = await plugin.cleanup(chancy)
+                if rows is None:
+                    continue
+
+                chancy.log.info(
+                    f"Plugin {plugin.__class__.__name__} removed {rows}"
+                    f" row(s) from the database."
+                )
 
     async def prune(self, chancy: Chancy, cursor: AsyncCursor) -> int:
         """

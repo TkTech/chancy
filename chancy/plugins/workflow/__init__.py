@@ -8,6 +8,7 @@ from chancy.app import Chancy
 from chancy.worker import Worker
 from chancy.job import Job, Reference
 from chancy.utils import json_dumps
+from chancy.rule import Rule
 
 
 @dataclass
@@ -131,12 +132,25 @@ class WorkflowPlugin(Plugin):
                                   in a single run of the plugin.
     """
 
+    class Rules:
+        class Age(Rule):
+            def __init__(self):
+                super().__init__("age")
+
+            def to_sql(self) -> sql.Composable:
+                return sql.SQL("EXTRACT(EPOCH FROM (NOW() - created_at))")
+
     def __init__(
-        self, *, polling_interval: int = 1, max_workflows_per_run: int = 1000
+        self,
+        *,
+        polling_interval: int = 1,
+        max_workflows_per_run: int = 1000,
+        pruning_rule: Rule = Rules.Age() > 60 * 60 * 24,
     ):
         super().__init__()
         self.polling_interval = polling_interval
         self.max_workflows_per_run = max_workflows_per_run
+        self.pruning_rule = pruning_rule
 
     @classmethod
     def get_scope(cls) -> PluginScope:
@@ -472,6 +486,42 @@ class WorkflowPlugin(Plugin):
 
         # Close the digraph
         output.write("}\n")
+
+    async def cleanup(self, chancy: Chancy) -> int | None:
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        DELETE FROM {workflow_steps}
+                        WHERE workflow_id NOT IN (
+                            SELECT id FROM {workflows}
+                        )
+                        """
+                    ).format(
+                        workflow_steps=sql.Identifier(
+                            f"{chancy.prefix}workflow_steps"
+                        ),
+                        workflows=sql.Identifier(f"{chancy.prefix}workflows"),
+                    )
+                )
+                steps_removed = cursor.rowcount
+
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        DELETE FROM {workflows}
+                        WHERE state NOT IN ('pending', 'running')
+                        AND ({rule})
+                        """
+                    ).format(
+                        workflows=sql.Identifier(f"{chancy.prefix}workflows"),
+                        rule=self.pruning_rule.to_sql(),
+                    )
+                )
+                workflows_removed = cursor.rowcount
+
+                return steps_removed + workflows_removed
 
     def migrate_package(self) -> str:
         return "chancy.plugins.workflow.migrations"
