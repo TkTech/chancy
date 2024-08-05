@@ -1,3 +1,4 @@
+from io import StringIO
 from psycopg import sql
 from psycopg.rows import dict_row
 from starlette.responses import Response
@@ -72,7 +73,14 @@ class WorkflowWebPlugin(WebPlugin):
         wp = WorkflowPlugin()
         workflow = await wp.fetch_workflow(chancy, id)
 
+        with StringIO() as dot:
+            wp.generate_dot(workflow, dot)
+            dot.seek(0)
+            dot = dot.read()
+
         return Response(
-            await self.render("workflow.html", request, workflow=workflow),
+            await self.render(
+                "workflow.html", request, workflow=workflow, dot=dot
+            ),
             media_type="text/html",
         )
