@@ -1,0 +1,86 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+<div>
+  <h1 class="h3 mb-3">Workflow</h1>
+  <div class="card mb-3">
+    <div class="card-header text-bg-info">
+      Workflow Details
+    </div>
+    <table class="table table-bordered table-striped mb-0">
+      <tbody>
+        <tr>
+          <th>ID</th>
+          <td>{{ workflow.id }}</td>
+        </tr>
+        <tr>
+          <th>Name</th>
+          <td>{{ workflow.name }}</td>
+        </tr>
+        <tr>
+          <th>State</th>
+          <td>
+            {% if workflow.state == "pending" %}
+              <span class="badge bg-warning text-dark">{{ workflow.state }}</span>
+            {% elif workflow.state == "running" %}
+              <span class="badge bg-primary">{{ workflow.state }}</span>
+            {% elif workflow.state == "completed" %}
+              <span class="badge bg-success">{{ workflow.state }}</span>
+            {% elif workflow.state == "failed" %}
+              <span class="badge bg-danger">{{ workflow.state }}</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ workflow.state }}</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-header text-bg-info">
+      Workflow Steps
+    </div>
+  </div>
+  <table class="table table-bordered table-striped mb-0">
+    <thead>
+    <tr>
+      <th>Step ID</th>
+      <th>State</th>
+      <th>Job ID</th>
+      <th>Dependencies</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for step in workflow.steps.values() %}
+      <tr>
+        <td>{{ step.step_id }}</td>
+        <td>
+          {% if step.state == "pending" %}
+            <span class="badge bg-warning text-dark">{{ step.state }}</span>
+          {% elif step.state == "running" %}
+            <span class="badge bg-primary">{{ step.state }}</span>
+          {% elif step.state == "completed" %}
+            <span class="badge bg-success">{{ step.state }}</span>
+          {% elif step.state == "failed" %}
+            <span class="badge bg-danger">{{ step.state }}</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ step.state }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if step.job_id %}
+            <a href="{{ url_for("job", job_id=step.job_id) }}">
+              {{ step.job_id }}
+            </a>
+          {% else %}
+            <span class="text-warning">-</span>
+          {% endif %}
+        </td>
+        <td>{{ step.dependencies }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+  <div>
+    <h1 class="h3 mb-3">Workflows</h1>
+    <div
+      id="content"
+      hx-get="/workflows"
+      hx-trigger="load delay:5s"
+      hx-target="#content"
+      hx-select="#content"
+    >
+      <table class="table table-bordered table-striped">
+        <thead>
+        <tr>
+          <th>ID</th>
+          <th>Workflow</th>
+          <th class="text-center">State</th>
+          <th>Created</th>
+          <th class="text-end">Pending Jobs</th>
+          <th class="text-end">Total Jobs</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for workflow in workflows %}
+          <tr>
+            <td>{{ workflow.id }}</td>
+            <td>{{ workflow.name }}</td>
+            <td class="text-center">
+              {% if workflow.state == "pending" %}
+                <span class="badge bg-warning text-dark">{{ workflow.state }}</span>
+              {% elif workflow.state == "running" %}
+                <span class="badge bg-primary">{{ workflow.state }}</span>
+              {% elif workflow.state == "completed" %}
+                <span class="badge bg-success">{{ workflow.state }}</span>
+              {% elif workflow.state == "failed" %}
+                <span class="badge bg-danger">{{ workflow.state }}</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ workflow.state }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {{ workflow.created_at|relative_time }}
+            </td>
+            <td class="text-end">{{ workflow.pending_steps }}</td>
+            <td class="text-end">{{ workflow.total_steps }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
