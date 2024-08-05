@@ -12,7 +12,7 @@ from starlette.staticfiles import StaticFiles
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin, PluginScope
-from chancy.plugins.web.base import BaseWebPlugin
+from chancy.plugins.web.core import CoreWebPlugin
 from chancy.plugins.web.filters import time_until, relative_time
 from chancy.plugins.web.plugin import WebPlugin
 
@@ -57,7 +57,7 @@ class Web(Plugin):
         debug: bool = False,
     ):
         super().__init__()
-        self.plugins = plugins or {BaseWebPlugin}
+        self.plugins = plugins or {CoreWebPlugin}
         self.port = port
         self.host = host
         self.debug = debug

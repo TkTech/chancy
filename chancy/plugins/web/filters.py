@@ -38,6 +38,9 @@ def relative_time(dt):
     """
     Show the time (in minutes and seconds) since or until the given datetime.
     """
+    if dt is None:
+        return "-"
+
     now = datetime.now(timezone.utc)
     delta = dt - now
 

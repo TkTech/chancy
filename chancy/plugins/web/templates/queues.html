@@ -21,7 +21,11 @@
       <tbody>
       {% for queue in queues %}
         <tr>
-          <td>{{ queue.name }}</td>
+          <td>
+            <a href="{{ url_for('queue', queue_name=queue.name) }}">
+              {{ queue.name }}
+            </a>
+          </td>
           <td class="text-center">{{ queue.worker_count }}</td>
           <td class="text-center">
             {% if queue.state == "paused" %}

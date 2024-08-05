@@ -1,0 +1,79 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+<div>
+  <h1 class="h3 mb-3">Queue</h1>
+  <div class="card mb-3">
+    <div class="card-header text-bg-info">
+      Queue Details
+    </div>
+    <table class="table table-bordered table-striped mb-0">
+      <tbody>
+        <tr>
+          <th>Name</th>
+          <td>{{ queue.name }}</td>
+        </tr>
+        <tr>
+          <th>State</th>
+          <td>
+            {% if queue.state == "paused" %}
+              <span class="badge bg-warning text-dark">{{ queue.state }}</span>
+            {% else %}
+              <span class="badge bg-success">{{ queue.state }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th>Concurrency</th>
+          <td>{{ queue.concurrency }}</td>
+        </tr>
+        <tr>
+          <th>Tags</th>
+          <td>
+            <ul class="list-inline mb-0">
+              {% for tag in queue.tags %}
+                <li class="list-inline-item">
+                  <span class="badge bg-secondary">{{ tag }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </td>
+        </tr>
+        <tr>
+          <th>Executor</th>
+          <td>
+            <code>{{ queue.executor }}</code>
+          </td>
+        </tr>
+        <tr>
+          <th>Executor Options</th>
+          <td>
+            <code>{{ queue.executor_options }}</code>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-header text-bg-info">
+      Workers
+    </div>
+    <table class="table table-bordered table-striped mb-0">
+      <thead>
+        <tr>
+          <th>Worker ID</th>
+          <th>Last Seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for worker in workers %}
+          <tr>
+            <td>{{ worker.worker_id }}</td>
+            <td>{{ worker.last_seen }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

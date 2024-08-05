@@ -9,7 +9,7 @@ from chancy.plugins.web.plugin import WebPlugin
 from chancy.job import JobInstance
 
 
-class BaseWebPlugin(WebPlugin):
+class CoreWebPlugin(WebPlugin):
     """
     A WebPlugin that implements views for core Chancy functionality, such
     as viewing jobs, workers, and queues.
@@ -44,6 +44,12 @@ class BaseWebPlugin(WebPlugin):
                 "endpoint": self.queues_view,
                 "methods": ["GET"],
                 "name": "queues",
+            },
+            {
+                "path": "/queues/{queue_name}",
+                "endpoint": self.queue_view,
+                "methods": ["GET"],
+                "name": "queue",
             },
             {
                 "path": "/jobs",
@@ -123,6 +129,57 @@ class BaseWebPlugin(WebPlugin):
 
         return HTMLResponse(
             await self.render("queues.html", request, queues=queues),
+        )
+
+    async def queue_view(
+        self, request: Request, chancy: Chancy, worker: Worker
+    ):
+        """
+        Returns a detailed view of a single queue.
+        """
+        queue_name = request.path_params["queue_name"]
+
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            *
+                        FROM
+                            {queues}
+                        WHERE
+                            name = %(queue_name)s
+                        """
+                    ).format(queues=sql.Identifier(f"{chancy.prefix}queues")),
+                    {"queue_name": queue_name},
+                )
+                queue = await cursor.fetchone()
+
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            *
+                        FROM
+                            {workers}
+                        WHERE
+                            %(queue_name)s = ANY(queues)
+                        """
+                    ).format(
+                        workers=sql.Identifier(f"{chancy.prefix}workers"),
+                    ),
+                    {"queue_name": queue_name},
+                )
+                workers = await cursor.fetchall()
+
+        if queue is None:
+            return HTMLResponse("Queue not found", status_code=404)
+
+        return HTMLResponse(
+            await self.render(
+                "queue.html", request, queue=queue, workers=workers
+            ),
         )
 
     async def jobs_view(self, request: Request, chancy: Chancy, worker: Worker):
