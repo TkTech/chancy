@@ -1,7 +1,15 @@
 {% extends "base/base.html" %}
 
 {% block content %}
-<div>
+<div
+  id="content"
+  hx-get="{{ request.url }}"
+  {% if workflow.state in ["running", "pending"] %}
+  hx-trigger="load delay:5s"
+  {% endif %}
+  hx-target="#content"
+  hx-select="#content"
+>
   <h1 class="h3 mb-3">Workflow</h1>
   <div class="card mb-3">
     <div class="card-header text-bg-info">

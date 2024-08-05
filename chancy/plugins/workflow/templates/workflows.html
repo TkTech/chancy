@@ -24,7 +24,11 @@
         <tbody>
         {% for workflow in workflows %}
           <tr>
-            <td>{{ workflow.id }}</td>
+            <td>
+              <a href="{{ url_for('workflow', id=workflow.id) }}">
+                {{ workflow.id }}
+              </a>
+            </td>
             <td>{{ workflow.name }}</td>
             <td class="text-center">
               {% if workflow.state == "pending" %}
