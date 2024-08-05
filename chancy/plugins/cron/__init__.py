@@ -1,13 +1,16 @@
 import json
 from datetime import datetime, timezone
+from typing import Type
 
 from psycopg import sql
 from croniter import croniter
 
 from chancy.plugin import Plugin, PluginScope
+from chancy.plugins.cron.web import CronWebPlugin
+from chancy.plugins.web import WebPlugin
 from chancy.worker import Worker
 from chancy.app import Chancy
-from chancy import Queue, Job
+from chancy import Job
 
 
 class Cron(Plugin):
@@ -110,7 +113,6 @@ class Cron(Plugin):
                                 """
                                 SELECT
                                     unique_key,
-                                    queue,
                                     cron,
                                     job
                                 FROM {table}
@@ -122,32 +124,25 @@ class Cron(Plugin):
                         )
 
                         for row in await cursor.fetchall():
-                            unique_key, queue_name, cron, job = row
-
-                            q = chancy[queue_name]
-                            if isinstance(q, Queue):
-                                # If we're using our built-in default queue, we
-                                # can push this as part of our transaction.
-                                await q.push_jobs(
-                                    cursor,
-                                    [Job.unpack(job)],
-                                    prefix=chancy.prefix,
-                                )
-                            else:
-                                # Otherwise, we're using the generic BaseQueue
-                                # interface which may not even be postgres.
-                                await q.push(chancy, [Job.unpack(job)])
+                            unique_key, cron, job = row
+                            # If we're using our built-in default queue, we
+                            # can push this as part of our transaction.
+                            await chancy.push_many_ex(
+                                cursor,
+                                [Job.unpack(job)],
+                            )
 
                             chancy.log.debug(
                                 f"Pushed scheduled cron job {unique_key!r}"
-                                f" onto queue {queue_name!r}."
                             )
 
                             await cursor.execute(
                                 sql.SQL(
                                     """
                                     UPDATE {table}
-                                    SET next_run = %(next_run)s
+                                    SET
+                                        next_run = %(next_run)s,
+                                        last_run = %(last_run)s
                                     WHERE unique_key = %(unique_key)s
                                     """
                                 ).format(table=table),
@@ -165,6 +160,10 @@ class Cron(Plugin):
 
     def migrate_package(self) -> str | None:
         return "chancy.plugins.cron.migrations"
+
+    @staticmethod
+    def web_plugin() -> Type["WebPlugin"] | None:
+        return CronWebPlugin
 
     @classmethod
     async def unschedule(cls, chancy: Chancy, *unique_keys: str):
@@ -192,7 +191,7 @@ class Cron(Plugin):
                     )
 
     @classmethod
-    async def schedule(cls, chancy: Chancy, queue_name, cron, *jobs: Job):
+    async def schedule(cls, chancy: Chancy, cron: str, *jobs: Job):
         """
         Schedule one or more jobs to run at specific times and intervals.
 
@@ -200,7 +199,7 @@ class Cron(Plugin):
         :attr:`~chancy.job.Job.unique_key` to ensure that only one
         copy of the job is scheduled at a time. Scheduling a job with the same
         unique key as an existing job will update the existing job with the new
-        schedule, job, and queue name.
+        schedule & job.
 
         For example, to run a function once every 2 minutes, we'd use:
 
@@ -214,7 +213,6 @@ class Cron(Plugin):
             )
 
         :param chancy: The Chancy application.
-        :param queue_name: The name of the queue to push the job onto.
         :param cron: A cron-like syntax string that describes when to run the
                      job.
         :param jobs: The jobs to run.
@@ -237,20 +235,17 @@ class Cron(Plugin):
                             """
                             INSERT INTO {table} (
                                 unique_key,
-                                queue,
                                 cron,
                                 job,
                                 next_run
                             )
                             VALUES (
                                 %(unique_key)s,
-                                %(queue)s,
                                 %(cron)s,
                                 %(job)s,
                                 %(next_run)s
                             )
                             ON CONFLICT (unique_key) DO UPDATE SET
-                                queue = %(queue)s,
                                 cron = %(cron)s,
                                 job = %(job)s,
                                 next_run = %(next_run)s
@@ -258,7 +253,6 @@ class Cron(Plugin):
                         ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
                         [
                             {
-                                "queue": queue_name,
                                 "unique_key": job.unique_key,
                                 "cron": cron,
                                 "job": json.dumps(job.pack()),

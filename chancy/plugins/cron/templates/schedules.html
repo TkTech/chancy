@@ -1,0 +1,45 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+<div>
+  <h1 class="h3 mb-3">Schedules</h1>
+  <div
+    id="content"
+    hx-get="/schedules"
+    hx-trigger="load delay:5s"
+    hx-target="#content"
+    hx-select="#content"
+  >
+    <table class="table table-bordered table-striped">
+      <thead>
+      <tr>
+        <th>Key</th>
+        <th>Schedule</th>
+        <th>Next Run</th>
+        <th>Last Enqueued</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for schedule in schedules %}
+        <tr>
+          <td>
+            <a href="{{ url_for('schedule', unique_key=schedule.unique_key) }}">
+              {{ schedule.unique_key }}
+            </a>
+          </td>
+          <td>
+            <code>{{ schedule.cron }}</code>
+          </td>
+          <td>{{ schedule.next_run|time_until }}</td>
+          <td>{{ schedule.last_run }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5" class="text-center">No scheduled jobs found</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

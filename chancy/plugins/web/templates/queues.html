@@ -1,0 +1,39 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+<div>
+  <h1 class="h3 mb-3">Queues</h1>
+  <div
+    id="content"
+    hx-get="/queues"
+    hx-trigger="load delay:5s"
+    hx-target="#content"
+    hx-select="#content"
+  >
+    <table class="table table-bordered table-striped">
+      <thead>
+      <tr>
+        <th>Queue</th>
+        <th class="text-center">Workers</th>
+        <th class="text-center">Status</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for queue in queues %}
+        <tr>
+          <td>{{ queue.name }}</td>
+          <td class="text-center">{{ queue.worker_count }}</td>
+          <td class="text-center">
+            {% if queue.state == "paused" %}
+              <span class="badge bg-warning">Paused</span>
+            {% else %}
+              <span class="badge bg-success">Active</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock content %}

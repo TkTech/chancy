@@ -1,0 +1,92 @@
+{% extends "base/base.html" %}
+
+{% block content %}
+<div>
+  <div
+    id="content"
+    hx-get="{{ request.url }}"
+    hx-trigger="load delay:5s"
+    hx-target="#content"
+    hx-select="#content"
+  >
+    <div class="row">
+      <div class="col col-3">
+        <h5>States</h5>
+        <div
+          class="list-group"
+          hx-trigger="click"
+          hx-select="#content"
+          hx-target="#content"
+          hx-push-url="true"
+        >
+          {% for label, value in states %}
+            <a
+              href="#"
+              class="list-group-item {{ 'active' if value == state else '' }}"
+              hx-get="{{ request.url.replace_query_params(state=value) }}"
+              >
+              {{ label }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+        <ul class="list-group list-group-flush">
+          {% for job in jobs %}
+            <li class="list-group-item py-3">
+              <div class="d-flex w-100 justify-content-between mb-2">
+                <a href="{{ url_for('job', job_id=job.id) }}" class="text-decoration-none">
+                  <strong>{{ job.payload.func }}</strong>
+                </a>
+                <small class="font-monospace">
+                  {%- if state == "pending" -%}
+                    {{ job.created_at|relative_time }}
+                  {%- elif state == "running" -%}
+                    {{ job.started_at|relative_time }}
+                  {%- elif state == "failed" -%}
+                    {{ job.completed_at|relative_time }}
+                  {%- elif state == "completed" -%}
+                    {{ job.completed_at|relative_time }}
+                  {%- endif  -%}
+                </small>
+              </div>
+              <div class="d-flex w-100 justify-content-between">
+                <small class="pe-3">
+                  {{ job.attempts }} / {{ job.max_attempts }}
+                </small>
+                <code class="flex-grow-1">{{ job.payload.kwargs|string|truncate(128) }}</code>
+                <small>
+                  <span class="badge bg-success">{{ job.queue }}</span>
+                </small>
+              </div>
+            </li>
+          {% else %}
+            <li class="list-group-item py-3">
+              <div class="d-flex w-100 justify-content-between">
+                <span class="text-muted">No jobs found</span>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+        <div class="card-footer">
+          <button
+            class="btn btn-primary btn-block btn-sm w-100"
+            hx-get="{{ request.url.replace_query_params(
+              limit=limit + 10,
+              state=state
+            ) }}"
+            hx-trigger="click"
+            hx-target="#content"
+            hx-push-url="true"
+            {%- if limit >= 200 or jobs|length < limit -%}
+              disabled
+            {%- endif -%}
+          >
+            Show More
+          </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

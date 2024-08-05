@@ -360,6 +360,10 @@ class Chancy:
                             "limits": [
                                 limit.serialize() for limit in job.limits
                             ],
+                            "rate_limits": [
+                                rate_limit.serialize()
+                                for rate_limit in job.rate_limits
+                            ],
                         }
                     ),
                     job.priority,

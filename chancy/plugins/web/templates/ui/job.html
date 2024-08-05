@@ -1,0 +1,81 @@
+{% macro job(j) %}
+  <div class="card">
+    <div class="card-header text-bg-info">
+      Job Definition
+    </div>
+    <table class="table table-striped mb-0">
+      <tbody>
+        <tr>
+          <th>Function</th>
+          <td><code>{{ j.func }}</code></td>
+        </tr>
+        <tr>
+          <th>Keywords</th>
+          <td>
+            <code>{{ j.kwargs }}</code>
+          </td>
+        </tr>
+        <tr>
+          <th>Queue</th>
+          <td>
+            <span class="badge bg-success">{{ j.queue }}</span>
+          </td>
+        </tr>
+        <tr>
+          <th>Priority</th>
+          <td>
+            {{ j.priority }}
+          </td>
+        </tr>
+        <tr>
+          <th>Max Attempts</th>
+          <td>
+            {{ j.max_attempts }}
+          </td>
+        </tr>
+        <tr>
+          <th>Unique Key</th>
+          <td>
+            <code>{{ j.unique_key }}</code>
+          </td>
+        </tr>
+        <tr>
+          <th>Resource Limits</th>
+          {% if j.limits %}
+          <td>
+            <ul class="list-inline mb-0">
+              {% for limit in j.limits %}
+                <li class="list-inline-item">
+                  <span class="badge bg-secondary">{{ limit }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </td>
+          {% else %}
+          <td class="text-warning">
+            No resource limits set
+          </td>
+          {% endif %}
+        </tr>
+        <tr>
+          <th>Rate Limits</th>
+          {% if j.rate_limits %}
+          <td>
+            <ul class="list-inline mb-0">
+              {% for limit in j.rate_limits %}
+                <li class="list-inline-item">
+                  <span class="badge bg-secondary">{{ limit }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </td>
+          {% else %}
+          <td class="text-warning">
+            No rate limits set
+          </td>
+          {% endif %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}

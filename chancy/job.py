@@ -1,7 +1,7 @@
 import asyncio
 import dataclasses
 import enum
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, TYPE_CHECKING
 
 from chancy.utils import importable_name
@@ -74,6 +74,28 @@ class Limit:
         return {"t": self.type_.value, "v": self.value}
 
 
+@dataclasses.dataclass
+class RateLimit:
+    key: str
+    limit: int
+    period: timedelta
+
+    def serialize(self) -> dict:
+        return {
+            "k": self.key,
+            "l": self.limit,
+            "p": self.period.total_seconds(),
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "RateLimit":
+        return cls(
+            key=data["k"],
+            limit=data["l"],
+            period=timedelta(seconds=data["p"]),
+        )
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Job:
     """
@@ -104,6 +126,8 @@ class Job:
     #: only 1 copy of a job with this key will be allowed to run or be
     #: scheduled at a time.
     unique_key: str | None = None
+    #: An optional list of rate limits that should be applied to this job.
+    rate_limits: list[RateLimit] = dataclasses.field(default_factory=list)
 
     @classmethod
     def from_func(cls, func, **kwargs):
@@ -130,6 +154,9 @@ class Job:
     def with_queue(self, queue: str) -> "Job":
         return dataclasses.replace(self, queue=queue)
 
+    def with_rate_limits(self, rate_limits: list[RateLimit]) -> "Job":
+        return dataclasses.replace(self, rate_limits=rate_limits)
+
     def pack(self) -> dict:
         """
         Pack the job into a dictionary that can be serialized and used to
@@ -142,6 +169,7 @@ class Job:
             "a": self.max_attempts,
             "s": self.scheduled_at.timestamp(),
             "l": [limit.serialize() for limit in self.limits],
+            "r": [rate_limit.serialize() for rate_limit in self.rate_limits],
             "u": self.unique_key,
             "q": self.queue,
         }
@@ -158,6 +186,9 @@ class Job:
             max_attempts=data["a"],
             scheduled_at=datetime.fromtimestamp(data["s"], tz=timezone.utc),
             limits=[Limit.deserialize(limit) for limit in data["l"]],
+            rate_limits=[
+                RateLimit.deserialize(rate_limit) for rate_limit in data["r"]
+            ],
             unique_key=data["u"],
             queue=data["q"],
         )
@@ -201,5 +232,9 @@ class JobInstance(Job):
             queue=data["queue"],
             limits=[
                 Limit.deserialize(limit) for limit in data["payload"]["limits"]
+            ],
+            rate_limits=[
+                RateLimit.deserialize(rate_limit)
+                for rate_limit in data["payload"].get("rate_limits", [])
             ],
         )

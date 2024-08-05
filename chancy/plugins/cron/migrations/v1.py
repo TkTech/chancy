@@ -11,7 +11,6 @@ class V1Migration(Migration):
                 """
                 CREATE TABLE {table} (
                     unique_key TEXT PRIMARY KEY,
-                    queue TEXT NOT NULL,
                     job JSON NOT NULL,
                     cron TEXT NOT NULL,
                     last_run TIMESTAMPTZ,

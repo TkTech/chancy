@@ -15,6 +15,17 @@ class PluginScope(enum.Enum):
     WORKER = "worker"
 
 
+class RouteT(typing.TypedDict):
+    """
+    A type hint for a route.
+    """
+
+    path: str
+    endpoint: typing.Callable
+    methods: str | None
+    name: str | None
+
+
 class Plugin(abc.ABC):
     """
     Base class for all plugins.

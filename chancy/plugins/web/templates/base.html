@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" class="h-100">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chancy - UI</title>
+    <link rel="stylesheet" href="/static/base/css/bootstrap.min.css">
+    <script src="/static/base/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/base/js/htmx.min.js"></script>
+    {% block head %}
+    {% endblock head %}
+  </head>
+  <body class="h-100">
+    {% block body %}
+      <div class="container h-100 p-3">
+        <header class="p-3 text-bg-dark bg-body-tertiary rounded-3">
+          <div class="container">
+            <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
+              <a class="d-flex align-items-center mb-2 mb-lg-0 text-white text-decoration-none" href="/">
+                <img src="/static/base/img/logo_small.png" alt="Chancy" width="40" height="40">
+              </a>
+              <ul class="nav col-12 col-lg-auto me-lg-auto mb-2 justify-content-center mb-md-0">
+                {% for plugin in plugins %}
+                  {% for label, link in plugin.links() %}
+                    <li>
+                      <a href="{{ link }}" class="nav-link px-2 text-white">{{ label }}</a>
+                    </li>
+                  {% endfor %}
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </header>
+        <div class="py-3">
+          {% block content %}
+          {% endblock content %}
+        </div>
+      </div>
+    {% endblock body %}
+  </body>
+</html>

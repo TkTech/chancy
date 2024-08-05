@@ -1,0 +1,34 @@
+{% extends "base/base.html" %}
+{% from "base/ui/job.html" import job %}
+
+{% block content %}
+<div>
+  <h1 class="h3 mb-3">Schedule Details</h1>
+  <div class="card mb-3">
+    <div class="card-header text-bg-info">
+      Scheduled
+    </div>
+    <table class="table table-striped mb-0">
+      <tbody>
+        <tr>
+          <th>Key</th>
+          <td><code>{{ schedule.unique_key }}</code></td>
+        </tr>
+        <tr>
+          <th>Schedule</th>
+          <td><code>{{ schedule.cron }}</code></td>
+        </tr>
+        <tr>
+          <th>Next Run</th>
+          <td>{{ schedule.next_run|time_until }}</td>
+        </tr>
+        <tr>
+          <th>Last Enqueued</th>
+          <td>{{ schedule.last_run }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {{ job(schedule.job) }}
+</div>
+{% endblock %}

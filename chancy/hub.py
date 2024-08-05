@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 from typing import Callable, Awaitable
 
@@ -9,6 +10,7 @@ class Hub:
 
     def __init__(self):
         self._handlers: dict[str, list[Callable[..., Awaitable[None]]]] = {}
+        self._waiters: dict[str, list[asyncio.Future]] = {}
 
     def on(self, event: str, f: Callable[..., Awaitable[None]]):
         """
@@ -44,6 +46,13 @@ class Hub:
                 else:
                     handler(event, body)
 
+        # Resolve any waiting futures
+        waiters = self._waiters.get(event, [])
+        for waiter in waiters:
+            if not waiter.done():
+                waiter.set_result(body)
+        self._waiters[event] = [w for w in waiters if not w.done()]
+
     def off(self, event: str, callback: Callable[..., Awaitable[None]]):
         """
         Remove a callback from an event.
@@ -54,3 +63,24 @@ class Hub:
         self._handlers[event] = [
             h for h in self._handlers[event] if h != callback
         ]
+
+    async def wait_for(self, event: str, timeout: float | None = None):
+        """
+        Wait for a specific event to occur.
+
+        :param event: The event to wait for.
+        :param timeout: The maximum time to wait for the event (in seconds).
+        :return: The data associated with the event.
+        :raises TimeoutError: If the timeout is reached before the event occurs.
+        """
+        future = asyncio.get_running_loop().create_future()
+        self._waiters.setdefault(event, []).append(future)
+
+        try:
+            return await asyncio.wait_for(future, timeout)
+        except TimeoutError:
+            self._waiters[event].remove(future)
+            raise
+        finally:
+            if not future.done():
+                future.cancel()
