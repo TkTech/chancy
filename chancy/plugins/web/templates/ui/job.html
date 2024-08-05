@@ -79,3 +79,48 @@
     </table>
   </div>
 {% endmacro %}
+
+{% macro jobinstancepanel(j) %}
+  <div class="card">
+    <div class="card-header text-bg-info">
+      Job Instance
+    </div>
+    <table class="table table-striped mb-0">
+      <tbody>
+        <tr>
+          <th>Job ID</th>
+          <td>{{ j.id }}</td>
+        </tr>
+        <tr>
+          <th>State</th>
+          <td>
+            {{ j.state }}
+          </td>
+        </tr>
+        <tr>
+          <th>Started At</th>
+          <td>
+            {% if j.started_at %}
+              {{ j.started_at }}
+            {% else %}
+              <span class="text-warning">Not started yet</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th>Completed At</th>
+          <td>
+            {% if j.completed_at %}
+              {{ j.completed_at }}
+            {% else %}
+              <span class="text-warning">Not completed yet</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th>Attempts</th>
+          <td>{{ j.attempts }} / {{ j.max_attempts }}</td>
+        </tr>
+    </table>
+  </div>
+{% endmacro %}

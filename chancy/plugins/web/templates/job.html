@@ -1,6 +1,10 @@
 {% extends "base/base.html" %}
 {% from "base/ui/job.html" import job as jobpanel %}
+{% from "base/ui/job.html" import jobinstancepanel %}
 
 {% block content %}
+  <div class="mb-3">
+    {{ jobinstancepanel(job) }}
+  </div>
   {{ jobpanel(job) }}
 {% endblock %}
