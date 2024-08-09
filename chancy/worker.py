@@ -8,6 +8,7 @@ import platform
 from psycopg import sql
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
+from psycopg.types.json import Json
 
 from chancy.app import Chancy
 from chancy.hub import Hub
@@ -96,14 +97,14 @@ class Worker:
         Will run indefinitely, polling the queues for new jobs and running any
         configured plugins.
         """
-        await self.manager.add(self._maintain_queues(), name="queues")
-        await self.manager.add(self._maintain_updates(), name="updates")
-        await self.manager.add(self._maintain_heartbeat(), name="heartbeat")
+        self.manager.add(self._maintain_queues(), name="queues")
+        self.manager.add(self._maintain_updates(), name="updates")
+        self.manager.add(self._maintain_heartbeat(), name="heartbeat")
 
         # pgbouncer and other connection pools may not support LISTEN/NOTIFY
         # properly, so this needs to remain an optional (but default) feature.
         if self.chancy.notifications:
-            await self.manager.add(
+            self.manager.add(
                 self._maintain_notifications(), name="notifications"
             )
 
@@ -129,7 +130,7 @@ class Worker:
 
         :param plugin: The plugin to add.
         """
-        await self.manager.add(
+        self.manager.add(
             plugin.run(self, self.chancy),
             name=plugin.__class__.__name__,
         )
@@ -185,7 +186,7 @@ class Worker:
             for queue_name, queue in db_queues.items():
                 if queue_name not in self._queues:
                     self._queues[queue_name] = queue
-                    await self.manager.add(
+                    self.manager.add(
                         self._maintain_queue(queue_name),
                         name=f"queue_{queue_name}",
                     )
@@ -213,7 +214,10 @@ class Worker:
             try:
                 queue = self._queues[queue_name]
             except KeyError:
-                # The queue was removed, so we should stop maintaining it.
+                self.chancy.log.info(
+                    f"Queue {queue_name!r} no longer exists, stopping its"
+                    f" maintenance loop."
+                )
                 return
 
             maximum_jobs_to_poll = queue.concurrency - len(executor)
@@ -312,6 +316,10 @@ class Worker:
             run when the worker is started.
         """
         while True:
+            if self.outgoing.empty():
+                await asyncio.sleep(self.send_outgoing_interval)
+                continue
+
             pending_updates = []
             while len(pending_updates) < 1000:
                 try:
@@ -332,7 +340,8 @@ class Worker:
                                         state = %(state)s,
                                         started_at = %(started_at)s,
                                         completed_at = %(completed_at)s,
-                                        attempts = %(attempts)s
+                                        attempts = %(attempts)s,
+                                        errors = %(errors)s
                                     WHERE
                                         id = %(id)s
                                     """
@@ -344,10 +353,11 @@ class Worker:
                                 [
                                     {
                                         "id": update.id,
-                                        "state": update.state,
+                                        "state": update.state.value,
                                         "started_at": update.started_at,
                                         "completed_at": update.completed_at,
                                         "attempts": update.attempts,
+                                        "errors": Json(update.errors),
                                     }
                                     for update in pending_updates
                                 ],
@@ -499,7 +509,6 @@ class Worker:
                             {jobs}
                         set
                             started_at = now(),
-                            attempts = attempts + 1,
                             state = 'running',
                             taken_by = %(worker_id)s
                         from

@@ -1,9 +1,9 @@
 import asyncio
 import dataclasses
 import traceback
-from asyncio import Future
 from typing import Dict
 from datetime import datetime, timezone
+from functools import partial
 
 from chancy.executor import Executor
 from chancy.job import JobInstance, Limit
@@ -23,17 +23,21 @@ class AsyncExecutor(Executor):
 
     def __init__(self, worker, queue):
         super().__init__(worker, queue)
-        self.running_jobs: Dict[str, asyncio.Task] = {}
+        self.running_jobs: set[asyncio.Task] = set()
 
-    async def push(self, job: JobInstance) -> Future:
-        task = asyncio.create_task(self.run_job(job))
-        self.running_jobs[job.id] = task
-        return task
+    async def push(self, job: JobInstance):
+        task = asyncio.create_task(self._job_wrapper(job))
+        self.running_jobs.add(task)
+        task.add_done_callback(self._job_cleanup)
 
     def __len__(self):
         return len(self.running_jobs)
 
-    async def run_job(self, job: JobInstance):
+    def _job_cleanup(self, task: asyncio.Task):
+        self.running_jobs.remove(task)
+        task.exception()
+
+    async def _job_wrapper(self, job: JobInstance):
         try:
             func = import_string(job.func)
             if not asyncio.iscoroutinefunction(func):
@@ -55,47 +59,11 @@ class AsyncExecutor(Executor):
             try:
                 # This annoyingly creates quite the excessive traceback,
                 # we should revisit this and clean it up.
-                result = await asyncio.wait_for(func(**kwargs), timeout=timeout)
+                await asyncio.wait_for(func(**kwargs), timeout=timeout)
             except (asyncio.TimeoutError, TimeoutError):
                 raise asyncio.TimeoutError(
                     f"Job {job.id} timed out after {timeout} seconds"
                 )
-
-            await self.job_completed(job, result, None)
-            return result
+            self.worker.manager.add(self.job_completed(job))
         except Exception as exc:
-            await self.job_completed(job, None, exc)
-            raise
-        finally:
-            del self.running_jobs[job.id]
-
-    async def job_completed(
-        self, job: JobInstance, result: any, exc: Exception | None
-    ):
-        """
-        Called when a job has completed.
-
-        This method should be called by the executor when a job has completed
-        execution. It will update the job's state in the queue and handle
-        retries if necessary.
-        """
-        if exc is not None:
-            traceback.print_exception(type(exc), exc, exc.__traceback__)
-            new_state = dataclasses.replace(
-                job,
-                state=(
-                    JobInstance.State.FAILED
-                    if job.attempts + 1 >= job.max_attempts
-                    else JobInstance.State.RETRYING
-                ),
-                attempts=job.attempts + 1,
-            )
-        else:
-            now = datetime.now(tz=timezone.utc)
-            new_state = dataclasses.replace(
-                job,
-                state=JobInstance.State.SUCCEEDED,
-                completed_at=now,
-            )
-
-        await self.worker.push_update(new_state)
+            self.worker.manager.add(self.job_completed(job, exc))

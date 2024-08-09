@@ -1,10 +1,20 @@
 {% extends "base/base.html" %}
-{% from "base/ui/job.html" import job as jobpanel %}
-{% from "base/ui/job.html" import jobinstancepanel %}
+{% from "base/ui/job.html" import job_panel with context %}
+{% from "base/ui/job.html" import jobinstance_panel %}
 
 {% block content %}
   <div class="mb-3">
-    {{ jobinstancepanel(job) }}
+    {{ jobinstance_panel(job) }}
   </div>
-  {{ jobpanel(job) }}
+  {{ job_panel(job) }}
+  {% for error in job.errors %}
+  <div class="card mt-3">
+    <div class="card-header text-bg-danger">
+      Error - Attempt #{{ error.attempt }}
+    </div>
+    <div class="card-body bg-body-tertiary">
+      <pre class="mb-0"><code>{{ error.traceback }}</code></pre>
+    </div>
+  </div>
+  {% endfor %}
 {% endblock %}

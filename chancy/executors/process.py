@@ -70,7 +70,7 @@ class ProcessExecutor(Executor):
         future: Future = self.pool.submit(self.job_wrapper, job)
         future.add_done_callback(
             functools.partial(
-                self.job_completed, loop=asyncio.get_running_loop()
+                self._on_job_completed, loop=asyncio.get_running_loop()
             )
         )
         self.processes[future] = job
@@ -156,39 +156,14 @@ class ProcessExecutor(Executor):
         if signum == signal.SIGALRM:
             raise TimeoutError("Job timed out.")
 
-    def job_completed(self, future: Future, loop: asyncio.AbstractEventLoop):
-        """
-        Called when a job has completed.
-
-        This method should be called by the executor when a job has completed
-        execution. It will update the job's state in the queue and handle
-        retries if necessary.
-        """
+    def _on_job_completed(
+        self, future: Future, loop: asyncio.AbstractEventLoop
+    ):
         job = self.processes.pop(future)
         exc = future.exception()
 
-        if exc is not None:
-            traceback.print_exception(type(exc), exc, exc.__traceback__)
-
-            new_state = dataclasses.replace(
-                job,
-                state=(
-                    JobInstance.State.FAILED
-                    if job.attempts + 1 >= job.max_attempts
-                    else JobInstance.State.RETRYING
-                ),
-                attempts=job.attempts + 1,
-            )
-        else:
-            now = datetime.now(tz=timezone.utc)
-            new_state = dataclasses.replace(
-                job,
-                state=JobInstance.State.SUCCEEDED,
-                completed_at=now,
-            )
-
         f = asyncio.run_coroutine_threadsafe(
-            self.worker.push_update(new_state),
+            self.job_completed(job, exc),
             loop,
         )
         f.result()

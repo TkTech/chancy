@@ -14,7 +14,7 @@ from chancy.migrate import Migrator
 from chancy.queue import Queue
 from chancy.job import Reference, Job, JobInstance
 from chancy.plugin import Plugin
-from chancy.utils import chancy_uuid, chunked
+from chancy.utils import chancy_uuid, chunked, json_dumps
 
 
 @cache
@@ -154,7 +154,7 @@ class Chancy:
             ),
             [
                 f"{self.prefix}events",
-                json.dumps({"t": event, **payload}),
+                json_dumps({"t": event, **payload}),
             ],
         )
 

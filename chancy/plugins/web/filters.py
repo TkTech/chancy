@@ -34,22 +34,31 @@ def time_until(future_date):
         return ", ".join(parts[:-1]) + f", and {parts[-1]}"
 
 
-def relative_time(dt):
+def relative_time(dt: datetime | None) -> str:
     """
-    Show the time (in minutes and seconds) since or until the given datetime.
+    Show the time in hours, minutes, and seconds between `dt` and now.
+
+    Works with both past and future datetimes. Returns a string that looks like
+    HHhMMmSSs, where HH is hours, MM is minutes, and SS is seconds. If the time
+    is within an hour, only minutes and seconds are shown. If the time is within
+    a minute, only seconds are shown.
     """
     if dt is None:
         return "-"
 
     now = datetime.now(timezone.utc)
-    delta = dt - now
-
+    delta = abs(now - dt)
     hours, rem = divmod(delta.seconds, 3600)
     minutes, seconds = divmod(rem, 60)
 
+    p = []
+    if delta.days > 0:
+        p.append(f"{delta.days}d")
     if hours > 0:
-        return f"{hours:02}h{minutes:02}m{seconds:02}s"
-    elif minutes > 0:
-        return f"{minutes:02}m{seconds:02}s"
-    else:
-        return f"{seconds:02}s"
+        p.append(f"{hours}h")
+    if minutes > 0:
+        p.append(f"{minutes}m")
+    if seconds > 0:
+        p.append(f"{seconds}s")
+
+    return f"{''.join(p)} ago" if dt < now else f"in {''.join(p)}"

@@ -136,7 +136,7 @@ class TaskManager:
     def __init__(self):
         self.tasks: set[asyncio.Task] = set()
 
-    async def add(self, coro, *, name: str | None = None) -> asyncio.Task:
+    def add(self, coro, *, name: str | None = None) -> asyncio.Task:
         """
         Add a task to the manager.
         """
@@ -146,7 +146,7 @@ class TaskManager:
             task.set_name(name)
         return task
 
-    async def remove(self, task: asyncio.Task):
+    def remove(self, task: asyncio.Task):
         """
         Remove a task from the manager.
         """
@@ -167,6 +167,8 @@ class TaskManager:
                     task.result()
                 except asyncio.CancelledError:
                     logger.debug(f"Task {task.get_name()} was cancelled.")
+                except Exception:
+                    logger.exception(f"Task {task} failed with exception.")
 
     async def shutdown(self, *, timeout: int | None = None) -> bool:
         """

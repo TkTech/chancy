@@ -30,8 +30,8 @@
           <td>
             <code>{{ schedule.cron }}</code>
           </td>
-          <td>{{ schedule.next_run|time_until }}</td>
-          <td>{{ schedule.last_run }}</td>
+          <td>{{ schedule.next_run|relative_time }}</td>
+          <td>{{ schedule.last_run|relative_time }}</td>
         </tr>
       {% else %}
         <tr>

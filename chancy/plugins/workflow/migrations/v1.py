@@ -11,7 +11,7 @@ class V1Migration(Migration):
             sql.SQL(
                 """
                 CREATE TABLE {workflows} (
-                    id SERIAL PRIMARY KEY,
+                    id UUID PRIMARY KEY,
                     name TEXT NOT NULL,
                     state TEXT NOT NULL,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -27,7 +27,8 @@ class V1Migration(Migration):
                 """
                 CREATE TABLE {workflow_steps} (
                     id SERIAL PRIMARY KEY,
-                    workflow_id INTEGER REFERENCES {workflows}(id),
+                    workflow_id UUID REFERENCES {workflows}(id)
+                        ON DELETE CASCADE,
                     step_id TEXT NOT NULL,
                     job_data JSONB NOT NULL,
                     dependencies JSONB NOT NULL,
@@ -52,6 +53,7 @@ class V1Migration(Migration):
                 CREATE INDEX {workflow_steps_workflow_id_idx} ON {workflow_steps} (workflow_id);
                 CREATE INDEX {workflow_steps_state_idx} ON {workflow_steps} (state);
                 CREATE INDEX {workflows_state_idx} ON {workflows} (state);
+                CREATE UNIQUE INDEX {workflows_steps_unique_idx} ON {workflow_steps} (workflow_id, step_id);
                 """
             ).format(
                 workflow_steps=sql.Identifier(
@@ -66,6 +68,9 @@ class V1Migration(Migration):
                 ),
                 workflows_state_idx=sql.Identifier(
                     f"{migrator.prefix}workflows_state_idx"
+                ),
+                workflows_steps_unique_idx=sql.Identifier(
+                    f"{migrator.prefix}workflows_steps_unique_idx"
                 ),
             )
         )

@@ -1,4 +1,5 @@
 {% extends "base/base.html" %}
+{% from "base/ui/state.html" import state_badge %}
 
 {% block content %}
   <div>
@@ -31,23 +32,13 @@
             </td>
             <td>{{ workflow.name }}</td>
             <td class="text-center">
-              {% if workflow.state == "pending" %}
-                <span class="badge bg-warning text-dark">{{ workflow.state }}</span>
-              {% elif workflow.state == "running" %}
-                <span class="badge bg-primary">{{ workflow.state }}</span>
-              {% elif workflow.state == "completed" %}
-                <span class="badge bg-success">{{ workflow.state }}</span>
-              {% elif workflow.state == "failed" %}
-                <span class="badge bg-danger">{{ workflow.state }}</span>
-              {% else %}
-                <span class="badge bg-secondary">{{ workflow.state }}</span>
-              {% endif %}
+              {{ state_badge(workflow.state.value) }}
             </td>
             <td>
               {{ workflow.created_at|relative_time }}
             </td>
-            <td class="text-end">{{ workflow.pending_steps }}</td>
-            <td class="text-end">{{ workflow.total_steps }}</td>
+            <td class="text-end">{{ workflow.pending_steps|length }}</td>
+            <td class="text-end">{{ workflow.steps|length }}</td>
           </tr>
         {% endfor %}
         </tbody>

@@ -1,4 +1,6 @@
-{% macro job(j) %}
+{% from "base/ui/state.html" import state_badge %}
+
+{% macro job_panel(j) %}
   <div class="card">
     <div class="card-header text-bg-info">
       Job Definition
@@ -18,7 +20,11 @@
         <tr>
           <th>Queue</th>
           <td>
-            <span class="badge bg-success">{{ j.queue }}</span>
+            <a href="{{ url_for('queue', queue_name=j.queue) }}">
+              <span class="badge bg-success">
+                {{ j.queue }}
+              </span>
+            </a>
           </td>
         </tr>
         <tr>
@@ -80,7 +86,7 @@
   </div>
 {% endmacro %}
 
-{% macro jobinstancepanel(j) %}
+{% macro jobinstance_panel(j) %}
   <div class="card">
     <div class="card-header text-bg-info">
       Job Instance
@@ -94,7 +100,7 @@
         <tr>
           <th>State</th>
           <td>
-            {{ j.state }}
+            {{ state_badge(j.state.value) }}
           </td>
         </tr>
         <tr>

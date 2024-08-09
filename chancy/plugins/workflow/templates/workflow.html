@@ -1,4 +1,5 @@
 {% extends "base/base.html" %}
+{% from "base/ui/state.html" import state_badge %}
 
 {% block head %}
   {{ super() }}
@@ -25,17 +26,7 @@
         <tr>
           <th>State</th>
           <td>
-            {% if workflow.state == "pending" %}
-              <span class="badge bg-warning text-dark">{{ workflow.state }}</span>
-            {% elif workflow.state == "running" %}
-              <span class="badge bg-primary">{{ workflow.state }}</span>
-            {% elif workflow.state == "completed" %}
-              <span class="badge bg-success">{{ workflow.state }}</span>
-            {% elif workflow.state == "failed" %}
-              <span class="badge bg-danger">{{ workflow.state }}</span>
-            {% else %}
-              <span class="badge bg-secondary">{{ workflow.state }}</span>
-            {% endif %}
+            {{ state_badge(workflow.state.value) }}
           </td>
         </tr>
       </tbody>
@@ -62,17 +53,7 @@
         <tr>
           <td>{{ step.step_id }}</td>
           <td>
-            {% if step.state == "pending" %}
-              <span class="badge bg-warning text-dark">{{ step.state }}</span>
-            {% elif step.state == "running" %}
-              <span class="badge bg-primary">{{ step.state }}</span>
-            {% elif step.state == "succeeded" %}
-              <span class="badge bg-success">{{ step.state }}</span>
-            {% elif step.state == "failed" %}
-              <span class="badge bg-danger">{{ step.state }}</span>
-            {% else %}
-              <span class="badge bg-secondary">{{ step.state }}</span>
-            {% endif %}
+            {{ state_badge(step.state.value) }}
           </td>
           <td>
             {% if step.job_id %}
@@ -103,21 +84,21 @@
             multi: "md"
           },
           "color": {
-            {% if step.state == "running" %}
+            {% if step.state.value == "running" %}
               background: "#007bff",
               border: "#0056b3",
               highlight: {
                 background: "#0056b3",
                 border: "#003c6b"
               }
-            {% elif step.state == "succeeded" %}
+            {% elif step.state.value == "succeeded" %}
               background: "#28a745",
               border: "#218838",
               highlight: {
                 background: "#218838",
                 border: "#1e7e34"
               }
-            {% elif step.state == "failed" %}
+            {% elif step.state.value == "failed" %}
               background: "#dc3545",
               border: "#c82333",
               highlight: {

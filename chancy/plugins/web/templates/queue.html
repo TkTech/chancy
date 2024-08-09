@@ -54,6 +54,11 @@
       </tbody>
     </table>
   </div>
+  <h2 class="h4 mb-3">Workers</h2>
+  <p class="text-muted">
+    The following workers have announced that they're processing events
+    from the <em>{{ queue.name }}</em> queue.
+  </p>
   <div class="card">
     <div class="card-header text-bg-info">
       Workers
@@ -69,7 +74,13 @@
         {% for worker in workers %}
           <tr>
             <td>{{ worker.worker_id }}</td>
-            <td>{{ worker.last_seen }}</td>
+            <td>{{ worker.last_seen|relative_time }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="2" class="text-center">
+              No workers are currently processing events from this queue.
+            </td>
           </tr>
         {% endfor %}
       </tbody>

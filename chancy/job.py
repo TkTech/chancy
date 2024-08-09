@@ -202,7 +202,7 @@ class JobInstance(Job):
     so far.
     """
 
-    class State:
+    class State(enum.Enum):
         PENDING = "pending"
         RUNNING = "running"
         FAILED = "failed"
@@ -214,6 +214,7 @@ class JobInstance(Job):
     completed_at: Optional[datetime] = None
     attempts: int = 0
     state: State = State.PENDING
+    errors: list[str] = dataclasses.field(default_factory=list)
 
     @classmethod
     def unpack(cls, data: dict) -> "JobInstance":
@@ -227,9 +228,10 @@ class JobInstance(Job):
             completed_at=data["completed_at"],
             attempts=data["attempts"],
             max_attempts=data["max_attempts"],
-            state=data["state"],
+            state=JobInstance.State(data["state"]),
             unique_key=data["unique_key"],
             queue=data["queue"],
+            errors=data["errors"],
             limits=[
                 Limit.deserialize(limit) for limit in data["payload"]["limits"]
             ],

@@ -1,5 +1,5 @@
 {% extends "base/base.html" %}
-{% from "base/ui/job.html" import job %}
+{% from "base/ui/job.html" import job_panel with context %}
 
 {% block content %}
 <div>
@@ -20,15 +20,19 @@
         </tr>
         <tr>
           <th>Next Run</th>
-          <td>{{ schedule.next_run|time_until }}</td>
+          <td>{{ schedule.next_run|relative_time }}</td>
         </tr>
         <tr>
           <th>Last Enqueued</th>
-          <td>{{ schedule.last_run }}</td>
+          <td>{{ schedule.last_run|relative_time }}</td>
         </tr>
       </tbody>
     </table>
   </div>
-  {{ job(schedule.job) }}
+  <h2 class="h4 mb-3">Job</h2>
+  <p class="text-muted">
+    The following job will be queued whenever the schedule is reached.
+  </p>
+  {{ job_panel(schedule.job) }}
 </div>
 {% endblock %}

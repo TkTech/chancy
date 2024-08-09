@@ -38,7 +38,11 @@
             <ul class="list-inline mb-0">
               {% for queue in worker.queues %}
                 <li class="list-inline-item">
-                  <span class="badge bg-success">{{ queue }}</span>
+                  <a href="{{ url_for('queue', queue_name=queue) }}">
+                    <span class="badge bg-success">
+                      {{ queue }}
+                    </span>
+                  </a>
                 </li>
               {% endfor %}
             </ul>

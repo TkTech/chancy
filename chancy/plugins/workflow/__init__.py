@@ -1,35 +1,53 @@
+import enum
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, TextIO
+from datetime import datetime
+from typing import List, Dict, TextIO
 from psycopg import sql
 from psycopg.rows import dict_row
 
 from chancy.plugin import Plugin, PluginScope
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.job import Job, Reference
-from chancy.utils import json_dumps
+from chancy.job import Job, Reference, JobInstance
+from chancy.utils import json_dumps, chancy_uuid
 from chancy.rule import Rule
 
 
 @dataclass
 class WorkflowStep:
     job: Job
+    step_id: str
     dependencies: List[str] = field(default_factory=list)
-    state: str = "pending"
-    step_id: str | None = None
+    state: JobInstance.State = JobInstance.State.PENDING
     job_id: str | None = None
 
 
 @dataclass
 class Workflow:
+    class State(enum.Enum):
+        PENDING = "pending"
+        RUNNING = "running"
+        COMPLETED = "completed"
+        FAILED = "failed"
+
     name: str
     steps: Dict[str, WorkflowStep] = field(default_factory=dict)
-    id: int | None = None
-    state: str = "pending"
+    state: State = State.PENDING
+
+    id: str = field(default_factory=chancy_uuid)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     def add_step(
         self, step_id: str, job: Job, dependencies: List[str] = None
     ) -> "Workflow":
+        """
+        Add a step to the workflow.
+
+        :param step_id: The ID of the step.
+        :param job: The job to execute.
+        :param dependencies: A list of step IDs that this step depends on.
+        """
         self.steps[step_id] = WorkflowStep(
             job=job, dependencies=dependencies or [], step_id=step_id
         )
@@ -41,6 +59,10 @@ class Workflow:
     def __iadd__(self, other: WorkflowStep) -> "Workflow":
         self.steps[other.step_id] = other
         return self
+
+    @property
+    def pending_steps(self) -> List[WorkflowStep]:
+        return [step for step in self.steps.values() if step.state == "pending"]
 
 
 class WorkflowPlugin(Plugin):
@@ -165,7 +187,9 @@ class WorkflowPlugin(Plugin):
         while await self.sleep(self.polling_interval):
             await self.wait_for_leader(worker)
             workflows = await self.fetch_workflows(
-                chancy, states=["pending", "running"]
+                chancy,
+                states=["pending", "running"],
+                limit=self.max_workflows_per_run,
             )
             for workflow in workflows:
                 await self.process_workflow(chancy, workflow)
@@ -187,6 +211,7 @@ class WorkflowPlugin(Plugin):
         *,
         states: list[str] | None = None,
         ids: list[str] | None = None,
+        limit: int = 100,
     ) -> List[Workflow]:
         """
         Fetch workflows from the database, optionally matching the given
@@ -195,6 +220,7 @@ class WorkflowPlugin(Plugin):
         :param chancy: The Chancy application.
         :param states: A list of states to match.
         :param ids: A list of IDs to match.
+        :param limit: The maximum number of workflows to fetch.
         :return: A list of workflows.
         """
         async with chancy.pool.connection() as conn:
@@ -206,6 +232,8 @@ class WorkflowPlugin(Plugin):
                             w.id, 
                             w.name, 
                             w.state,
+                            w.created_at,
+                            w.updated_at,
                             COALESCE(json_agg(
                                 json_build_object(
                                     'step_id', ws.step_id,
@@ -223,8 +251,8 @@ class WorkflowPlugin(Plugin):
                             %(states)s::text[] IS NULL OR
                             w.state = ANY(%(states)s::text[])
                         ) AND (
-                            %(ids)s::integer[] IS NULL OR
-                            w.id = ANY(%(ids)s::integer[])
+                            %(ids)s::uuid[] IS NULL OR
+                            w.id = ANY(%(ids)s::uuid[])
                         )
                         GROUP BY w.id, w.name, w.state
                         LIMIT {limit}
@@ -234,7 +262,7 @@ class WorkflowPlugin(Plugin):
                         workflow_steps=sql.Identifier(
                             f"{chancy.prefix}workflow_steps"
                         ),
-                        limit=sql.Literal(self.max_workflows_per_run),
+                        limit=sql.Literal(limit),
                     ),
                     {
                         "states": states,
@@ -247,12 +275,14 @@ class WorkflowPlugin(Plugin):
                     Workflow(
                         id=row["id"],
                         name=row["name"],
-                        state=row["state"],
+                        state=Workflow.State(row["state"]),
+                        updated_at=row["updated_at"],
+                        created_at=row["created_at"],
                         steps={
                             step["step_id"]: WorkflowStep(
                                 job=Job.unpack(step["job_data"]),
                                 dependencies=step["dependencies"],
-                                state=step["state"],
+                                state=JobInstance.State(step["state"]),
                                 step_id=step["step_id"],
                                 job_id=step["job_id"],
                             )
@@ -264,125 +294,74 @@ class WorkflowPlugin(Plugin):
 
     async def process_workflow(self, chancy: Chancy, workflow: Workflow):
         """
-        Process a single iteration of the given workflow.
+        Process a single iteration of the given workflow, progressing the
+        state of each step and the overall workflow as necessary.
 
         :param chancy: The Chancy application.
         :param workflow: The workflow to process.
         """
+        if workflow.state in [Workflow.State.COMPLETED, Workflow.State.FAILED]:
+            return
+
         workflow_updated = False
-        steps_to_start = []
-        steps_to_check = []
+        all_succeeded = True
+        any_failed = False
+        any_running = False
 
-        # Identify steps to start and check
-        for step in workflow.steps.values():
-            if step.state == "pending" and all(
-                workflow.steps[dep].state == "succeeded"
-                for dep in step.dependencies
-                if dep in workflow.steps
-            ):
-                steps_to_start.append(step)
-            elif step.state == "running":
-                steps_to_check.append(step)
-
-        # Start pending steps
-        for step in steps_to_start:
-            ref = await chancy.push(step.job)
-            step.job_id = ref.identifier
-            step.state = "running"
-            await self.update_workflow_step(chancy, workflow.id, step)
-            workflow_updated = True
-
-        # Check running steps
-        for step in steps_to_check:
-            job_instance = await chancy.get_job(Reference(chancy, step.job_id))
-            if job_instance.state in ("succeeded", "failed"):
-                step.state = job_instance.state
-                await self.update_workflow_step(chancy, workflow.id, step)
+        try:
+            for step in workflow.steps.values():
+                if step.state == JobInstance.State.RUNNING:
+                    job = await Reference(chancy, step.job_id).get()
+                    if job.state != JobInstance.State.RUNNING:
+                        step.state = job.state
+                        workflow_updated = True
+                if step.state == JobInstance.State.PENDING:
+                    if all(
+                        workflow.steps[dep].state == JobInstance.State.SUCCEEDED
+                        for dep in step.dependencies
+                    ):
+                        step.job_id = (await chancy.push(step.job)).identifier
+                        step.state = JobInstance.State.RUNNING
+                        workflow_updated = True
+                        any_running = True
+                if step.state == JobInstance.State.FAILED:
+                    any_failed = True
+                    all_succeeded = False
+                elif step.state == JobInstance.State.RUNNING:
+                    any_running = True
+                    all_succeeded = False
+                elif step.state != JobInstance.State.SUCCEEDED:
+                    all_succeeded = False
+            if all_succeeded:
+                workflow.state = Workflow.State.COMPLETED
                 workflow_updated = True
-
-        # Update workflow state if needed
-        if workflow_updated:
-            if workflow.state == "pending" and any(
-                step.state == "running" for step in workflow.steps.values()
-            ):
-                workflow.state = "running"
-                await self.update_workflow_state(chancy, workflow)
-            elif all(
-                step.state in ("succeeded", "failed")
-                for step in workflow.steps.values()
-            ):
-                workflow.state = "completed"
-                await self.update_workflow_state(chancy, workflow)
-
-    @classmethod
-    async def update_workflow_step(
-        cls, chancy: Chancy, workflow_id: int, step: WorkflowStep
-    ):
-        """
-        Update a workflow step in the database.
-
-        .. note::
-
-            This currently only updates the state, job_id, and updated_at,
-            as other fields are not expected to change.
-
-        :param chancy: The Chancy application.
-        :param workflow_id: The ID of the workflow.
-        :param step: The step to update.
-        """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        UPDATE {workflow_steps}
-                        SET state = %s, job_id = %s, updated_at = NOW()
-                        WHERE workflow_id = %s AND step_id = %s
-                        """
-                    ).format(
-                        workflow_steps=sql.Identifier(
-                            f"{chancy.prefix}workflow_steps"
-                        )
-                    ),
-                    [step.state, step.job_id, workflow_id, step.step_id],
-                )
+            elif any_failed and not any_running:
+                workflow.state = Workflow.State.FAILED
+                workflow_updated = True
+            elif any_running and workflow.state != Workflow.State.RUNNING:
+                workflow.state = Workflow.State.RUNNING
+                workflow_updated = True
+            if workflow_updated:
+                await self.push(chancy, workflow)
+        except Exception:
+            chancy.log.exception(
+                f"Internal error occurred while processing workflow"
+                f" {workflow.id}."
+            )
+            workflow.state = Workflow.State.FAILED
+            await self.push(chancy, workflow)
 
     @classmethod
-    async def update_workflow_state(cls, chancy: Chancy, workflow: Workflow):
+    async def push(cls, chancy: Chancy, workflow: Workflow) -> str:
         """
-        Update a workflow in the database.
+        Push new workflow to the database.
 
-        .. note::
-
-            This currently only updates the state and updated_at, as other
-            fields are not expected to change.
-
-        :param chancy: The Chancy application.
-        :param workflow: The workflow to update.
-        """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        UPDATE {workflows}
-                        SET state = %s, updated_at = NOW()
-                        WHERE id = %s
-                        """
-                    ).format(
-                        workflows=sql.Identifier(f"{chancy.prefix}workflows")
-                    ),
-                    [workflow.state, workflow.id],
-                )
-
-    @classmethod
-    async def push(cls, chancy: Chancy, workflow: Workflow) -> int:
-        """
-        Push a new workflow to the database.
+        If the workflow already exists in the database, it will be updated
+        instead.
 
         :param chancy: The Chancy application.
         :param workflow: The workflow to push.
-        :return: The ID of the newly created workflow.
+        :return: The UUID of the newly created workflow.
         """
         async with chancy.pool.connection() as conn:
             async with conn.transaction():
@@ -390,19 +369,31 @@ class WorkflowPlugin(Plugin):
                     await cursor.execute(
                         sql.SQL(
                             """
-                            INSERT INTO {workflows} (name, state)
-                            VALUES (%s, %s)
-                            RETURNING id
+                            INSERT INTO {workflows} (
+                                id,
+                                name,
+                                state,
+                                created_at,
+                                updated_at
+                            )
+                            VALUES (%s, %s, %s, NOW(), NOW())
+                            ON CONFLICT (id) DO UPDATE
+                            SET name = EXCLUDED.name,
+                                state = EXCLUDED.state,
+                                updated_at = NOW()
+                            RETURNING id, created_at, updated_at
                             """
                         ).format(
                             workflows=sql.Identifier(
                                 f"{chancy.prefix}workflows"
                             )
                         ),
-                        [workflow.name, workflow.state],
+                        [workflow.id, workflow.name, workflow.state.value],
                     )
-                    workflow_id = await cursor.fetchone()
-                    workflow.id = workflow_id[0]
+                    result = await cursor.fetchone()
+                    workflow.id, workflow.created_at, workflow.updated_at = (
+                        result
+                    )
 
                     for step_id, step in workflow.steps.items():
                         await cursor.execute(
@@ -413,9 +404,16 @@ class WorkflowPlugin(Plugin):
                                     step_id,
                                     job_data,
                                     dependencies,
-                                    state
+                                    state,
+                                    job_id
                                 )
-                                VALUES (%s, %s, %s, %s, %s)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                                ON CONFLICT (workflow_id, step_id) DO UPDATE
+                                SET job_data = EXCLUDED.job_data,
+                                    dependencies = EXCLUDED.dependencies,
+                                    state = EXCLUDED.state,
+                                    job_id = EXCLUDED.job_id,
+                                    updated_at = NOW()
                                 """
                             ).format(
                                 workflow_steps=sql.Identifier(
@@ -427,13 +425,14 @@ class WorkflowPlugin(Plugin):
                                 step_id,
                                 json_dumps(step.job.pack()),
                                 json_dumps(step.dependencies),
-                                step.state,
+                                step.state.value,
+                                step.job_id,
                             ],
                         )
 
                     await chancy.notify(
                         cursor,
-                        "workflow.created",
+                        "workflow.upserted",
                         {
                             "id": workflow.id,
                             "name": workflow.name,
@@ -459,10 +458,10 @@ class WorkflowPlugin(Plugin):
 
         # Define color scheme
         colors = {
-            "pending": "lightblue",
-            "running": "yellow",
-            "succeeded": "lightgreen",
-            "failed": "lightpink",
+            JobInstance.State.PENDING: "lightblue",
+            JobInstance.State.RUNNING: "yellow",
+            JobInstance.State.SUCCEEDED: "lightgreen",
+            JobInstance.State.FAILED: "lightpink",
         }
 
         # Add nodes (steps)
@@ -493,23 +492,6 @@ class WorkflowPlugin(Plugin):
                 await cursor.execute(
                     sql.SQL(
                         """
-                        DELETE FROM {workflow_steps}
-                        WHERE workflow_id NOT IN (
-                            SELECT id FROM {workflows}
-                        )
-                        """
-                    ).format(
-                        workflow_steps=sql.Identifier(
-                            f"{chancy.prefix}workflow_steps"
-                        ),
-                        workflows=sql.Identifier(f"{chancy.prefix}workflows"),
-                    )
-                )
-                steps_removed = cursor.rowcount
-
-                await cursor.execute(
-                    sql.SQL(
-                        """
                         DELETE FROM {workflows}
                         WHERE state NOT IN ('pending', 'running')
                         AND ({rule})
@@ -519,9 +501,7 @@ class WorkflowPlugin(Plugin):
                         rule=self.pruning_rule.to_sql(),
                     )
                 )
-                workflows_removed = cursor.rowcount
-
-                return steps_removed + workflows_removed
+                return cursor.rowcount
 
     def migrate_package(self) -> str:
         return "chancy.plugins.workflow.migrations"
