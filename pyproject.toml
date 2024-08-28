@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "chancy"
-version = "0.9.0"
+version = "0.9.1"
 description = ""
 authors = ["Tyler Kennedy <tk@tkte.ch>"]
 readme = "README.md"
