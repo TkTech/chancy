@@ -1,13 +1,11 @@
 import json
 from datetime import datetime, timezone
-from typing import Type
 
 from psycopg import sql
 from croniter import croniter
 
 from chancy.plugin import Plugin, PluginScope
 from chancy.plugins.cron.web import CronWebPlugin
-from chancy.plugins.web import WebPlugin
 from chancy.worker import Worker
 from chancy.app import Chancy
 from chancy import Job
@@ -160,10 +158,6 @@ class Cron(Plugin):
 
     def migrate_package(self) -> str | None:
         return "chancy.plugins.cron.migrations"
-
-    @staticmethod
-    def web_plugin() -> Type["WebPlugin"] | None:
-        return CronWebPlugin
 
     @classmethod
     async def unschedule(cls, chancy: Chancy, *unique_keys: str):
