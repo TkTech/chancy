@@ -6,14 +6,12 @@ A postgres-backed task queue for Python.
 
 ## Key Features
 
-- Postgres-backed for reliability and familiarity
 - Support for job priorities, retries, timeouts, scheduling,
-  global rate limits, and more
+  global rate limits, memory limits, and more.
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
-- Optional transactional job queueing
-- asyncio-based worker for efficient processing
-- Plugins for a dashboard, workflows, and more
+- asyncio & sync APIs for easy integration with existing codebases
+- Plugins for workflows, cron jobs, and more
 
 ## Documentation
 

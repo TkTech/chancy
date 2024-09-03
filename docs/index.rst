@@ -18,7 +18,7 @@ Key Features:
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
 - asyncio & sync APIs for easy integration with existing codebases
-- Plugins for a dashboard, workflows, cron jobs, and more
+- Plugins for workflows, cron jobs, and more
 
 Quick Start
 -----------

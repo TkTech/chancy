@@ -16,7 +16,7 @@ Chancy comes with several built-in plugins:
     managing leadership elections between multiple workers.
 - :class:`chancy.plugins.cron.Cron`: This plugin is responsible for scheduling
     jobs to run at specific times.
-- :class:`chancy.plugins.web.Web`: This plugin provides a web interface for
+- :class:`chancy.plugins.web.Api`: This plugin provides a web interface for
     managing the Chancy instance.
 - :class:`chancy.plugins.workflow.WorkflowPlugin`: This plugin provides a
     workflow system for managing complex job dependencies.
