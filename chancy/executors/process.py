@@ -1,17 +1,14 @@
 import asyncio
-import dataclasses
 import functools
 import os
 import resource
 import signal
-import traceback
 import threading
 from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
-from datetime import datetime, timezone
 
-from chancy.executor import Executor
+from chancy.executors.base import Executor
 from chancy.job import JobInstance, Limit
 
 

@@ -13,14 +13,12 @@ A postgres-backed task queue for Python.
 Key Features:
 -------------
 
-- Postgres-backed for reliability and familiarity
 - Support for job priorities, retries, timeouts, scheduling,
-  global rate limits, and more
+  global rate limits, memory limits, and more.
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
-- Optional transactional job queueing
-- asyncio-based worker for efficient processing
-- Plugins for a dashboard, workflows, and more
+- asyncio & sync APIs for easy integration with existing codebases
+- Plugins for a dashboard, workflows, cron jobs, and more
 
 Quick Start
 -----------
@@ -39,10 +37,8 @@ Quick Start
    import asyncio
    from chancy import Chancy, Worker, Queue
 
-   chancy = Chancy(dsn="postgresql://localhost/postgres")
-
    async def main():
-       async with chancy:
+       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
            await chancy.migrate()
            await chancy.declare(Queue("default", concurrency=10))
            await Worker(chancy).start()
@@ -68,7 +64,7 @@ Quick Start
                kwargs={"name": "world"},
                queue="default"
            )
-           await chancy.push("default", job)
+           await chancy.push(job)
 
    if __name__ == "__main__":
        asyncio.run(main())
@@ -87,16 +83,6 @@ Quick Start
 
 
 Congratulations! You've just run your first Chancy job.
-
-Next Steps
-----------
-
-- Learn about :doc:`Jobs <guide/jobs>` in detail
-- Understand how :doc:`Queues <guide/queues>` work
-- Explore :doc:`Workers <guide/workers>` and their configuration
-- Dive into :doc:`Plugins <guide/plugins>` for extending Chancy's functionality
-- Read the :doc:`chancy` module documentation for a complete reference of
-  Chancy's API.
 
 
 Similar Projects
@@ -124,7 +110,6 @@ Similar Projects
    :caption: Contents:
    :hidden:
 
-   guide/index
    chancy
 
 

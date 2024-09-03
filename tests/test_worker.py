@@ -26,7 +26,7 @@ async def test_basic_job(chancy: Chancy, worker: tuple[Worker, asyncio.Task]):
         upsert=True,
     )
     ref = await chancy.push(Job.from_func(job_to_run))
-    job = await ref.wait()
+    job = await chancy.wait_for_job(ref)
     assert job.state == JobInstance.State.SUCCEEDED
 
 
@@ -43,5 +43,5 @@ async def test_failing_job(chancy: Chancy, worker: tuple[Worker, asyncio.Task]):
         upsert=True,
     )
     ref = await chancy.push(Job.from_func(job_that_fails))
-    job = await ref.wait()
+    job = await chancy.wait_for_job(ref)
     assert job.state == JobInstance.State.FAILED

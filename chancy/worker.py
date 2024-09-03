@@ -23,8 +23,7 @@ class Worker:
     The Worker is responsible for polling queues for new jobs, running any
     configured plugins, and internal management such as heartbeats.
 
-    As an example, lets create a Worker that will poll the "default" queue
-    with a concurrency of 10, and run a single worker:
+    Starting a worker is simple:
 
     .. code-block:: python
 
@@ -33,6 +32,37 @@ class Worker:
         ) as chancy:
             await chancy.migrate()
             await Worker(chancy).start()
+
+    Worker Tags
+    -----------
+
+    Worker tags control which workers run which queues. A tag is a string
+    (typically in the format ``key=value``) assigned to a worker. Declare
+    a queue with a list of tags, and only workers with matching tags will
+    run that queue.
+
+    Every worker automatically gets some tags, like ``hostname``, ``worker_id``,
+    ``python``, ``arch``, ``os``, and ``*`` (wildcard). You can also add custom
+    tags when creating a worker.
+
+    .. code-block:: python
+
+        await Worker(chancy, tags={"has=gpu", "has=large-disk"}).start()
+
+    You could then assign a queue to only run on workers with the ``has=gpu`` tag:
+
+    .. code-block:: python
+
+        await chancy.declare(
+            Queue(name="default", tags={"has=gpu"}, concurrency=10),
+            upsert=True  # Replaces existing settings
+        )
+
+    Tags are regexes, allowing for flexible matching:
+
+    .. code-block:: python
+
+        Queue(name="default", tags={r"python=3\.11\.[0-9]+"}, concurrency=10)
 
     :param chancy: The Chancy application that the worker is associated with.
     :param worker_id: The ID of the worker, which must be globally unique. If

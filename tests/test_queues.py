@@ -30,8 +30,8 @@ async def test_multiple_queues(
     ref_low = await chancy.push(Job.from_func(job_to_run, queue="low"))
     ref_high = await chancy.push(Job.from_func(job_to_run, queue="high"))
 
-    job_low = await ref_low.wait()
-    job_high = await ref_high.wait()
+    job_low = await chancy.wait_for_job(ref_low)
+    job_high = await chancy.wait_for_job(ref_high)
 
     assert job_low.state == JobInstance.State.SUCCEEDED
     assert job_high.state == JobInstance.State.SUCCEEDED

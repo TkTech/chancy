@@ -13,8 +13,14 @@ if typing.TYPE_CHECKING:
 
 class Executor(abc.ABC):
     """
-    The executor is responsible for managing the execution of jobs in a job
-    pool.
+    The base class for all executors.
+
+    Executors are responsible for managing the execution of jobs after they've
+    been retrieved from a queue.
+
+    See :class:`~chancy.executors.process.ProcessExecutor` and
+    :class:`~chancy.executors.asyncex.AsyncExecutor` for examples of built-in
+    executors.
     """
 
     def __init__(self, worker: "Worker", queue: "Queue"):

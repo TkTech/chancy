@@ -17,12 +17,11 @@ Submodules
    :maxdepth: 4
 
    chancy.app
-   chancy.executor
-   chancy.hub
-   chancy.migrate
+   chancy.job
    chancy.queue
    chancy.worker
    chancy.plugin
+   chancy.migrate
+   chancy.hub
    chancy.rule
-   chancy.job
    chancy.utils

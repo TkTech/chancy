@@ -5,6 +5,17 @@ from dataclasses import KW_ONLY
 
 @dataclasses.dataclass(frozen=True)
 class Queue:
+    """
+    Represents a queue in a Chancy cluster.
+
+    Queues are used to group jobs together and determine how they should be
+    processed. Each queue has a name, concurrency level, and a set of tags that
+    determine which workers can process jobs from the queue.
+
+    Queue's must be declared using :func:`~chancy.app.Chancy.declare` before workers
+    will be able to process jobs from them.
+    """
+
     class State(enum.Enum):
         #: The queue is active and jobs can be processed.
         ACTIVE = "active"

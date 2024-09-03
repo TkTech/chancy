@@ -1,11 +1,6 @@
 import asyncio
-import dataclasses
-import traceback
-from typing import Dict
-from datetime import datetime, timezone
-from functools import partial
 
-from chancy.executor import Executor
+from chancy.executors.base import Executor
 from chancy.job import JobInstance, Limit
 from chancy.utils import import_string
 

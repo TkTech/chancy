@@ -12,5 +12,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
+   chancy.executors.base
    chancy.executors.process
    chancy.executors.asyncex
