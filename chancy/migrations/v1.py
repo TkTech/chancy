@@ -154,6 +154,6 @@ class V1Migration(Migration):
         )
         await cursor.execute(
             sql.SQL("DROP TABLE {rate_limit}").format(
-                rate_limit=sql.Identifier(f"{migrator.prefix}rate_limits")
+                rate_limit=sql.Identifier(f"{migrator.prefix}queue_rate_limits")
             )
         )
