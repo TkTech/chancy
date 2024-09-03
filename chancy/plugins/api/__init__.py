@@ -7,7 +7,7 @@ from starlette.applications import Starlette
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin, PluginScope
-from chancy.plugins.api.core import CoreWebPlugin
+from chancy.plugins.api.core import CoreApiPlugin
 from chancy.plugins.api.plugin import ApiPlugin
 
 
@@ -50,7 +50,7 @@ class Api(Plugin):
         debug: bool = False,
     ):
         super().__init__()
-        self.plugins = plugins or {CoreWebPlugin}
+        self.plugins = plugins or {CoreApiPlugin}
         self.port = port
         self.host = host
         self.debug = debug

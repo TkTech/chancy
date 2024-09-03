@@ -12,7 +12,7 @@ class SQLAble:
         raise NotImplementedError
 
 
-class Rule:
+class Rule(SQLAble):
     def __init__(self, field: str):
         self.field = field
 
@@ -33,6 +33,12 @@ class Rule:
 
     def __ge__(self, other: Any) -> "Condition":
         return Condition(self.to_sql(), ">=", other)
+
+    def __or__(self, other: "Condition") -> "OrCondition":
+        return OrCondition(self, other)
+
+    def __and__(self, other: "Condition") -> "AndCondition":
+        return AndCondition(self, other)
 
     def to_sql(self) -> sql.Composable:
         return sql.Identifier(self.field)
@@ -123,3 +129,7 @@ class JobRules:
     class ScheduledAt(Rule):
         def __init__(self):
             super().__init__("scheduled_at")
+
+    class ID(Rule):
+        def __init__(self):
+            super().__init__("id")

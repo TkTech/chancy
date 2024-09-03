@@ -249,6 +249,22 @@ class BaseChancy(ABC):
         :param name: The name of the queue to retrieve.
         """
 
+    @abstractmethod
+    def get_all_workers(self) -> list[dict[str, Any]]:
+        """
+        Get all workers known to the cluster, regardless of their status.
+        """
+
+    def _get_all_workers_sql(self):
+        return sql.SQL(
+            """
+            SELECT
+                *
+            FROM
+                {workers}
+            """
+        ).format(workers=sql.Identifier(f"{self.prefix}workers"))
+
     def _get_queue_sql(self):
         return sql.SQL(
             """
@@ -532,6 +548,12 @@ class SyncChancy(BaseChancy):
                     raise KeyError(f"Queue {name!r} not found.")
                 return Queue.unpack(record)
 
+    def get_all_workers(self) -> list[dict[str, Any]]:
+        with self.pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cursor:
+                cursor.execute(self._get_all_workers_sql())
+                return [record for record in cursor]
+
     def __iter__(self):
         return iter(self.get_all_queues())
 
@@ -717,6 +739,12 @@ class Chancy(BaseChancy):
                 if record is None:
                     raise KeyError(f"Queue {name!r} not found.")
                 return Queue.unpack(record)
+
+    async def get_all_workers(self) -> list[dict[str, Any]]:
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(self._get_all_workers_sql())
+                return [record async for record in cursor]
 
     async def __aiter__(self):
         async with self.pool.connection() as conn:

@@ -18,7 +18,7 @@ class Pruner(Plugin):
     The pruner will never prune jobs that haven't been run yet ("pending"),
     or are currently being run ("running").
 
-    You can use simple rules, or combine them using the `|` and `+` operators
+    You can use simple rules, or combine them using the `|` and `&` operators
     to create complex rules.
 
     For example, to prune jobs that are older than 60 seconds:
@@ -32,7 +32,7 @@ class Pruner(Plugin):
 
     .. code-block:: python
 
-        Pruner(Pruner.Rules.Queue("default") + (Pruner.Rules.Age() > 60))
+        Pruner(Pruner.Rules.Queue() == "default" & (Pruner.Rules.Age() > 60))
 
     Or to prune jobs that are older than 60 seconds and are in the "default"
     queue, or instantly deleted if the job is `update_cache`:
@@ -40,8 +40,8 @@ class Pruner(Plugin):
     .. code-block:: python
 
         Pruner(
-            (Pruner.Rules.Queue("default") + (Pruner.Rules.Age() > 60)) |
-            Pruner.Rules.Job("update_cache")
+            (Pruner.Rules.Queue() == "default" & (Pruner.Rules.Age() > 60)) |
+            Pruner.Rules.Job() == "update_cache"
         )
 
     By default, the pruner will run every 60 seconds and will remove up to
