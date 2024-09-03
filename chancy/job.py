@@ -135,16 +135,12 @@ Prevent duplicate job execution by assigning a unique key:
   failed.
 """
 
-import asyncio
 import dataclasses
 import enum
-from datetime import datetime, timezone, timedelta
-from typing import Any, Optional, TYPE_CHECKING
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from chancy.utils import importable_name
-
-if TYPE_CHECKING:
-    from chancy.app import Chancy
 
 
 class Reference:

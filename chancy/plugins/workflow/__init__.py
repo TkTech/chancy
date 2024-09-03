@@ -8,7 +8,7 @@ from psycopg.rows import dict_row
 from chancy.plugin import Plugin, PluginScope
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.job import Job, Reference, JobInstance
+from chancy.job import Job, JobInstance
 from chancy.utils import json_dumps, chancy_uuid
 from chancy.rule import Rule
 
@@ -479,7 +479,7 @@ class WorkflowPlugin(Plugin):
                 output.write(f'  "{dep}" -> "{step_id}";\n')
 
         # Add workflow info
-        output.write(f'  labelloc="t";\n')
+        output.write('  labelloc="t";\n')
         output.write(
             f'  label="Workflow: {workflow.name}\\nState: {workflow.state}";\n'
         )
