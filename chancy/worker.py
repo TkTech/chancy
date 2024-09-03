@@ -172,20 +172,18 @@ class Worker:
                     # in the worker are a set of strings. We need to filter the
                     # queues based on the worker's tags.
                     db_queues = {
-                        q["name"]: Queue(**q)
+                        q["name"]: Queue.unpack(q)
                         for q in await cursor.fetchall()
                         if any(
                             re.match(t, tag) for tag in tags for t in q["tags"]
                         )
                     }
 
-            # Remove queues that are no longer in the database
             for queue_name in list(self._queues.keys()):
                 if queue_name not in db_queues:
                     del self._queues[queue_name]
                     self.chancy.log.info(f"Removed queue {queue_name}")
 
-            # Add or update queues
             for queue_name, queue in db_queues.items():
                 if queue_name not in self._queues:
                     self._queues[queue_name] = queue
@@ -194,15 +192,14 @@ class Worker:
                         name=f"queue_{queue_name}",
                     )
                     self.chancy.log.info(
-                        f"Added newly discover queue {queue_name}."
+                        f"Adding queue {queue_name!r} to worker."
                     )
                 else:
-                    # Update existing queue if necessary
                     if self._queues[queue_name] != queue:
                         self._queues[queue_name] = queue
                         self.chancy.log.info(
-                            f"Updated queue {queue_name} due to changes in the"
-                            f" database."
+                            f"Updated configuration for the queue"
+                            f" {queue_name!r}."
                         )
 
             await asyncio.sleep(self.queue_change_poll_interval)

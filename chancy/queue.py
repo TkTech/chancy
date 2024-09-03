@@ -1,10 +1,11 @@
 import dataclasses
-from datetime import timedelta
+import enum
+from dataclasses import KW_ONLY
 
 
 @dataclasses.dataclass(frozen=True)
 class Queue:
-    class State:
+    class State(enum.Enum):
         #: The queue is active and jobs can be processed.
         ACTIVE = "active"
         #: The queue is paused and no jobs will be processed.
@@ -12,6 +13,8 @@ class Queue:
 
     #: A globally unique identifier for the queue.
     name: str
+
+    _ = KW_ONLY
     #: The number of jobs that can be processed concurrently per worker.
     concurrency: int = 1
     #: The tags that determine which workers will process this queue.
@@ -30,3 +33,37 @@ class Queue:
     rate_limit: int | None = None
     #: The period of time over which the rate limit applies (in seconds).
     rate_limit_window: int | None = None
+
+    @classmethod
+    def unpack(cls, data: dict) -> "Queue":
+        """
+        Unpack a serialized queue object into a Queue instance.
+        """
+        return cls(
+            name=data["name"],
+            concurrency=data["concurrency"],
+            tags=set(data["tags"]),
+            state=cls.State(data["state"]),
+            executor=data["executor"],
+            executor_options=data["executor_options"],
+            polling_interval=data["polling_interval"],
+            rate_limit=data.get("rate_limit"),
+            rate_limit_window=data.get("rate_limit_window"),
+        )
+
+    def pack(self) -> dict:
+        """
+        Pack the queue into a dictionary that can be serialized and used to
+        recreate the queue later.
+        """
+        return {
+            "name": self.name,
+            "concurrency": self.concurrency,
+            "tags": list(self.tags),
+            "state": self.state.value,
+            "executor": self.executor,
+            "executor_options": self.executor_options,
+            "polling_interval": self.polling_interval,
+            "rate_limit": self.rate_limit,
+            "rate_limit_window": self.rate_limit_window,
+        }

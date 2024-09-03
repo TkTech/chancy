@@ -1,14 +1,12 @@
-import json
 import logging
 import dataclasses
-from datetime import timedelta
 from typing import Any, Iterator
 from functools import cached_property, cache
 
 from psycopg import sql
 from psycopg import AsyncCursor
 from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
+from psycopg_pool import AsyncConnectionPool, ConnectionPool
 from psycopg.types.json import Json
 
 from chancy.migrate import Migrator
@@ -98,12 +96,34 @@ class Chancy:
             reconnect_timeout=self.poll_reconnect_timeout,
         )
 
+    @cached_property
+    def sync_pool(self):
+        """
+        A synchronous connection pool to the configured database.
+        """
+        return ConnectionPool(
+            self.dsn,
+            open=False,
+            check=ConnectionPool.check_connection,
+            min_size=self.min_connection_pool_size,
+            max_size=self.max_connection_pool_size,
+            reconnect_timeout=self.poll_reconnect_timeout,
+        )
+
     async def __aenter__(self):
         await self.pool.open()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.pool.close()
+        return False
+
+    def __enter__(self):
+        self.sync_pool.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.sync_pool.close()
         return False
 
     async def open(self):
@@ -121,6 +141,21 @@ class Chancy:
         """
         await self.pool.open()
 
+    def open_sync(self):
+        """
+        Open the connection pool.
+
+        Whenever possible, it's preferred to use the async context manager
+        instead of this method, as it will ensure that the connection pool is
+        properly closed when the block is exited. Ex:
+
+        .. code-block:: python
+
+            async with Chancy(...) as chancy:
+                ...
+        """
+        self.sync_pool.open()
+
     async def close(self):
         """
         Close the connection pool.
@@ -136,6 +171,22 @@ class Chancy:
         """
         if not self.pool.closed:
             await self.pool.close()
+
+    def close_sync(self):
+        """
+        Close the connection pool.
+
+        Whenever possible, it's preferred to use the async context manager
+        instead of this method, as it will ensure that the connection pool is
+        properly closed when the block is exited. Ex:
+
+        .. code-block:: python
+
+            async with Chancy(...) as chancy:
+                ...
+        """
+        if not self.sync_pool.closed:
+            self.sync_pool.close()
 
     async def notify(
         self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
@@ -254,7 +305,7 @@ class Chancy:
             ),
             {
                 "name": queue.name,
-                "state": queue.state,
+                "state": queue.state.value,
                 "concurrency": queue.concurrency,
                 "tags": list(queue.tags),
                 "executor": queue.executor,
@@ -426,3 +477,66 @@ class Chancy:
                     raise KeyError(f"Job {ref.identifier} not found.")
 
                 return JobInstance.unpack(record)
+
+    async def get_all_queues(self) -> list[Queue]:
+        """
+        Retrieve all queues from the database.
+
+        :return: A list of all queues in the database.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            *
+                        FROM
+                            {queues}
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues"))
+                )
+                return [Queue.unpack(record) async for record in cursor]
+
+    async def get_queue(self, name: str) -> Queue:
+        """
+        Retrieve a queue from the database.
+
+        :param name: The name of the queue to retrieve.
+        :return: The queue with the given name.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            *
+                        FROM
+                            {queues}
+                        WHERE
+                            name = %s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    [name],
+                )
+                record = await cursor.fetchone()
+                if record is None:
+                    raise KeyError(f"Queue {name!r} not found.")
+                return Queue.unpack(record)
+
+    async def __aiter__(self):
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            *
+                        FROM
+                            {queues}
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues"))
+                )
+                async for record in cursor:
+                    yield Queue.unpack(record)

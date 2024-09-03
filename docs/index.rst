@@ -14,7 +14,8 @@ Key Features:
 -------------
 
 - Postgres-backed for reliability and familiarity
-- Support for job priorities, retries, timeouts, and scheduling
+- Support for job priorities, retries, timeouts, scheduling,
+  global rate limits, and more
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
 - Optional transactional job queueing

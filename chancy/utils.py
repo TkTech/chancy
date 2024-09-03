@@ -141,10 +141,10 @@ class TaskManager:
         Add a task to the manager.
         """
         task = asyncio.create_task(coro)
+        task.add_done_callback(self.tasks.remove)
         self.tasks.add(task)
         if name:
             task.set_name(name)
-        task.add_done_callback(self.tasks.remove)
         return task
 
     def remove(self, task: asyncio.Task):
