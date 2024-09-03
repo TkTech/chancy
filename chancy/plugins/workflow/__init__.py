@@ -18,7 +18,7 @@ class WorkflowStep:
     job: Job
     step_id: str
     dependencies: List[str] = field(default_factory=list)
-    state: JobInstance.State = JobInstance.State.PENDING
+    state: JobInstance.State | None = JobInstance.State.PENDING
     job_id: str | None = None
 
 
@@ -56,13 +56,28 @@ class Workflow:
     def __repr__(self):
         return f"<Workflow({self.name!r}, {self.state!r})>"
 
+    def __len__(self) -> int:
+        return len(self.steps)
+
     def __iadd__(self, other: WorkflowStep) -> "Workflow":
         self.steps[other.step_id] = other
         return self
 
+    def __iter__(self):
+        return iter(self.steps.items())
+
+    def __getitem__(self, key: str) -> WorkflowStep:
+        return self.steps[key]
+
+    def __delitem__(self, key: str):
+        del self.steps[key]
+
     @property
-    def pending_steps(self) -> List[WorkflowStep]:
-        return [step for step in self.steps.values() if step.state == "pending"]
+    def steps_by_state(self) -> Dict[JobInstance.State, List[WorkflowStep]]:
+        steps_by_state = {}
+        for step in self.steps.values():
+            steps_by_state.setdefault(step.state, []).append(step)
+        return steps_by_state
 
 
 class WorkflowPlugin(Plugin):
@@ -239,14 +254,13 @@ class WorkflowPlugin(Plugin):
                                     'step_id', ws.step_id,
                                     'job_data', ws.job_data,
                                     'dependencies', ws.dependencies,
-                                    'state', ws.state,
+                                    'state', j.state,
                                     'job_id', ws.job_id
                                 )
-                            ) FILTER (
-                                WHERE ws.step_id IS NOT NULL
                             ), '[]'::json) as steps
                         FROM {workflows} w
                         LEFT JOIN {workflow_steps} ws ON w.id = ws.workflow_id
+                        LEFT JOIN {jobs} j ON ws.job_id = j.id
                         WHERE (
                             %(states)s::text[] IS NULL OR
                             w.state = ANY(%(states)s::text[])
@@ -262,6 +276,7 @@ class WorkflowPlugin(Plugin):
                         workflow_steps=sql.Identifier(
                             f"{chancy.prefix}workflow_steps"
                         ),
+                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
                         limit=sql.Literal(limit),
                     ),
                     {
@@ -282,7 +297,11 @@ class WorkflowPlugin(Plugin):
                             step["step_id"]: WorkflowStep(
                                 job=Job.unpack(step["job_data"]),
                                 dependencies=step["dependencies"],
-                                state=JobInstance.State(step["state"]),
+                                state=(
+                                    JobInstance.State(step["state"])
+                                    if step["state"]
+                                    else None
+                                ),
                                 step_id=step["step_id"],
                                 job_id=step["job_id"],
                             )
@@ -300,56 +319,41 @@ class WorkflowPlugin(Plugin):
         :param chancy: The Chancy application.
         :param workflow: The workflow to process.
         """
+        # If the workflow is already in a terminal state, there's no further
+        # processing to do, although we may add future state handling here
+        # for retries.
         if workflow.state in [Workflow.State.COMPLETED, Workflow.State.FAILED]:
             return
 
-        workflow_updated = False
-        all_succeeded = True
-        any_failed = False
-        any_running = False
+        # We check each step in the workflow to see:
+        #    - If it has an associated job, and if so, what's the state of it?
+        #    - If it has any dependencies, and if so, are they all completed?
+        # If all dependencies are met, we can execute the job.
+        for step_id, step in workflow.steps.items():
+            # If the step is already in a terminal state, we can skip it.
+            if step.state in [
+                JobInstance.State.SUCCEEDED,
+                JobInstance.State.FAILED,
+            ]:
+                continue
 
-        try:
-            for step in workflow.steps.values():
-                if step.state == JobInstance.State.RUNNING:
-                    job = await Reference(chancy, step.job_id).get()
-                    if job.state != JobInstance.State.RUNNING:
-                        step.state = job.state
-                        workflow_updated = True
-                if step.state == JobInstance.State.PENDING:
-                    if all(
-                        workflow.steps[dep].state == JobInstance.State.SUCCEEDED
-                        for dep in step.dependencies
-                    ):
-                        step.job_id = (await chancy.push(step.job)).identifier
-                        step.state = JobInstance.State.RUNNING
-                        workflow_updated = True
-                        any_running = True
-                if step.state == JobInstance.State.FAILED:
-                    any_failed = True
-                    all_succeeded = False
-                elif step.state == JobInstance.State.RUNNING:
-                    any_running = True
-                    all_succeeded = False
-                elif step.state != JobInstance.State.SUCCEEDED:
-                    all_succeeded = False
-            if all_succeeded:
-                workflow.state = Workflow.State.COMPLETED
-                workflow_updated = True
-            elif any_failed and not any_running:
-                workflow.state = Workflow.State.FAILED
-                workflow_updated = True
-            elif any_running and workflow.state != Workflow.State.RUNNING:
-                workflow.state = Workflow.State.RUNNING
-                workflow_updated = True
-            if workflow_updated:
-                await self.push(chancy, workflow)
-        except Exception:
-            chancy.log.exception(
-                f"Internal error occurred while processing workflow"
-                f" {workflow.id}."
-            )
+            dependencies = [workflow.steps[dep] for dep in step.dependencies]
+            if all(
+                dep.state == JobInstance.State.SUCCEEDED for dep in dependencies
+            ):
+                if step.job_id is None:
+                    step.job_id = (await chancy.push(step.job)).identifier
+
+        # Are all jobs complete, or any jobs failed? If so, we can mark the
+        # workflow as completed or failed.
+        states = workflow.steps_by_state
+        if len(states.get(JobInstance.State.SUCCEEDED, [])) == len(workflow):
+            workflow.state = Workflow.State.COMPLETED
+        elif states.get(JobInstance.State.FAILED):
             workflow.state = Workflow.State.FAILED
-            await self.push(chancy, workflow)
+
+        # We update the workflow in the database to reflect the new state
+        await self.push(chancy, workflow)
 
     @classmethod
     async def push(cls, chancy: Chancy, workflow: Workflow) -> str:
@@ -404,14 +408,12 @@ class WorkflowPlugin(Plugin):
                                     step_id,
                                     job_data,
                                     dependencies,
-                                    state,
                                     job_id
                                 )
-                                VALUES (%s, %s, %s, %s, %s, %s)
+                                VALUES (%s, %s, %s, %s, %s)
                                 ON CONFLICT (workflow_id, step_id) DO UPDATE
                                 SET job_data = EXCLUDED.job_data,
                                     dependencies = EXCLUDED.dependencies,
-                                    state = EXCLUDED.state,
                                     job_id = EXCLUDED.job_id,
                                     updated_at = NOW()
                                 """
@@ -425,7 +427,6 @@ class WorkflowPlugin(Plugin):
                                 step_id,
                                 json_dumps(step.job.pack()),
                                 json_dumps(step.dependencies),
-                                step.state.value,
                                 step.job_id,
                             ],
                         )

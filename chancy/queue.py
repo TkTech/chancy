@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import timedelta
 
 
 @dataclasses.dataclass(frozen=True)
@@ -24,3 +25,8 @@ class Queue:
     executor_options: dict = dataclasses.field(default_factory=dict)
     #: The number of seconds to wait between polling the queue for new jobs.
     polling_interval: int = 1
+    #: An optional global rate limit to apply to this queue. All workers
+    #: processing jobs from this queue will be subject to this limit.
+    rate_limit: int | None = None
+    #: The period of time over which the rate limit applies (in seconds).
+    rate_limit_window: int | None = None

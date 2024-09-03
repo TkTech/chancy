@@ -1,6 +1,7 @@
 import json
 import logging
 import dataclasses
+from datetime import timedelta
 from typing import Any, Iterator
 from functools import cached_property, cache
 
@@ -205,7 +206,9 @@ class Chancy:
                     tags = EXCLUDED.tags,
                     executor = EXCLUDED.executor,
                     executor_options = EXCLUDED.executor_options,
-                    polling_interval = EXCLUDED.polling_interval
+                    polling_interval = EXCLUDED.polling_interval,
+                    rate_limit = EXCLUDED.rate_limit,
+                    rate_limit_window = EXCLUDED.rate_limit_window
                 """
             )
 
@@ -219,7 +222,9 @@ class Chancy:
                     tags,
                     executor,
                     executor_options,
-                    polling_interval
+                    polling_interval,
+                    rate_limit,
+                    rate_limit_window
                 ) VALUES (
                     %(name)s,
                     %(state)s,
@@ -227,7 +232,9 @@ class Chancy:
                     %(tags)s,
                     %(executor)s,
                     %(executor_options)s,
-                    %(polling_interval)s
+                    %(polling_interval)s,
+                    %(rate_limit)s,
+                    %(rate_limit_window)s
                 )
                 ON CONFLICT (name) DO
                     {action}
@@ -237,7 +244,9 @@ class Chancy:
                     tags,
                     polling_interval,
                     executor,
-                    executor_options
+                    executor_options,
+                    rate_limit,
+                    rate_limit_window;
                 """
             ).format(
                 queues=sql.Identifier(f"{self.prefix}queues"),
@@ -251,6 +260,8 @@ class Chancy:
                 "executor": queue.executor,
                 "executor_options": Json(queue.executor_options),
                 "polling_interval": queue.polling_interval,
+                "rate_limit": queue.rate_limit,
+                "rate_limit_window": queue.rate_limit_window,
             },
         )
 
@@ -263,6 +274,8 @@ class Chancy:
             polling_interval=result[3],
             executor=result[4],
             executor_options=result[5],
+            rate_limit=result[6],
+            rate_limit_window=result[7],
         )
 
     async def push(self, job: Job) -> Reference:
@@ -279,10 +292,17 @@ class Chancy:
         self, jobs: list[Job], *, batch_size: int = 1000
     ) -> Iterator[Reference]:
         """
-        Push one or more jobs onto the queue.
+        Push one or more jobs onto the queue. Each batch will be executed in
+        a separate transaction to limit memory usage on the server. If you want
+        explicit transaction control, use the `push_many_ex` method instead.
 
-        Yields a reference for each job pushed after its containing transaction
-        has been committed.
+        Yields a list of references to the jobs that were pushed, one list per
+        batch of jobs.
+
+        .. code:: python
+
+            async for refs in chancy.push_many(jobs):
+                print(refs)  # [Reference(...), Reference(...), ...]
 
         :param jobs: The jobs to push onto the queue.
         :param batch_size: The number of jobs to push in a single transaction.
@@ -291,10 +311,7 @@ class Chancy:
             async with conn.cursor() as cursor:
                 for chunk in chunked(jobs, batch_size):
                     async with conn.transaction():
-                        refs = await self.push_many_ex(cursor, chunk)
-
-                    for ref in refs:
-                        yield ref
+                        yield await self.push_many_ex(cursor, chunk)
 
     async def push_many_ex(
         self,
@@ -359,10 +376,6 @@ class Chancy:
                             "kwargs": job.kwargs or {},
                             "limits": [
                                 limit.serialize() for limit in job.limits
-                            ],
-                            "rate_limits": [
-                                rate_limit.serialize()
-                                for rate_limit in job.rate_limits
                             ],
                         }
                     ),

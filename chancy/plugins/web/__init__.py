@@ -138,4 +138,7 @@ class Web(Plugin):
                 log_level="error",
             )
         )
+
+        chancy.log.info(f"Dashboard running at http://{self.host}:{self.port}")
+
         await server.serve()

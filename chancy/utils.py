@@ -144,31 +144,23 @@ class TaskManager:
         self.tasks.add(task)
         if name:
             task.set_name(name)
+        task.add_done_callback(self.tasks.remove)
         return task
 
     def remove(self, task: asyncio.Task):
         """
         Remove a task from the manager.
         """
+        task.result()
         task.cancel()
-        self.tasks.remove(task)
+        self.tasks.discard(task)
 
-    async def run(self, *, logger: logging.Logger):
+    async def run(self):
         """
-        Run all tasks until they are complete.
+        Wait for all tasks to complete.
         """
         while self.tasks:
-            done, pending = await asyncio.wait(
-                self.tasks, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in done:
-                self.tasks.remove(task)
-                try:
-                    task.result()
-                except asyncio.CancelledError:
-                    logger.debug(f"Task {task.get_name()} was cancelled.")
-                except Exception:
-                    logger.exception(f"Task {task} failed with exception.")
+            await asyncio.wait(self.tasks, return_when=asyncio.ALL_COMPLETED)
 
     async def shutdown(self, *, timeout: int | None = None) -> bool:
         """

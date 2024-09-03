@@ -1,6 +1,7 @@
 import re
 import asyncio
 import json
+import time
 import uuid
 import socket
 import platform
@@ -115,7 +116,7 @@ class Worker:
             )
 
         try:
-            await self.manager.run(logger=self.chancy.log)
+            await self.manager.run()
         except asyncio.CancelledError:
             clean = await self.manager.shutdown(timeout=self.shutdown_timeout)
             if not clean:
@@ -158,7 +159,9 @@ class Worker:
                                 state,
                                 executor,
                                 executor_options,
-                                polling_interval
+                                polling_interval,
+                                rate_limit,
+                                rate_limit_window
                             FROM {queues}
                         """
                         ).format(
@@ -190,18 +193,26 @@ class Worker:
                         self._maintain_queue(queue_name),
                         name=f"queue_{queue_name}",
                     )
-                    self.chancy.log.info(f"Added queue {queue_name}")
+                    self.chancy.log.info(
+                        f"Added newly discover queue {queue_name}."
+                    )
                 else:
                     # Update existing queue if necessary
                     if self._queues[queue_name] != queue:
                         self._queues[queue_name] = queue
-                        self.chancy.log.info(f"Updated queue {queue_name}")
+                        self.chancy.log.info(
+                            f"Updated queue {queue_name} due to changes in the"
+                            f" database."
+                        )
 
             await asyncio.sleep(self.queue_change_poll_interval)
 
     async def _maintain_queue(self, queue_name: str):
         """
         Maintain a single queue.
+
+        Responsible for polling a queue for new jobs and pushing them to the
+        executor.
 
         :param queue_name: The queue to maintain.
         """
@@ -258,11 +269,6 @@ class Worker:
         """
         Announces the worker to the cluster, and maintains a periodic heartbeat
         to ensure that the worker is still alive.
-
-        .. note::
-
-            This method should not be called directly. It is automatically
-            run when the worker is started.
         """
         while True:
             async with self.chancy.pool.connection() as conn:
@@ -276,17 +282,13 @@ class Worker:
         Listen for notifications from the database.
 
         Improves the reactivity of a worker by allowing it to almost immediately
-        react to database events using Postgres's LISTEN/NOTIFY feature.
+        react to cluster events using Postgres's LISTEN/NOTIFY feature.
 
         .. note::
 
             This feature utilizes a permanent connection to the database
-            separate from the shared connection pool.
-
-        .. note::
-
-            This method should not be called directly. It is automatically
-            run when the worker is started.
+            separate from the shared connection pool and is not counted against
+            the pool's connection limit.
         """
         connection = await AsyncConnection.connect(
             self.chancy.dsn, autocommit=True
@@ -299,21 +301,18 @@ class Worker:
         self.chancy.log.info("Started listening for realtime notifications.")
         async for notification in connection.notifies():
             j = json.loads(notification.payload)
-            event = j.pop("t")
-            await self.hub.emit(event, j)
+            await self.hub.emit(j.pop("t"), j)
 
     async def _maintain_updates(self):
         """
         Process updates to job instances.
 
         We maintain a queue of updates to job instances, and process them in
-        batches to significantly reduce the number of transactions that need
-        to be made.
-
-        .. note::
-
-            This method should not be called directly. It is automatically
-            run when the worker is started.
+        batches to significantly reduce the number of overall transactions that
+        need to be made, at the cost of potentially losing some updates if the
+        worker is stopped unexpectedly. The frequency of these updates can be
+        controlled by setting the `send_outgoing_interval` attribute on the
+        worker.
         """
         while True:
             if self.outgoing.empty():
@@ -445,14 +444,14 @@ class Worker:
             *self._extra_tags,
         }
 
-    async def push_update(self, update: JobInstance):
+    async def queue_update(self, update: JobInstance):
         """
-        Push an update to the job instance.
+        Enqueue an update to a job instance.
 
-        .. note::
-
-            This will not immediately update the job instance in the database,
-            but will instead queue the update to be processed.
+        This method will queue an update to a job instance to be processed in
+        periodic batches, reducing the number of transactions that need to be
+        made. You can control the frequency of these updates by setting the
+        `send_outgoing_interval` attribute on the worker.
 
         :param update: The job instance to update.
         """
@@ -466,10 +465,11 @@ class Worker:
         up_to: int = 1,
     ) -> list[JobInstance]:
         """
-        Fetch jobs from the queue.
+        Fetch jobs from the queue for processing.
 
         This method will fetch up to `up_to` jobs from the queue, mark them as
-        running, and return them as a list of `JobInstance` objects.
+        running, and return them as a list of `JobInstance` objects. If no jobs
+        are available, an empty list will be returned.
 
         It's safe to call this method concurrently, as the jobs will be locked
         for the duration of the transaction.
@@ -479,43 +479,88 @@ class Worker:
         :param up_to: The maximum number of jobs to fetch.
         """
         jobs_table = sql.Identifier(f"{self.chancy.prefix}jobs")
+        rate_limits_table = sql.Identifier(
+            f"{self.chancy.prefix}queue_rate_limits"
+        )
 
         async with conn.cursor(row_factory=dict_row) as cursor:
             async with conn.transaction():
+                # If the queue is configured to use a rate limit, we need to
+                # check if there's any remaining capacity in the current
+                # window.
+                if queue.rate_limit:
+                    now = int(time.time())
+                    window_start = now - (now % queue.rate_limit_window)
+
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO {rate_limits_table} (
+                                queue,
+                                window_start,
+                                count
+                            )
+                            VALUES (%s, %s, 0)
+                            ON CONFLICT (queue) DO UPDATE
+                            SET 
+                                count = CASE
+                                    WHEN {rate_limits_table}.window_start
+                                        = EXCLUDED.window_start
+                                            THEN {rate_limits_table}.count
+                                    ELSE 0
+                                END,
+                                window_start = EXCLUDED.window_start
+                            RETURNING count
+                            """
+                        ).format(rate_limits_table=rate_limits_table),
+                        (queue.name, window_start),
+                    )
+
+                    result = await cursor.fetchone()
+                    current_count = result["count"]
+
+                    # If we've hit the rate limit, return early with no jobs
+                    # fetched.
+                    if current_count >= queue.rate_limit:
+                        return []
+
+                    # Adjust up_to based on remaining rate limit
+                    up_to = min(up_to, queue.rate_limit - current_count)
+
                 await cursor.execute(
                     sql.SQL(
                         """
-                        with selected_jobs as (
-                            select
+                        WITH selected_jobs AS (
+                            SELECT
                                 id
-                            from
+                            FROM
                                 {jobs}
-                            where
+                            WHERE
                                 queue = %(queue)s
-                            and
-                                (state = 'pending' or state = 'retrying')
-                            and
+                            AND
+                                (state = 'pending' OR state = 'retrying')
+                            AND
                                 attempts < max_attempts
-                            and
-                                (scheduled_at is null or scheduled_at <= now())
-                            order by
-                                priority asc,
-                                id desc
-                            limit
+                            AND
+                                (scheduled_at IS NULL OR scheduled_at <= NOW())
+                            ORDER BY
+                                priority ASC,
+                                id DESC
+                            LIMIT
                                 %(maximum_jobs_to_fetch)s
-                            for update of {jobs} skip locked
+                            FOR UPDATE OF {jobs} SKIP LOCKED
                         )
-                        update
+                        UPDATE
                             {jobs}
-                        set
-                            started_at = now(),
+                        SET
+                            started_at = NOW(),
                             state = 'running',
                             taken_by = %(worker_id)s
-                        from
+                        FROM
                             selected_jobs
-                        where
+                        WHERE
                             {jobs}.id = selected_jobs.id
-                        returning {jobs}.*
+                        RETURNING {jobs}.*
                         """
                     ).format(
                         jobs=jobs_table,
@@ -528,6 +573,20 @@ class Worker:
                 )
 
                 records = await cursor.fetchall()
+
+                # If a rate limit is configured, and we ended up fetching jobs,
+                # we need to increment the rate limit counter.
+                if queue.rate_limit and records:
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            UPDATE {rate_limits_table}
+                            SET count = count + %s
+                            WHERE queue = %s
+                            """
+                        ).format(rate_limits_table=rate_limits_table),
+                        (len(records), queue.name),
+                    )
 
             return [JobInstance.unpack(record) for record in records]
 

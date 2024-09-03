@@ -30,10 +30,9 @@ class V1Migration(Migration):
                     workflow_id UUID REFERENCES {workflows}(id)
                         ON DELETE CASCADE,
                     step_id TEXT NOT NULL,
-                    job_data JSONB NOT NULL,
-                    dependencies JSONB NOT NULL,
-                    state TEXT NOT NULL,
-                    job_id TEXT,
+                    job_data JSON NOT NULL,
+                    dependencies JSON NOT NULL,
+                    job_id UUID,
                     created_at TIMESTAMPTZ DEFAULT NOW(),
                     updated_at TIMESTAMPTZ DEFAULT NOW()
                 )
@@ -51,7 +50,6 @@ class V1Migration(Migration):
             sql.SQL(
                 """
                 CREATE INDEX {workflow_steps_workflow_id_idx} ON {workflow_steps} (workflow_id);
-                CREATE INDEX {workflow_steps_state_idx} ON {workflow_steps} (state);
                 CREATE INDEX {workflows_state_idx} ON {workflows} (state);
                 CREATE UNIQUE INDEX {workflows_steps_unique_idx} ON {workflow_steps} (workflow_id, step_id);
                 """

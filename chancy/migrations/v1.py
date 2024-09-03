@@ -83,6 +83,20 @@ class V1Migration(Migration):
         await cursor.execute(
             sql.SQL(
                 """
+                CREATE UNLOGGED TABLE {rate_limit} (
+                    queue VARCHAR(255) PRIMARY KEY,
+                    window_start INTEGER NOT NULL,
+                    count INTEGER NOT NULL DEFAULT 0
+                );
+                """
+            ).format(
+                rate_limit=sql.Identifier(f"{migrator.prefix}queue_rate_limits")
+            )
+        )
+
+        await cursor.execute(
+            sql.SQL(
+                """
                 CREATE TABLE {queues} (
                     -- A unique name for the queue.
                     name TEXT PRIMARY KEY,
@@ -104,7 +118,11 @@ class V1Migration(Migration):
                     -- jobs.
                     polling_interval INTEGER DEFAULT 1,
                     -- The time at which the queue was first declared.
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    -- The number of jobs that can be processed per period.
+                    rate_limit INTEGER,
+                    -- The period of time over which the rate limit applies.
+                    rate_limit_window INTEGER
                 );
                 """
             ).format(queues=sql.Identifier(f"{migrator.prefix}queues"))
@@ -132,5 +150,10 @@ class V1Migration(Migration):
         await cursor.execute(
             sql.SQL("DROP TABLE {queues}").format(
                 queues=sql.Identifier(f"{migrator.prefix}queues")
+            )
+        )
+        await cursor.execute(
+            sql.SQL("DROP TABLE {rate_limit}").format(
+                rate_limit=sql.Identifier(f"{migrator.prefix}rate_limits")
             )
         )

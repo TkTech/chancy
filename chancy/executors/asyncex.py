@@ -27,14 +27,14 @@ class AsyncExecutor(Executor):
 
     async def push(self, job: JobInstance):
         task = asyncio.create_task(self._job_wrapper(job))
-        self.running_jobs.add(task)
         task.add_done_callback(self._job_cleanup)
+        self.running_jobs.add(task)
 
     def __len__(self):
         return len(self.running_jobs)
 
     def _job_cleanup(self, task: asyncio.Task):
-        self.running_jobs.remove(task)
+        self.running_jobs.discard(task)
         task.exception()
 
     async def _job_wrapper(self, job: JobInstance):

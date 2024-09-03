@@ -54,8 +54,10 @@ class Executor(abc.ABC):
                 errors=[
                     *job.errors,
                     {
-                        "traceback": traceback.format_exception(
-                            type(exc), exc, exc.__traceback__
+                        "traceback": "".join(
+                            traceback.format_exception(
+                                type(exc), exc, exc.__traceback__
+                            )
                         ),
                         "attempt": job.attempts,
                     },
@@ -69,7 +71,7 @@ class Executor(abc.ABC):
                 completed_at=now,
             )
 
-        await self.worker.push_update(new_instance)
+        await self.worker.queue_update(new_instance)
 
     @abc.abstractmethod
     def __len__(self):
