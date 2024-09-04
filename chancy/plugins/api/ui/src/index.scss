@@ -1,0 +1,12 @@
+$enable-rounded: false;
+@import "node_modules/bootstrap/scss/bootstrap";
+
+body,
+#root {
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    padding-bottom: 40px;
+}

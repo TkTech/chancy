@@ -19,7 +19,7 @@ class CronApiPlugin(ApiPlugin):
     def routes(self):
         return [
             {
-                "path": "/crons",
+                "path": "/api/v1/crons",
                 "endpoint": self.get_cron,
                 "methods": ["GET"],
                 "name": "get_cron",

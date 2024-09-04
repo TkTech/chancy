@@ -16,13 +16,13 @@ class WorkflowApiPlugin(ApiPlugin):
     def routes(self):
         return [
             {
-                "path": "/workflows",
+                "path": "/api/v1/workflows",
                 "endpoint": self.get_workflows,
                 "methods": ["GET"],
                 "name": "get_workflows",
             },
             {
-                "path": "/workflows/{id}",
+                "path": "/api/v1/workflows/{id}",
                 "endpoint": self.get_workflow,
                 "methods": ["GET"],
                 "name": "get_workflow",

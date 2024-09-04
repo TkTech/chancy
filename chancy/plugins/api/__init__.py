@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from functools import partial
 from typing import Type
@@ -6,11 +7,25 @@ import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin, PluginScope
 from chancy.plugins.api.core import CoreApiPlugin
 from chancy.plugins.api.plugin import ApiPlugin
+
+
+class SPAStaticFiles(StaticFiles):
+    """
+    A StaticFiles class that serves the SPA index.html file for any path that
+    doesn't match an existing file.
+    """
+
+    def lookup_path(self, path: str) -> tuple[str, os.stat_result | None]:
+        full_path, stat_result = super().lookup_path(path)
+        if stat_result is None:
+            return super().lookup_path("./index.html")
+        return full_path, stat_result
 
 
 class Api(Plugin):
@@ -37,6 +52,7 @@ class Api(Plugin):
     :param port: The port to listen on.
     :param host: The host to listen on.
     :param debug: Whether to run the server in debug mode.
+    :param allow_origins: A list of origins that are allowed to access the API.
     """
 
     @classmethod
@@ -94,6 +110,18 @@ class Api(Plugin):
                     methods=route["methods"],
                     name=route["name"],
                 )
+
+        # Add the wildcard route to the end of the list so that it doesn't
+        # override any other routes and serves anything that should be handled
+        # by the UI SPA.
+        app.mount(
+            "/",
+            SPAStaticFiles(
+                packages=[("chancy.plugins.api", "dist")],
+                html=True,
+            ),
+            name="ui",
+        )
 
         server = uvicorn.Server(
             config=uvicorn.Config(

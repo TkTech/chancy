@@ -14,31 +14,31 @@ class CoreApiPlugin(ApiPlugin):
     def routes(self):
         return [
             {
-                "path": "/configuration",
+                "path": "/api/v1/configuration",
                 "endpoint": self.get_configuration,
                 "methods": ["GET"],
                 "name": "get_configuration",
             },
             {
-                "path": "/queues",
+                "path": "/api/v1/queues",
                 "endpoint": self.get_queues,
                 "methods": ["GET"],
                 "name": "get_queues",
             },
             {
-                "path": "/workers",
+                "path": "/api/v1/workers",
                 "endpoint": self.get_workers,
                 "methods": ["GET"],
                 "name": "get_workers",
             },
             {
-                "path": "/jobs",
+                "path": "/api/v1/jobs",
                 "endpoint": self.get_jobs,
                 "methods": ["GET"],
                 "name": "get_jobs",
             },
             {
-                "path": "/jobs/{id}",
+                "path": "/api/v1/jobs/{id}",
                 "endpoint": self.get_job,
                 "methods": ["GET"],
                 "name": "get_job",
