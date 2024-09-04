@@ -209,7 +209,8 @@ class WorkflowPlugin(Plugin):
             for workflow in workflows:
                 await self.process_workflow(chancy, workflow)
 
-    async def fetch_workflow(self, chancy: Chancy, id_: str) -> Workflow | None:
+    @classmethod
+    async def fetch_workflow(cls, chancy: Chancy, id_: str) -> Workflow | None:
         """
         Fetch a single workflow from the database.
 
@@ -217,11 +218,11 @@ class WorkflowPlugin(Plugin):
         :param id_: The ID of the workflow to fetch.
         :return: The workflow, or None if it does not exist.
         """
-        workflows = await self.fetch_workflows(chancy, ids=[id_])
+        workflows = await cls.fetch_workflows(chancy, ids=[id_])
         return workflows[0] if workflows else None
 
+    @staticmethod
     async def fetch_workflows(
-        self,
         chancy: Chancy,
         *,
         states: list[str] | None = None,

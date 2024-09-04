@@ -4,6 +4,8 @@ from typing import Type
 
 import uvicorn
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin, PluginScope
@@ -48,6 +50,7 @@ class Api(Plugin):
         port: int = 8000,
         host: str = "127.0.0.1",
         debug: bool = False,
+        allow_origins: list[str] | None = None,
     ):
         super().__init__()
         self.plugins = plugins or {CoreApiPlugin}
@@ -55,6 +58,7 @@ class Api(Plugin):
         self.host = host
         self.debug = debug
         self.root = Path(__file__).parent
+        self.allow_origins = allow_origins or []
 
     async def run(self, worker: Worker, chancy: Chancy):
         """
@@ -64,7 +68,15 @@ class Api(Plugin):
         def _r(f):
             return partial(f, chancy=chancy, worker=worker)
 
-        app = Starlette(debug=self.debug)
+        app = Starlette(
+            debug=self.debug,
+            middleware=[
+                Middleware(
+                    CORSMiddleware,
+                    allow_origins=self.allow_origins,
+                )
+            ],
+        )
 
         web_plugins = []
         # Look through all the enabled plugins for any that implement the

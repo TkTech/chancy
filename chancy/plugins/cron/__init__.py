@@ -5,18 +5,9 @@ from psycopg import sql
 from croniter import croniter
 
 from chancy.plugin import Plugin, PluginScope
-from chancy.plugins.api import ApiPlugin
 from chancy.worker import Worker
 from chancy.app import Chancy
 from chancy import Job
-
-
-class CronApiPlugin(ApiPlugin):
-    def name(self):
-        return "cron"
-
-    def routes(self):
-        return []
 
 
 class Cron(Plugin):

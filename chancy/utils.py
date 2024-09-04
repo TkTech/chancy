@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import enum
 import inspect
 import uuid
 import time
@@ -103,7 +104,12 @@ def json_dumps(obj, **kwargs):
             return str(o)
         elif isinstance(o, datetime.datetime):
             return o.isoformat()
-        raise TypeError
+        elif isinstance(o, enum.Enum):
+            return o.value
+
+        raise TypeError(
+            f"Object of type {o.__class__.__name__} is not JSON serializable"
+        )
 
     return json.dumps(obj, default=_dump, **kwargs)
 

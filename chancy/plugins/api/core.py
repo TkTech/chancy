@@ -14,6 +14,12 @@ class CoreApiPlugin(ApiPlugin):
     def routes(self):
         return [
             {
+                "path": "/configuration",
+                "endpoint": self.get_configuration,
+                "methods": ["GET"],
+                "name": "get_configuration",
+            },
+            {
                 "path": "/queues",
                 "endpoint": self.get_queues,
                 "methods": ["GET"],
@@ -31,7 +37,29 @@ class CoreApiPlugin(ApiPlugin):
                 "methods": ["GET"],
                 "name": "get_jobs",
             },
+            {
+                "path": "/jobs/{id}",
+                "endpoint": self.get_job,
+                "methods": ["GET"],
+                "name": "get_job",
+            },
         ]
+
+    @staticmethod
+    async def get_configuration(request, *, chancy, worker):
+        """
+        Get the configuration of the Chancy instance.
+        """
+        return Response(
+            json_dumps(
+                {
+                    "plugins": [
+                        plugin.__class__.__name__ for plugin in chancy.plugins
+                    ]
+                }
+            ),
+            media_type="application/json",
+        )
 
     @staticmethod
     async def get_queues(request, *, chancy, worker):
@@ -100,6 +128,41 @@ class CoreApiPlugin(ApiPlugin):
                 if not result:
                     return Response(
                         json_dumps([]),
+                        media_type="application/json",
+                    )
+
+                return Response(
+                    json_dumps(result),
+                    media_type="application/json",
+                )
+
+    @staticmethod
+    async def get_job(request, *, chancy, worker):
+        """
+        Get a single job by ID.
+        """
+        job_id = request.path_params["id"]
+
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT * FROM {jobs}
+                        WHERE id = %(job_id)s
+                        """
+                    ).format(
+                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
+                    ),
+                    {"job_id": job_id},
+                )
+
+                result = await cursor.fetchone()
+
+                if not result:
+                    return Response(
+                        json_dumps({}),
+                        status_code=404,
                         media_type="application/json",
                     )
 
