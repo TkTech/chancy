@@ -20,13 +20,24 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install Poetry
-      run: pip install poetry
+    - name: Install uv
+      run: pip install uv
+
+    - name: Installing dependencies (Node)
+      working-directory: chancy/plugins/api/ui
+      run: npm install
+
+    - name: Building UI
+      working-directory: chancy/plugins/api/ui
+      run: npm run build
 
     - name: Publishing
       env:
-        PYPI_TOKEN: ${{ secrets.PYPI_PASSWORD }}
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
+        uv build
+        uvx twine upload dist/*
         poetry config pypi-token.pypi $PYPI_TOKEN
         poetry publish --build
 
@@ -42,20 +53,16 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+      - name: Installing uv
+        run: pip install uv
 
       - name: Installing Package
-        run: poetry install --no-interaction --with dev --all-extras
-
-      - name: Installing extras
-        run: |
-            pip install ghp-import
+        run: uv sync --all-extras
 
       - name: Building documentation
         run: |
-          cd docs && poetry run make clean && poetry run make html
+          cd docs && uv run make clean html
 
       - name: Publishing documentation
         run: |
-          poetry run ghp-import -f -n -p docs/_build/html
+          uv run ghp-import -f -n -p docs/_build/html

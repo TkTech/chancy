@@ -1,7 +1,7 @@
-chancy.plugins.web module
+chancy.plugins.api module
 =========================
 
-.. automodule:: chancy.plugins.web
+.. automodule:: chancy.plugins.api
    :members:
    :undoc-members:
    :show-inheritance:

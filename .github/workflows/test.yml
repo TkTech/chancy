@@ -63,15 +63,15 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Installing poetry
-      run: pip install poetry
+    - name: Installing uv
+      run: pip install uv
 
     - name: Installing dependencies (Python)
-      run: poetry install --no-interaction --with dev
+      run: uv sync
 
     - name: Running tests
       run: |
-        poetry run pytest --cov=chancy --cov-report=xml
+        uv run pytest --cov=chancy --cov-report=xml
 
     - name: Uploading coverage
       uses: codecov/codecov-action@v4
@@ -85,4 +85,4 @@ jobs:
 
     - name: Building docs
       run: |
-          cd docs && poetry run make clean && poetry run make html
+          cd docs && uv run make clean html
