@@ -62,7 +62,7 @@ class Worker:
 
     .. code-block:: python
 
-        Queue(name="default", tags={r"python=3\.11\.[0-9]+"}, concurrency=10)
+        Queue(name="default", tags={r"python=3\\.11\\.[0-9]+"}, concurrency=10)
 
     :param chancy: The Chancy application that the worker is associated with.
     :param worker_id: The ID of the worker, which must be globally unique. If
