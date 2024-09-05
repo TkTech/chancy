@@ -160,11 +160,11 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Poetry
-poetry.lock
-
 # PyCharm
 .idea/
 
-node_modules
-.parcel-cache
+chancy/plugins/api/ui/node_modules
+# rollup-visualizer output
+chancy/plugins/api/ui/stats.html
+# uv
+uv.lock
