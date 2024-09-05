@@ -59,7 +59,7 @@ export function Workflow() {
           <div className={"card-header"}>
             Steps
           </div>
-          <table className={"table mb-0"}>
+          <table className={"table table-striped table-hover mb-0"}>
             <thead>
             <tr>
               <th>Step ID</th>

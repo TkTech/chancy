@@ -46,8 +46,16 @@ jobs:
     - name: Installing poetry
       run: pip install poetry
 
-    - name: Installing dependencies
+    - name: Installing dependencies (Python)
       run: poetry install --no-interaction --with dev
+
+    - name: Installing dependencies (Node)
+      working-directory: chancy/plugins/api/ui
+      run: npm install
+
+    - name: Ensuring UI is buildable
+      working-directory: chancy/plugins/api/ui
+      run: npm run build
 
     - name: Running tests
       run: |
