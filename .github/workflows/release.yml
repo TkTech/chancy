@@ -38,8 +38,6 @@ jobs:
       run: |
         uv build
         uvx twine upload dist/*
-        poetry config pypi-token.pypi $PYPI_TOKEN
-        poetry publish --build
 
   build_documentation:
       name: Building & uploading documentation.
