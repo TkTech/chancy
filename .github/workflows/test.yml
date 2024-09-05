@@ -8,6 +8,26 @@ on:
   pull_request:
 
 jobs:
+  build_ui:
+    name: Building UI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4.1.6
+
+      - name: Installing Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Installing dependencies
+        working-directory: chancy/plugins/api/ui
+        run: npm install
+
+      - name: Building UI
+        working-directory: chancy/plugins/api/ui
+        run: npm run build
+
   build:
     name: Running tests.
 
@@ -48,14 +68,6 @@ jobs:
 
     - name: Installing dependencies (Python)
       run: poetry install --no-interaction --with dev
-
-    - name: Installing dependencies (Node)
-      working-directory: chancy/plugins/api/ui
-      run: npm install
-
-    - name: Ensuring UI is buildable
-      working-directory: chancy/plugins/api/ui
-      run: npm run build
 
     - name: Running tests
       run: |
