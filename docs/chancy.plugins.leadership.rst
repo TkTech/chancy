@@ -1,5 +1,5 @@
-chancy.plugins.leadership module
-================================
+Leadership
+==========
 
 .. automodule:: chancy.plugins.leadership
    :members:

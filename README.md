@@ -15,7 +15,7 @@ A postgres-backed task queue for Python.
 
 ## Documentation
 
-Checkout the getting-started guide and the API documentation at
+Check out the getting-started guide and the API documentation at
 https://tkte.ch/chancy/.
 
 ## Similar Work

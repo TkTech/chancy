@@ -8,6 +8,11 @@ from chancy.utils import json_dumps
 
 
 class CoreApiPlugin(ApiPlugin):
+    """
+    Core API plugin which implements the endpoints for jobs, queues, workers,
+    etc...
+    """
+
     def name(self):
         return "base"
 
@@ -64,7 +69,7 @@ class CoreApiPlugin(ApiPlugin):
     @staticmethod
     async def get_queues(request, *, chancy, worker):
         """
-        Get a list of all the queues in the system.
+        Get a list of all the queues.
         """
         queues = await chancy.get_all_queues()
         return Response(
@@ -75,7 +80,7 @@ class CoreApiPlugin(ApiPlugin):
     @staticmethod
     async def get_workers(request, *, chancy, worker):
         """
-        Get a list of all the workers in the system.
+        Get a list of all the workers.
         """
         workers = await chancy.get_all_workers()
         return Response(

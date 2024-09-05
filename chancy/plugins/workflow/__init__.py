@@ -15,27 +15,46 @@ from chancy.rule import Rule
 
 @dataclass
 class WorkflowStep:
+    """
+    A single step in a workflow.
+    """
+
+    #: The job to execute when this step is ready.
     job: Job
+    #: The unique ID of the step.
     step_id: str
+    #: A list of step IDs that this step depends on.
     dependencies: List[str] = field(default_factory=list)
+    #: The current state of the step.
     state: JobInstance.State | None = JobInstance.State.PENDING
+    #: The unique ID of a running Job which is associated with this step.
     job_id: str | None = None
 
 
 @dataclass
 class Workflow:
+    """
+    A simple dependency-based workflow.
+    """
+
     class State(enum.Enum):
         PENDING = "pending"
         RUNNING = "running"
         COMPLETED = "completed"
         FAILED = "failed"
 
+    # A descriptive name for the workflow.
     name: str
+    #: A dictionary of steps in the workflow, keyed by step ID.
     steps: Dict[str, WorkflowStep] = field(default_factory=dict)
+    #: The current state of the workflow.
     state: State = State.PENDING
 
+    #: The unique ID of a specific run of the workflow.
     id: str = field(default_factory=chancy_uuid)
+    #: The time the workflow was created.
     created_at: datetime | None = None
+    #: The time the workflow was last updated.
     updated_at: datetime | None = None
 
     def add_step(
@@ -97,12 +116,18 @@ class WorkflowPlugin(Plugin):
     similar tools. This can be a helpful debugging and validation tool for
     complex workflows.
 
-    Events
-    ------
+    Enable the plugin by adding it to the list of plugins in the Chancy
+    constructor:
 
-    The WorkflowPlugin reacts to the following events:
+    .. code-block:: python
 
-    - ``workflow.created``: Triggered when a new workflow is created.
+        from chancy.plugins.workflow import WorkflowPlugin
+
+        async with Chancy(
+            dsn="postgresql://localhost/postgres",
+            plugins=[WorkflowPlugin()]
+        ) as chancy:
+            ...
 
     Example
     -------
@@ -510,3 +535,77 @@ class WorkflowPlugin(Plugin):
 
     def migrate_key(self) -> str:
         return "workflow"
+
+
+class Sequence:
+    """
+    A simple sequential workflow.
+
+    Sequences are a special case of workflows, where each step depends on the
+    previous step. This forms a linear chain of jobs that are executed in
+    order.
+
+    Sequences are useful for defining sequences of jobs that must be executed
+    in order, without the complexity of full workflows.
+
+    Example
+    -------
+
+    .. code-block:: python
+       :caption: example_chain.py
+
+        import asyncio
+        from chancy import Job, Chancy
+        from chancy.plugins.workflow import Sequence
+
+        async def first():
+            print("First")
+
+        async def second():
+            print("Second")
+
+        async def third():
+            print("Third")
+
+        async def main():
+            async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+                sequence = Sequence("example")
+
+                sequence.add(Job.from_func(first))
+                sequence.add(Job.from_func(second))
+                sequence.add(Job.from_func(third))
+
+                await Chain.push(chancy, chain)
+
+        if __name__ == "__main__":
+            asyncio.run(main())
+    """
+
+    def __init__(self, name: str, jobs: List[Job] = None):
+        self.name = name
+        self.jobs = jobs or []
+
+    def add(self, job: Job):
+        """
+        Add a job to the chain.
+
+        :param job: The job to add.
+        """
+        self.jobs.append(job)
+
+    @classmethod
+    async def push(cls, chancy: Chancy, chain: "Chain") -> str:
+        """
+        Push a new chain to the database.
+
+        :param chancy: The Chancy application.
+        :param chain: The chain to push.
+        :return: The UUID of the newly created chain.
+        """
+        workflow = Workflow(chain.name)
+        for i, job in enumerate(chain.jobs):
+            step_id = f"step_{i}"
+            dependencies = [f"step_{i - 1}"] if i > 0 else []
+            workflow.add_step(step_id, job, dependencies)
+
+        return await WorkflowPlugin.push(chancy, workflow)

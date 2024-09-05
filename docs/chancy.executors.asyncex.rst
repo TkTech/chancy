@@ -1,5 +1,5 @@
-chancy.executors.asyncex module
-===============================
+AsyncExecutor
+=============
 
 .. automodule:: chancy.executors.asyncex
    :members:

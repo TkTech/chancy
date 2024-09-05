@@ -10,6 +10,10 @@ from chancy.utils import json_dumps
 
 
 class WorkflowApiPlugin(ApiPlugin):
+    """
+    API plugin for workflows.
+    """
+
     def name(self):
         return "workflow"
 

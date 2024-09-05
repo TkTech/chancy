@@ -18,17 +18,6 @@ class Recovery(Plugin):
     This will transition any matching jobs back to the "pending" state, and
     increment the `max_attempts` counter by 1 to allow it to be retried.
 
-    Events
-    ------
-
-    The following events are emitted by the recovery plugin:
-
-    +---------------------+------------------------------------------------+
-    | Event Name          | Description                                    |
-    +=====================+================================================+
-    | `recovery.recovered`| Emitted when the recovery has recovered jobs.  |
-    +---------------------+------------------------------------------------+
-
     :param poll_interval: The number of seconds between recovery poll intervals.
     """
 

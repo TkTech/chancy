@@ -1,5 +1,5 @@
-chancy.executors.base module
-============================
+Executor
+========
 
 .. automodule:: chancy.executors.base
    :members:

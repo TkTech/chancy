@@ -15,7 +15,7 @@ from chancy.plugins.api.core import CoreApiPlugin
 from chancy.plugins.api.plugin import ApiPlugin
 
 
-class SPAStaticFiles(StaticFiles):
+class _SPAStaticFiles(StaticFiles):
     """
     A StaticFiles class that serves the SPA index.html file for any path that
     doesn't match an existing file.
@@ -41,7 +41,21 @@ class Api(Plugin):
         pip install chancy[web]
 
     Most built-in Chancy plugins provide an ApiPlugin implementation that
-    adds additional endpoints.
+    adds additional endpoints. Enable them by passing them to the plugin
+    constructor.
+
+    .. code-block:: python
+
+        from chancy.plugins.api import Api
+        from chancy.plugins.api.core import CoreApiPlugin
+        from chancy.plugins.workflow import WorkflowPlugin
+        from chancy.plugins.workflow.api import WorkflowApiPlugin
+
+        async with Chancy(..., plugins=[
+            WorkflowPlugin(),
+            Api(plugins={CoreApiPlugin, WorkflowApiPlugin}),
+        ]) as chancy:
+            ...
 
     .. warning::
 
@@ -116,7 +130,7 @@ class Api(Plugin):
         # by the UI SPA.
         app.mount(
             "/",
-            SPAStaticFiles(
+            _SPAStaticFiles(
                 packages=[("chancy.plugins.api", "dist")],
                 html=True,
             ),
@@ -132,6 +146,6 @@ class Api(Plugin):
             )
         )
 
-        chancy.log.info(f"API running at http://{self.host}:{self.port}")
+        chancy.log.info(f"Dashboard running at http://{self.host}:{self.port}")
 
         await server.serve()

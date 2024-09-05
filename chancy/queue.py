@@ -14,6 +14,48 @@ class Queue:
 
     Queue's must be declared using :func:`~chancy.app.Chancy.declare` before workers
     will be able to process jobs from them.
+
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            chancy.declare(Queue(name="default", concurrency=4))
+
+    By default, this queue will shortly be picked up by all running workers and
+    begin processing jobs. If you want to instead apply it to specific workers,
+    you can assign it using "tags":
+
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            chancy.declare(Queue(name="default", concurrency=4, tags={"reporting"}))
+
+    This will only be picked up by workers that have the "reporting" tag:
+
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            await Worker(chancy, tags={"reporting"}).start()
+
+    Queues can have a global rate limit applied to them, which will be enforced
+    across all workers processing jobs from the queue:
+
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            chancy.declare(
+                Queue(name="default", rate_limit=10, rate_limit_window=60)
+            )
+
+    This will limit the queue to processing 10 jobs per minute across all
+    workers. If the rate limit is exceeded, jobs will be skipped until the
+    rate limit window has passed. Combined with the AsyncExecutor, this can be
+    a very easy way to work with external APIs.
+
+    .. note::
+
+        Rate limiting is done with a fixed window algorithm for simplicity.
+        If you need to do something custom, subclass the worker and
+        re-implement :func:`~chancy.worker.Worker.fetch_jobs`.
     """
 
     class State(enum.Enum):

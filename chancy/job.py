@@ -146,6 +146,29 @@ from chancy.utils import importable_name
 class Reference:
     """
     References a Job in the queue.
+
+    This object can be used to retrieve the job instance later, or wait for it
+    to complete. It is returned by the :meth:`~chancy.app.Chancy.push`,
+    :meth:`~chancy.app.Chancy.push_many`, and
+    :meth:`~chancy.app.Chancy.push_many_ex` functions.
+
+    Waiting for a job to finish:
+
+    .. code-block:: python
+
+         async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            ref = await chancy.push(Job.from_func(my_function))
+            job = await chancy.wait_for_job(ref)
+            print(job.state)  # "succeeded"
+
+    Retrieving a job instance:
+
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            ref = await chancy.push(Job.from_func(my_function))
+            job = await chancy.get_job(ref)
+            print(job.state)  # "pending"
     """
 
     __slots__ = ("identifier",)

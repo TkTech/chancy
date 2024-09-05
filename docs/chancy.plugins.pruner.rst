@@ -1,5 +1,5 @@
-chancy.plugins.pruner module
-============================
+Pruner
+======
 
 .. automodule:: chancy.plugins.pruner
    :members:

@@ -76,12 +76,6 @@ class Cron(Plugin):
             )
             await Worker(chancy).start()
 
-    Tables
-    ------
-
-    This plugin creates a table called ``{prefix}_cron`` in the database to
-    store the cron-like schedules for the jobs when migrations are run.
-
     :param poll_interval: The number of seconds between cron poll intervals.
     """
 

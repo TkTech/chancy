@@ -1,5 +1,5 @@
-chancy.executors.process module
-===============================
+ProcessExecutor
+===============
 
 .. automodule:: chancy.executors.process
    :members:

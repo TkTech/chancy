@@ -54,18 +54,6 @@ class Pruner(Plugin):
         multiple rules, you may need to create additional indexes to improve
         performance on busy queues.
 
-    Events
-    ------
-
-    The following events are emitted by the pruner plugin:
-
-    +---------------------+------------------------------------------------+
-    | Event Name          | Description                                    |
-    +=====================+================================================+
-    | `pruner.removed`    | Emitted when the pruner has removed jobs from  |
-    |                     | the database.                                  |
-    +---------------------+------------------------------------------------+
-
     :param rule: The rule that the pruner will use to match jobs.
     :param maximum_to_prune: The maximum number of jobs to prune in a single
                              run of the pruner.

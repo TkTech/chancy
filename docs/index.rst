@@ -18,7 +18,9 @@ Key Features:
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
 - asyncio & sync APIs for easy integration with existing codebases
-- Plugins for workflows, cron jobs, and more
+- Plugins for a :class:`dashboard<chancy.plugins.api.Api>`,
+  :class:`workflows<chancy.plugins.workflow.WorkflowPlugin>`,
+  :class:`cron jobs<chancy.plugins.cron.Cron>`, and more
 
 Quick Start
 -----------
@@ -35,52 +37,32 @@ Quick Start
   :caption: worker.py
 
    import asyncio
-   from chancy import Chancy, Worker, Queue
+   from chancy import Chancy, Worker, Queue, Job
+
+   def hello_world(*, name: str):
+       print(f"Hello, {name}!")
 
    async def main():
        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            # Migrate the database to the latest version (don't do this in prod)
            await chancy.migrate()
+           # Declares a queue to all workers called "default".
            await chancy.declare(Queue("default", concurrency=10))
+           # Push a job onto the default queue
+           await chancy.push(
+              Job.from_func(hello_world, kwargs={"name": "world"}, queue="default")
+           )
+           # Start the worker and keep it running until we terminate it.
            await Worker(chancy).start()
 
    if __name__ == "__main__":
        asyncio.run(main())
 
-3. Create and queue a job (job.py):
-
-.. code-block:: python
-  :caption: job.py
-
-   import asyncio
-   from chancy import Job
-
-   def my_dummy_task(name: str):
-       print(f"Hello, {name}!")
-
-   async def main():
-       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-           job = Job.from_func(
-               my_dummy_task,
-               kwargs={"name": "world"},
-               queue="default"
-           )
-           await chancy.push(job)
-
-   if __name__ == "__main__":
-       asyncio.run(main())
-
-4. Run the worker in one terminal:
+3. Run the worker:
 
 .. code-block:: bash
 
    $ python worker.py
-
-5. Push the job in another terminal:
-
-.. code-block:: bash
-
-   $ python job.py
-
 
 Congratulations! You've just run your first Chancy job.
 

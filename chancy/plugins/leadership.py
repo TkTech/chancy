@@ -21,30 +21,6 @@ class Leadership(Plugin):
     leadership information, which will only ever contain at most 1 row, the
     current leader.
 
-    Events
-    ------
-
-    The following events are emitted by the leadership plugin:
-
-    +---------------------+------------------------------------------------+
-    | Event Name          | Description                                    |
-    +=====================+================================================+
-    | `leadership.gained` | Emitted when a worker has gained leadership.   |
-    +---------------------+------------------------------------------------+
-    | `leadership.lost`   | Emitted when a worker has lost leadership.     |
-    +---------------------+------------------------------------------------+
-    | `leadership.renewed`| Emitted when a worker has renewed an existing  |
-    |                     | leadership.                                    |
-    +---------------------+------------------------------------------------+
-
-    The leadership plugin reacts to the following event:
-
-    +---------------------+------------------------------------------------+
-    | Event Name          | Description                                    |
-    +=====================+================================================+
-    | `worker.stopped`    | Emitted when a worker has stopped.             |
-    +---------------------+------------------------------------------------+
-
     :param poll_interval: The number of seconds between leadership poll
                           intervals.
     :param timeout: The number of seconds before a worker is considered to have
