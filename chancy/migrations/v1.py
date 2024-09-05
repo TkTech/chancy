@@ -133,27 +133,27 @@ class V1Migration(Migration):
         Drop the $prefix_jobs, $prefix_leaders tables.
         """
         await cursor.execute(
-            sql.SQL("DROP TABLE {jobs}").format(
+            sql.SQL("DROP TABLE IF EXISTS {jobs}").format(
                 jobs=sql.Identifier(f"{migrator.prefix}jobs")
             )
         )
         await cursor.execute(
-            sql.SQL("DROP TABLE {leader}").format(
+            sql.SQL("DROP TABLE IF EXISTS {leader}").format(
                 leader=sql.Identifier(f"{migrator.prefix}leader")
             )
         )
         await cursor.execute(
-            sql.SQL("DROP TABLE {workers}").format(
+            sql.SQL("DROP TABLE IF EXISTS {workers}").format(
                 workers=sql.Identifier(f"{migrator.prefix}workers")
             )
         )
         await cursor.execute(
-            sql.SQL("DROP TABLE {queues}").format(
+            sql.SQL("DROP TABLE IF EXISTS {queues}").format(
                 queues=sql.Identifier(f"{migrator.prefix}queues")
             )
         )
         await cursor.execute(
-            sql.SQL("DROP TABLE {rate_limit}").format(
+            sql.SQL("DROP TABLE IF EXISTS {rate_limit}").format(
                 rate_limit=sql.Identifier(f"{migrator.prefix}queue_rate_limits")
             )
         )
