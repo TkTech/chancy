@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import logging
 import time
 from abc import abstractmethod, ABC
@@ -405,6 +406,23 @@ class SyncChancy(BaseChancy):
 
     """
 
+    @staticmethod
+    def _ensure_pool_is_open(f):
+        """
+        A decorator which ensures the connection pool is open before calling
+        the wrapped function.
+
+        It's never ideal to rely on this, since it will never _close_ the pool,
+        but users expect to be able to just call push() and have it work.
+        """
+
+        @functools.wraps(f)
+        def wrapper(self, *args, **kwargs):
+            self.pool.open()
+            return f(self, *args, **kwargs)
+
+        return wrapper
+
     @cached_property
     def pool(self):
         return ConnectionPool(
@@ -422,6 +440,7 @@ class SyncChancy(BaseChancy):
         self.pool.close()
         return False
 
+    @_ensure_pool_is_open
     def migrate(self, *, to_version: int | None = None):
         migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
         with self.pool.connection() as conn:
@@ -430,6 +449,7 @@ class SyncChancy(BaseChancy):
         for plugin in self.plugins:
             plugin.migrate_sync(self, to_version=to_version)
 
+    @_ensure_pool_is_open
     def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
         with self.pool.connection() as conn:
             with conn.cursor() as cursor:
@@ -466,11 +486,13 @@ class SyncChancy(BaseChancy):
             rate_limit_window=result[7],
         )
 
+    @_ensure_pool_is_open
     def push(self, job: Job) -> Reference:
         with self.pool.connection() as conn:
             with conn.cursor() as cursor:
                 return self.push_many_ex(cursor, [job])[0]
 
+    @_ensure_pool_is_open
     def push_many(
         self, jobs: list[Job], *, batch_size: int = 1000
     ) -> Iterator[list[Reference]]:
@@ -512,6 +534,7 @@ class SyncChancy(BaseChancy):
 
         return references
 
+    @_ensure_pool_is_open
     def get_job(self, ref: Reference) -> JobInstance:
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cursor:
@@ -533,12 +556,14 @@ class SyncChancy(BaseChancy):
                 return job
             time.sleep(interval)
 
+    @_ensure_pool_is_open
     def get_all_queues(self) -> list[Queue]:
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cursor:
                 cursor.execute(self._get_all_queues_sql())
                 return [Queue.unpack(record) for record in cursor]
 
+    @_ensure_pool_is_open
     def get_queue(self, name: str) -> Queue:
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cursor:
@@ -548,6 +573,7 @@ class SyncChancy(BaseChancy):
                     raise KeyError(f"Queue {name!r} not found.")
                 return Queue.unpack(record)
 
+    @_ensure_pool_is_open
     def get_all_workers(self) -> list[dict[str, Any]]:
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cursor:
@@ -592,6 +618,23 @@ class Chancy(BaseChancy):
         asyncio.run(main())
     """
 
+    @staticmethod
+    def _ensure_pool_is_open(f):
+        """
+        A decorator which ensures the connection pool is open before calling
+        the wrapped function.
+
+        It's never ideal to rely on this, since it will never _close_ the pool,
+        but users expect to be able to just call push() and have it work.
+        """
+
+        @functools.wraps(f)
+        async def wrapper(self, *args, **kwargs):
+            await self.pool.open()
+            return await f(self, *args, **kwargs)
+
+        return wrapper
+
     @cached_property
     def pool(self):
         return AsyncConnectionPool(
@@ -612,6 +655,7 @@ class Chancy(BaseChancy):
         await self.pool.close()
         return False
 
+    @_ensure_pool_is_open
     async def migrate(self, *, to_version: int | None = None):
         migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
         async with self.pool.connection() as conn:
@@ -620,6 +664,7 @@ class Chancy(BaseChancy):
         for plugin in self.plugins:
             await plugin.migrate(self, to_version=to_version)
 
+    @_ensure_pool_is_open
     async def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cursor:
@@ -656,11 +701,13 @@ class Chancy(BaseChancy):
             rate_limit_window=result[7],
         )
 
+    @_ensure_pool_is_open
     async def push(self, job: Job) -> Reference:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cursor:
                 return (await self.push_many_ex(cursor, [job]))[0]
 
+    @_ensure_pool_is_open
     async def push_many(
         self, jobs: list[Job], *, batch_size: int = 1000
     ) -> Iterator[list[Reference]]:
@@ -704,6 +751,7 @@ class Chancy(BaseChancy):
 
         return references
 
+    @_ensure_pool_is_open
     async def get_job(self, ref: Reference) -> JobInstance:
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
@@ -725,12 +773,14 @@ class Chancy(BaseChancy):
                 return job
             await asyncio.sleep(interval)
 
+    @_ensure_pool_is_open
     async def get_all_queues(self) -> list[Queue]:
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(self._get_all_queues_sql())
                 return [Queue.unpack(record) async for record in cursor]
 
+    @_ensure_pool_is_open
     async def get_queue(self, name: str) -> Queue:
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
@@ -740,6 +790,7 @@ class Chancy(BaseChancy):
                     raise KeyError(f"Queue {name!r} not found.")
                 return Queue.unpack(record)
 
+    @_ensure_pool_is_open
     async def get_all_workers(self) -> list[dict[str, Any]]:
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:

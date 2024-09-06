@@ -2,27 +2,11 @@ import asyncio
 import secrets
 from typing import AsyncIterator
 
+import pytest
 import pytest_asyncio
 from pytest_postgresql import factories
 
 from chancy import Chancy, Worker
-
-
-def run_chancy_migrations(host, port, user, dbname, password):
-    """
-    Bootstraps the database with the required Chancy migrations.
-    """
-    import asyncio
-
-    from chancy.app import Chancy
-
-    async def main():
-        async with Chancy(
-            dsn=f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-        ) as app:
-            await app.migrate()
-
-    asyncio.run(main())
 
 
 external_postgres = factories.postgresql_noproc(
@@ -30,7 +14,6 @@ external_postgres = factories.postgresql_noproc(
     password="localtest",
     user="postgres",
     port=8190,
-    load=[run_chancy_migrations],
     dbname=f"chancy_test_{secrets.token_hex(8)}",
 )
 postgresql = factories.postgresql(
@@ -38,7 +21,7 @@ postgresql = factories.postgresql(
 )
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture()
 async def chancy(request, postgresql):
     """
     Provides a Chancy application instance with an open connection pool
@@ -55,7 +38,19 @@ async def chancy(request, postgresql):
         await chancy.migrate(to_version=0)
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
+def chancy_just_app(postgresql):
+    """
+    Provides just a configured chancy instance with no open connection pool
+    or migrations.
+    """
+    i = postgresql.info
+    return Chancy(
+        dsn=f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
+    )
+
+
+@pytest_asyncio.fixture()
 async def worker(chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
     """
     Starts and returns a Worker and the task associated with it.
@@ -78,7 +73,7 @@ async def worker(chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
             pass
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture()
 async def worker_no_start(chancy) -> Worker:
     """
     Returns a Worker instance that has not been started.

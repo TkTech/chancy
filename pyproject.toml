@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.10.2"
+version = "0.10.3"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -24,7 +24,7 @@ web = [
 [tool.uv]
 dev-dependencies = [
     "pytest-postgresql>=6.0.0",
-    "pytest-asyncio>=0.23.7",
+    "pytest-asyncio>=0.24.0",
     "pytest>=8.2.0",
     "sphinx>=7.3.7",
     "furo>=2024.5.6",
@@ -46,3 +46,6 @@ artifacts = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
