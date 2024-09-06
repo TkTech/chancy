@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 import socket
+import signal
 import platform
 
 from psycopg import sql
@@ -89,6 +90,7 @@ class Worker:
         queue_change_poll_interval: int = 10,
         shutdown_timeout: int = 30,
         tags: set[str] | None = None,
+        register_signal_handlers: bool = True,
     ):
         #: The Chancy application that the worker is associated with.
         self.chancy = chancy
@@ -120,6 +122,9 @@ class Worker:
         self._queues: dict[str, Queue] = {}
         self.manager = TaskManager()
         self.outgoing = asyncio.Queue()
+
+        if register_signal_handlers:
+            self.register_signal_handlers()
 
     async def start(self):
         """
@@ -615,7 +620,33 @@ class Worker:
                         (len(records), queue.name),
                     )
 
-            return [JobInstance.unpack(record) for record in records]
+                return [JobInstance.unpack(record) for record in records]
+
+    def register_signal_handlers(self):
+        """
+        Registers signal handlers.
+        """
+        signal.signal(signal.SIGTERM, self._on_sigterm)
+
+    def _on_sigterm(self, signum: int, frame):
+        """
+        Signal handler for SIGTERM, which we use to attempt a relatively
+        clean shutdown.
+
+        Docker, for example, will send a SIGTERM, wait a bit, and then send a
+        SIGKILL if the process hasn't exited. This gives us a chance to clean
+        up any resources before being terminated.
+        """
+        self.chancy.log.info("Received SIGTERM, shutting down worker...")
+        loop = asyncio.get_event_loop()
+        if not loop.is_running():
+            return
+
+        # This is not currently a "clean" shutdown. We rely on the recovery
+        # plugin to handle any jobs that were running when the worker was
+        # terminated. We should expand on this to deregister the worker, allow
+        # executors to clean up, etc.
+        loop.create_task(self.manager.shutdown())
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"
