@@ -70,9 +70,12 @@ class Cron(Plugin):
             await chancy.migrate()
             await Cron.schedule(
                 chancy,
-                "default",
                 "*/2 * * * *",
-                Job(func="worker.hello_world", unique_key="hello_world_cron"),
+                Job(
+                    func="worker.hello_world",
+                    unique_key="hello_world_cron",
+                    queue="default",
+                )
             )
             await Worker(chancy).start()
 
