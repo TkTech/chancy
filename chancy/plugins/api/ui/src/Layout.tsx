@@ -2,16 +2,31 @@ import {NavLink, Outlet} from 'react-router-dom';
 import {useServerConfiguration} from './hooks/useServerConfiguration.tsx';
 import {useQueryClient} from '@tanstack/react-query';
 import {Loading} from './components/Loading.tsx';
+import {useCallback, useState} from 'react';
 
 function Layout() {
   const {configuration, isLoading, setHost, setPort, host, port} = useServerConfiguration();
+  const [formHost, setFormHost] = useState(host);
+  const [formPort, setFormPort] = useState(port);
   const queryClient = useQueryClient();
 
-  if (isLoading) return <Loading />;
+  const connect = useCallback(() => {
+    setHost(formHost);
+    setPort(formPort);
+    queryClient.invalidateQueries();
+  }, [formHost, formPort, setHost, setPort, queryClient]);
+
+  if (isLoading) {
+    return (
+      <div className={"p-4"}>
+        <Loading />
+      </div>
+    );
+  }
 
   if (!configuration) {
     return (
-      <div className={"vh-100 vw-100 d-flex align-items-center justify-content-center"}>
+      <div className={"h-100 w-100 d-flex align-items-center justify-content-center"}>
         <div>
           <h1 className={"text-center mb-4"}>Chancy</h1>
           <p></p>
@@ -22,8 +37,8 @@ function Layout() {
               type={"text"}
               id={"host"}
               placeholder={"http://localhost"}
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
+              value={formHost}
+              onChange={(e) => setFormHost(e.target.value)}
             />
             <small className={"form-text text-muted"}>The host of the Chancy API to connect to.</small>
           </div>
@@ -34,11 +49,11 @@ function Layout() {
               type={"number"}
               id={"port"}
               placeholder={"8000"}
-              value={port}
-              onChange={(e) => setPort(parseInt(e.target.value))}/>
+              value={formPort}
+              onChange={(e) => setFormPort(parseInt(e.target.value))}/>
             <small className={"form-text text-muted"}>The port of the Chancy API to connect to.</small>
           </div>
-          <button className={"btn btn-primary w-100"} onClick={() => queryClient.invalidateQueries()}>
+          <button className={"btn btn-primary w-100"} onClick={connect}>
             Connect
           </button>
         </div>
