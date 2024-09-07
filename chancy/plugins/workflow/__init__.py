@@ -1,7 +1,7 @@
 import enum
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, TextIO
+from typing import List, Dict, TextIO, Self
 from psycopg import sql
 from psycopg.rows import dict_row
 
@@ -552,7 +552,7 @@ class Sequence:
     -------
 
     .. code-block:: python
-       :caption: example_chain.py
+       :caption: example_sequence.py
 
         import asyncio
         from chancy import Job, Chancy
@@ -569,13 +569,12 @@ class Sequence:
 
         async def main():
             async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-                sequence = Sequence("example")
-
-                sequence.add(Job.from_func(first))
-                sequence.add(Job.from_func(second))
-                sequence.add(Job.from_func(third))
-
-                await Chain.push(chancy, chain)
+                sequence = Sequence("example", [
+                    Job.from_func(first),
+                    Job.from_func(second),
+                    Job.from_func(third),
+                ])
+                await sequence.push(chancy)
 
         if __name__ == "__main__":
             asyncio.run(main())
@@ -585,25 +584,24 @@ class Sequence:
         self.name = name
         self.jobs = jobs or []
 
-    def add(self, job: Job):
+    def add(self, job: Job) -> Self:
         """
-        Add a job to the chain.
+        Add a job to the sequence.
 
         :param job: The job to add.
         """
         self.jobs.append(job)
+        return self
 
-    @classmethod
-    async def push(cls, chancy: Chancy, chain: "Chain") -> str:
+    async def push(self, chancy: Chancy) -> str:
         """
-        Push a new chain to the database.
+        Push a new sequence to the database.
 
         :param chancy: The Chancy application.
-        :param chain: The chain to push.
         :return: The UUID of the newly created chain.
         """
-        workflow = Workflow(chain.name)
-        for i, job in enumerate(chain.jobs):
+        workflow = Workflow(self.name)
+        for i, job in enumerate(self.jobs):
             step_id = f"step_{i}"
             dependencies = [f"step_{i - 1}"] if i > 0 else []
             workflow.add_step(step_id, job, dependencies)
