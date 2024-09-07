@@ -30,8 +30,7 @@ class _SPAStaticFiles(StaticFiles):
 
 class Api(Plugin):
     """
-    A plugin that provides a Starlette and Uvicorn-based HTTP API for
-    querying the state of the worker and the overall cluster.
+    Provides an API and a dashboard for viewing the state of the Chancy cluster.
 
     Running this plugin requires a few additional dependencies, you can install
     them with:
@@ -42,7 +41,7 @@ class Api(Plugin):
 
     Most built-in Chancy plugins provide an ApiPlugin implementation that
     adds additional endpoints. Enable them by passing them to the plugin
-    constructor.
+    constructor:
 
     .. code-block:: python
 
@@ -57,12 +56,19 @@ class Api(Plugin):
         ]) as chancy:
             ...
 
+    .. note::
+
+        The API is still mostly undocumented, as its development is driven by
+        the needs of the dashboard and may change significantly before it
+        becomes stable.
+
     .. warning::
 
         The api interface is not secure and should not be exposed to the
         public internet. It is intended for use in a secure environment, such
         as a private network or a VPN where only trusted users have access.
 
+    :param plugins: A set of plugins that provide additional API endpoints.
     :param port: The port to listen on.
     :param host: The host to listen on.
     :param debug: Whether to run the server in debug mode.
