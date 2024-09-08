@@ -1,5 +1,6 @@
 import code
 import asyncio
+from email.policy import default
 from functools import wraps
 from typing import Callable
 
@@ -118,7 +119,116 @@ async def shell(ctx):
         )
 
 
+@click.group("queue")
+@click.pass_context
+def queue_group(ctx: click.Context):
+    """
+    Queue management commands.
+    """
+    pass
+
+
+@queue_group.command("list")
+@click.pass_context
+@run_async_command
+async def list_queues(ctx: click.Context):
+    """
+    List all the queues.
+    """
+    chancy: Chancy = ctx.obj["app"]
+
+    async with chancy:
+        queues = await chancy.get_all_queues()
+
+        for queue in queues:
+            click.echo(f"{queue!r}")
+
+
+@queue_group.command("declare")
+@click.argument("name")
+@click.option(
+    "--concurrency",
+    "-c",
+    default=1,
+    type=int,
+    help="The number of simultaneous jobs to process.",
+)
+@click.option(
+    "--executor",
+    "-e",
+    default="chancy.executors.process.ProcessExecutor",
+    help="The executor to use.",
+)
+@click.option(
+    "--rate-limit", "-r", type=int, help="The global queue rate limit."
+)
+@click.option(
+    "--rate-limit-window",
+    "-w",
+    type=int,
+    help="The global queue rate limit window.",
+)
+@click.option(
+    "--polling-interval",
+    "-p",
+    help="The interval to poll the queue for new jobs.",
+    type=int,
+    default=5,
+)
+@click.option(
+    "--tags",
+    "-t",
+    help="Extra tags to apply to the queue.",
+    multiple=True,
+)
+@click.pass_context
+@run_async_command
+async def declare_queue(
+    ctx: click.Context,
+    name: str,
+    concurrency: int | None,
+    executor: str | None,
+    rate_limit: int | None,
+    rate_limit_window: int | None,
+    polling_interval: int | None,
+    tags: list[str] | None,
+):
+    """
+    Declare a new queue.
+    """
+    chancy: Chancy = ctx.obj["app"]
+
+    async with chancy:
+        await chancy.declare(
+            Queue(
+                name,
+                concurrency=concurrency,
+                executor=executor,
+                rate_limit=rate_limit,
+                rate_limit_window=rate_limit_window,
+                polling_interval=polling_interval,
+                tags=set(tags) if tags else {r".*"},
+            )
+        )
+
+
+@queue_group.command("delete")
+@click.argument("name")
+@click.pass_context
+@run_async_command
+async def delete_queue(ctx: click.Context, name: str):
+    """
+    Delete a queue.
+    """
+    chancy: Chancy = ctx.obj["app"]
+
+    if click.confirm(f"Are you sure you want to delete the queue {name}?"):
+        async with chancy:
+            await chancy.delete_queue(name)
+
+
 def main():
+    cli.add_command(queue_group)
     cli()
 
 

@@ -251,6 +251,14 @@ class BaseChancy(ABC):
         """
 
     @abstractmethod
+    def delete_queue(self, name: str):
+        """
+        Delete a queue by name.
+
+        :param name: The name of the queue to delete.
+        """
+
+    @abstractmethod
     def get_all_workers(self) -> list[dict[str, Any]]:
         """
         Get all workers known to the cluster, regardless of their status.
@@ -572,6 +580,20 @@ class SyncChancy(BaseChancy):
                 return Queue.unpack(record)
 
     @_ensure_pool_is_open
+    def delete_queue(self, name: str):
+        with self.pool.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    sql.SQL(
+                        """
+                        DELETE FROM {queues}
+                        WHERE name = %s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    [name],
+                )
+
+    @_ensure_pool_is_open
     def get_all_workers(self) -> list[dict[str, Any]]:
         with self.pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cursor:
@@ -787,6 +809,20 @@ class Chancy(BaseChancy):
                 if record is None:
                     raise KeyError(f"Queue {name!r} not found.")
                 return Queue.unpack(record)
+
+    @_ensure_pool_is_open
+    async def delete_queue(self, name: str):
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        DELETE FROM {queues}
+                        WHERE name = %s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    [name],
+                )
 
     @_ensure_pool_is_open
     async def get_all_workers(self) -> list[dict[str, Any]]:
