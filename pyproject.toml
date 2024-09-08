@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.10.4"
+version = "0.10.5"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,12 @@ web = [
     "starlette>=0.37.2",
     "uvicorn[standard]>=0.30.1"
 ]
+cli = [
+    "click"
+]
+
+[project.scripts]
+chancy = "chancy.cli:main"
 
 [tool.uv]
 dev-dependencies = [
