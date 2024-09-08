@@ -78,6 +78,8 @@ class Worker:
                                        should be processing.
     :param shutdown_timeout: The number of seconds to wait for a clean shutdown
                                 before forcing the worker to stop.
+    :param tags: Extra tags to associate with the worker.
+    :param register_signal_handlers: Whether to register signal handlers.
     """
 
     def __init__(
@@ -145,7 +147,7 @@ class Worker:
             )
 
         for plugin in self.chancy.plugins:
-            await self.add_plugin(plugin)
+            self.add_plugin(plugin)
             self.chancy.log.info(
                 f"Started plugin {plugin.__class__.__name__!r}"
             )
@@ -160,7 +162,7 @@ class Worker:
                     f" {self.shutdown_timeout} seconds."
                 )
 
-    async def add_plugin(self, plugin):
+    def add_plugin(self, plugin):
         """
         Add a plugin to the worker.
 
