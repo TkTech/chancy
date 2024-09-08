@@ -655,6 +655,24 @@ class Chancy(BaseChancy):
 
         return wrapper
 
+    @staticmethod
+    def _ensure_pool_is_open_async_iter(f):
+        """
+        A decorator which ensures the connection pool is open before calling
+        the wrapped function.
+
+        It's never ideal to rely on this, since it will never _close_ the pool,
+        but users expect to be able to just call push() and have it work.
+        """
+
+        @functools.wraps(f)
+        async def wrapper(self, *args, **kwargs):
+            await self.pool.open()
+            async for record in f(self, *args, **kwargs):
+                yield record
+
+        return wrapper
+
     @cached_property
     def pool(self):
         return AsyncConnectionPool(
@@ -727,7 +745,7 @@ class Chancy(BaseChancy):
             async with conn.cursor() as cursor:
                 return (await self.push_many_ex(cursor, [job]))[0]
 
-    @_ensure_pool_is_open
+    @_ensure_pool_is_open_async_iter
     async def push_many(
         self, jobs: list[Job], *, batch_size: int = 1000
     ) -> Iterator[list[Reference]]:
