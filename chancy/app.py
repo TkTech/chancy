@@ -442,12 +442,10 @@ class SyncChancy(BaseChancy):
 
     @_ensure_pool_is_open
     def migrate(self, *, to_version: int | None = None):
-        migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
-        with self.pool.connection() as conn:
-            migrator.migrate(conn, to_version=to_version)
-
-        for plugin in self.plugins:
-            plugin.migrate_sync(self, to_version=to_version)
+        raise NotImplementedError(
+            "Migrations are not supported in the synchronous version of"
+            " the Chancy application."
+        )
 
     @_ensure_pool_is_open
     def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
