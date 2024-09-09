@@ -47,9 +47,11 @@ class Executor(abc.ABC):
         :param exc: The exception that was raised during execution, if any.
         """
         if exc is not None:
+            is_failure = job.attempts + 1 >= job.max_attempts
+
             new_state = (
                 JobInstance.State.FAILED
-                if job.attempts + 1 >= job.max_attempts
+                if is_failure
                 else JobInstance.State.RETRYING
             )
 
@@ -57,6 +59,9 @@ class Executor(abc.ABC):
                 job,
                 state=new_state,
                 attempts=job.attempts + 1,
+                completed_at=(
+                    datetime.now(tz=timezone.utc) if is_failure else None
+                ),
                 errors=[
                     *job.errors,
                     {
