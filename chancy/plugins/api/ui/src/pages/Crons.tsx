@@ -2,6 +2,7 @@ import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {useCrons} from '../hooks/useCrons.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
+import {UpdatingTime} from '../components/UpdatingTime.tsx';
 
 export function Cron() {
   const { url } = useServerConfiguration();
@@ -170,8 +171,12 @@ export function Crons() {
               </td>
               <td><code>{cron.job.func}</code></td>
               <td><code>{cron.cron}</code></td>
-              <td>{cron.next_run}</td>
-              <td>{cron.last_run}</td>
+              <td>
+                <UpdatingTime date={cron.next_run} />
+              </td>
+              <td>
+                <UpdatingTime date={cron.last_run} />
+              </td>
             </tr>
           ))}
           </tbody>
