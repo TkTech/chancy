@@ -1,4 +1,4 @@
-import {useQuery} from '@tanstack/react-query';
+import {keepPreviousData, useQuery} from '@tanstack/react-query';
 import {useMemo} from 'react';
 
 export interface Job {
@@ -54,7 +54,9 @@ export function useJobs ({
       const response = await fetch(fullUrl);
       return response.json();
     },
-    enabled: url !== null
+    enabled: url !== null,
+    refetchInterval: 5000,
+    placeholderData: keepPreviousData
   });
 }
 

@@ -119,7 +119,7 @@ export function Jobs () {
   const [searchParams, setSearchParams] = useSearchParams();
   const state = searchParams.get('state') || 'pending';
 
-  const { data: jobs, isLoading } = useJobs({
+  const { data: jobs, isLoading, dataUpdatedAt } = useJobs({
     url: url,
     state: state
   });
@@ -156,8 +156,11 @@ export function Jobs () {
       </div>
 
       <div className={'card'}>
-        <div className={'card-header'}>
+        <div className={'card-header d-flex'}>
           Jobs
+          <div className={'ms-auto'}>
+            Last fetched: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}
+          </div>
         </div>
         <table className={"table table-sm table-striped table-hover mb-0"}>
           <thead>
