@@ -118,7 +118,10 @@ class CoreApiPlugin(ApiPlugin):
                         """
                         SELECT * FROM {jobs}
                         WHERE ({rule})
-                        ORDER BY id DESC
+                        ORDER BY (
+                            completed_at,
+                            scheduled_at 
+                        ) DESC
                         LIMIT {limit}
                         """
                     ).format(
