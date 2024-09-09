@@ -61,7 +61,26 @@ class ProcessExecutor(Executor):
         self.pool = ProcessPoolExecutor(
             max_workers=queue.concurrency,
             max_tasks_per_child=maximum_jobs_per_worker,
+            initializer=self.on_initialize_worker,
         )
+
+    def on_initialize_worker(self):
+        """
+        This method is called in each worker process before it begins running
+        jobs. It can be used to perform any necessary setup, such as loading
+        NLTK datasets or calling ``django.setup()``.
+
+        This isn't called once per job but once per worker process until
+        :prop:`~concurrent.futures.ProcessPoolExecutor.max_tasks_per_child`
+        is reached (if set). After that, the worker process is replaced with a
+        new one.
+
+        .. note::
+
+            Care should be taken when overriding this method, as it is called
+            within a separate process and may not have access to the same
+            resources as the main process.
+        """
 
     async def push(self, job: JobInstance) -> Future:
         future: Future = self.pool.submit(self.job_wrapper, job)
