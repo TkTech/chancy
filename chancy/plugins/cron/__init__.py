@@ -155,6 +155,9 @@ class Cron(Plugin):
     def migrate_package(self) -> str | None:
         return "chancy.plugins.cron.migrations"
 
+    def api_plugin(self) -> str | None:
+        return "chancy.plugins.cron.api.CronApiPlugin"
+
     @classmethod
     async def unschedule(cls, chancy: Chancy, *unique_keys: str):
         """

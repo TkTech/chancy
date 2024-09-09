@@ -536,6 +536,9 @@ class WorkflowPlugin(Plugin):
     def migrate_key(self) -> str:
         return "workflow"
 
+    def api_plugin(self) -> str | None:
+        return "chancy.plugins.workflow.api.WorkflowApiPlugin"
+
 
 class Sequence:
     """

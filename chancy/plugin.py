@@ -103,7 +103,8 @@ class Plugin(abc.ABC):
         self.wakeup_signal.clear()
         return True
 
-    async def wait_for_leader(self, worker: "Worker") -> None:
+    @staticmethod
+    async def wait_for_leader(worker: "Worker") -> None:
         """
         Wait until the worker running this plugin is the leader.
         """
@@ -126,6 +127,12 @@ class Plugin(abc.ABC):
 
             Normally, you don't need to call this yourself. The Pruner plugin
             will call the cleanup method of all other registered plugins.
+        """
+
+    def api_plugin(self) -> str | None:
+        """
+        If this plugin has an associated API component, returns the import
+        string for the plugin.
         """
 
     def __repr__(self):
