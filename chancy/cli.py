@@ -1,10 +1,13 @@
 import code
 import asyncio
+import json
 from email.policy import default
+from enum import unique
 from functools import wraps
 from typing import Callable
 
 import click
+from click import Context
 
 from chancy import Chancy, Worker, Job, Limit, Reference, Queue, JobInstance
 from chancy.utils import import_string
@@ -116,6 +119,69 @@ async def shell(ctx):
                 "Queue": Queue,
                 "asyncio": asyncio,
             }
+        )
+
+
+@cli.command()
+@click.argument("job")
+@click.option(
+    "--queue",
+    "-q",
+    help="The queue to push the job to.",
+    default="default",
+)
+@click.option(
+    "--priority",
+    "-p",
+    help="The job's priority.",
+    default=0,
+    type=int,
+)
+@click.option(
+    "--unique-key",
+    "-u",
+    help="The job's unique key.",
+)
+@click.option(
+    "--max-attempts",
+    "-m",
+    help="The maximum number of attempts to make.",
+    type=int,
+)
+@click.option(
+    "--kwargs",
+    "-k",
+    help="A JSON blob containing the keyword arguments to pass to the job.",
+)
+@click.pass_context
+@run_async_command
+async def push(
+    ctx: Context,
+    job: str,
+    queue: str,
+    priority: int,
+    unique_key: str,
+    max_attempts: int,
+    kwargs: str | None = None,
+):
+    """
+    Push a job to the default queue.
+    """
+    chancy: Chancy = ctx.obj["app"]
+
+    if kwargs is not None:
+        kwargs = json.loads(kwargs)
+
+    async with chancy:
+        await chancy.push(
+            Job(
+                func=job,
+                queue=queue,
+                priority=priority,
+                unique_key=unique_key,
+                max_attempts=max_attempts,
+                kwargs=kwargs,
+            )
         )
 
 

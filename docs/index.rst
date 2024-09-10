@@ -27,42 +27,110 @@ Quick Start
 
 1. Install Chancy:
 
-.. code-block:: bash
+.. tab:: Code
 
-   $ pip install chancy
+  .. code-block:: bash
 
-2. Setup a basic worker (worker.py):
+     pip install chancy
 
-.. code-block:: python
-  :caption: worker.py
+.. tab:: CLI
 
-   import asyncio
-   from chancy import Chancy, Worker, Queue, Job
+  .. code-block:: bash
 
-   def hello_world(*, name: str):
-       print(f"Hello, {name}!")
+     pip install chancy[cli]
 
-   async def main():
-       async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-            # Migrate the database to the latest version (don't do this in prod)
-           await chancy.migrate()
-           # Declares a queue to all workers called "default".
-           await chancy.declare(Queue("default", concurrency=10))
-           # Push a job onto the default queue
-           await chancy.push(
-              Job.from_func(hello_world, kwargs={"name": "world"}, queue="default")
-           )
-           # Start the worker and keep it running until we terminate it.
-           await Worker(chancy).start()
 
-   if __name__ == "__main__":
-       asyncio.run(main())
+2. Setup a worker (worker.py) with all the bells and whistles:
+
+.. tab:: Code
+
+  .. code-block:: python
+    :caption: worker.py
+
+     import asyncio
+     from chancy import Chancy, Worker, Queue, Job
+     from chancy.plugins.pruner import Pruner
+     from chancy.plugins.recovery import Recovery
+     from chancy.plugins.leadership import Leadership
+     from chancy.plugins.cron import Cron
+     from chancy.plugins.api import Api
+     from chancy.plugins.workflow import WorkflowPlugin
+
+     def hello_world(*, name: str):
+         print(f"Hello, {name}!")
+
+     async def main():
+         async with Chancy(
+             dsn="postgresql://localhost/postgres",
+             plugins=[
+                  Pruner(),
+                  Recovery(),
+                  Leadership(),
+                  Cron(),
+                  Api(),
+                  WorkflowPlugin(),
+             ]
+         ) as chancy:
+              # Migrate the database to the latest version (don't do this in prod)
+             await chancy.migrate()
+             # Declares a queue to all workers called "default".
+             await chancy.declare(Queue("default", concurrency=10))
+             # Push a job onto the default queue
+             await chancy.push(
+                Job.from_func(hello_world, kwargs={"name": "world"}, queue="default")
+             )
+             # Start the worker and keep it running until we terminate it.
+             await Worker(chancy).start()
+
+     if __name__ == "__main__":
+         asyncio.run(main())
+
+.. tab:: CLI
+
+  .. code-block:: python
+     :caption: worker.py
+
+     from chancy import Chancy
+     from chancy.plugins.pruner import Pruner
+     from chancy.plugins.recovery import Recovery
+     from chancy.plugins.leadership import Leadership
+     from chancy.plugins.cron import Cron
+     from chancy.plugins.api import Api
+     from chancy.plugins.workflow import WorkflowPlugin
+
+     def hello_world(*, name: str):
+         print(f"Hello, {name}!")
+
+     chancy = Chancy(
+         dsn="postgresql://localhost/postgres",
+         plugins=[
+             Pruner(),
+             Recovery(),
+             Leadership(),
+             Cron(),
+             Api(),
+             WorkflowPlugin(),
+         ]
+     )
+
 
 3. Run the worker:
 
-.. code-block:: bash
+.. tab:: Code
 
-   $ python worker.py
+  .. code-block:: bash
+
+     python worker.py
+
+.. tab:: CLI
+
+  .. code-block:: bash
+
+     chancy --app worker.chancy migrate
+     chancy --app worker.chancy queue declare default --concurrency 10
+     chancy --app worker.chancy push worker.hello_world --kwargs '{"name": "world"}' --queue default
+     chancy --app worker.chancy worker
+
 
 Congratulations! You've just run your first Chancy job.
 
