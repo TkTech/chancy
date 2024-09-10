@@ -14,6 +14,19 @@ class AsyncExecutor(Executor):
     without the high overhead of new processes or threads. However, it is not
     suitable for CPU-bound jobs, as it will block the main event loop and
     prevent other jobs & queues from running.
+
+    To use this executor, simply pass the import path to this class in the
+    ``executor`` field of your queue configuration:
+
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            await chancy.declare(
+                Queue(
+                    name="default",
+                    executor="chancy.executors.asyncex.AsyncExecutor",
+                )
+            )
     """
 
     def __init__(self, worker, queue):

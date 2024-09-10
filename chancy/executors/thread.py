@@ -1,7 +1,6 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 import asyncio
-from sys import exception
 from typing import Dict
 import functools
 
@@ -21,6 +20,19 @@ class ThreadedExecutor(Executor):
     When working with existing asyncio code, it's often easier and more
     efficient to use the :class:`~chancy.executors.asyncex.AsyncExecutor`
     instead, as it can run a very large number of jobs concurrently.
+
+    To use this executor, simply pass the import path to this class in the
+    ``executor`` field of your queue configuration:
+
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            await chancy.declare(
+                Queue(
+                    name="default",
+                    executor="chancy.executors.thread.ThreadedExecutor",
+                )
+            )
 
     :param worker: The worker instance associated with this executor.
     :param queue: The queue that this executor is associated with.

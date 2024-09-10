@@ -15,3 +15,4 @@ Submodules
    chancy.executors.base
    chancy.executors.process
    chancy.executors.asyncex
+   chancy.executors.thread

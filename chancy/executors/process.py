@@ -36,6 +36,10 @@ class _TimeoutThread(threading.Thread):
 
 class ProcessExecutor(Executor):
     """
+    .. note::
+
+        Currently, this is the default executor used by Chancy.
+
     An Executor which uses a process pool to run its jobs.
 
     This executor is useful for running jobs that are CPU-bound, avoiding the
@@ -45,9 +49,18 @@ class ProcessExecutor(Executor):
     within each process to raise a TimeoutError if the job takes too long to
     complete.
 
-    .. note::
+    To use this executor, simply pass the import path to this class in the
+    ``executor`` field of your queue configuration:
 
-        Currently, this is the default executor used by Chancy.
+    .. code-block:: python
+
+        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            await chancy.declare(
+                Queue(
+                    name="default",
+                    executor="chancy.executors.process.ProcessExecutor"
+                )
+            )
 
     :param queue: The queue that this executor is associated with.
     :param maximum_jobs_per_worker: The maximum number of jobs that each worker
@@ -72,9 +85,8 @@ class ProcessExecutor(Executor):
         NLTK datasets or calling ``django.setup()``.
 
         This isn't called once per job but once per worker process until
-        :prop:`~concurrent.futures.ProcessPoolExecutor.max_tasks_per_child`
-        is reached (if set). After that, the worker process is replaced with a
-        new one.
+        :attr:`~ProcessExecutor.maximum_jobs_per_worker` is reached (if
+        set). After that, the worker process is replaced with a new one.
 
         .. note::
 
