@@ -1,5 +1,5 @@
-chancy.plugins package
-======================
+Plugins
+=======
 
 .. automodule:: chancy.plugins
    :members:
