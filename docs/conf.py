@@ -18,6 +18,7 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.graphviz",
     "sphinx.ext.linkcode",
+    "sphinx_inline_tabs",
 ]
 
 templates_path = ["_templates"]

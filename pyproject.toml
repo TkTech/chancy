@@ -33,6 +33,7 @@ dev-dependencies = [
     "pytest-asyncio>=0.24.0",
     "pytest>=8.2.0",
     "sphinx>=7.3.7",
+    "sphinx-inline-tabs>=2023.4.21",
     "furo>=2024.5.6",
     "pytest-cov>=5.0.0",
     "sentry-sdk>=2.3.1",
