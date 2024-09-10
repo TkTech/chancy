@@ -64,7 +64,8 @@ class ProcessExecutor(Executor):
             initializer=self.on_initialize_worker,
         )
 
-    def on_initialize_worker(self):
+    @staticmethod
+    def on_initialize_worker():
         """
         This method is called in each worker process before it begins running
         jobs. It can be used to perform any necessary setup, such as loading

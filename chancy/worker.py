@@ -360,6 +360,10 @@ class Worker:
                 except asyncio.QueueEmpty:
                     break
 
+            self.chancy.log.debug(
+                f"Processing {len(pending_updates)} outgoing updates."
+            )
+
             async with self.chancy.pool.connection() as conn:
                 async with conn.cursor() as cursor:
                     async with conn.transaction():
@@ -398,6 +402,9 @@ class Worker:
                         except Exception:
                             # If we were unable to apply the updates, we should
                             # re-queue them for the next poll.
+                            self.chancy.log.exception(
+                                "Failed to apply updates to job instances."
+                            )
                             for update in pending_updates:
                                 await self.outgoing.put(update)
                             raise
