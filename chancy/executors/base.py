@@ -87,7 +87,7 @@ class Executor(abc.ABC):
         for plugin in self.worker.chancy.plugins:
             try:
                 new_instance = await plugin.on_job_completed(
-                    new_instance, exc=exc
+                    new_instance, worker=self.worker, exc=exc
                 )
             except NotImplementedError:
                 continue
