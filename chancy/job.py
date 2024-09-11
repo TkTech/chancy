@@ -138,9 +138,16 @@ Prevent duplicate job execution by assigning a unique key:
 import dataclasses
 import enum
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict
 
 from chancy.utils import importable_name
+
+
+class ErrorT(TypedDict):
+    #: The attempt number of the job when the error occurred.
+    attempt: int
+    #: The error message, typically the traceback of an exception.
+    traceback: str
 
 
 class Reference:
@@ -231,6 +238,9 @@ class Job:
     #: only 1 copy of a job with this key will be allowed to run or be
     #: scheduled at a time.
     unique_key: str | None = None
+    #: Arbitrary metadata associated with this job instance. Plugins can use
+    #: this to store additional information during the execution of a job.
+    meta: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_func(cls, func, **kwargs):
@@ -257,6 +267,9 @@ class Job:
     def with_queue(self, queue: str) -> "Job":
         return dataclasses.replace(self, queue=queue)
 
+    def with_meta(self, meta: dict[str, Any]) -> "Job":
+        return dataclasses.replace(self, meta=meta)
+
     def pack(self) -> dict:
         """
         Pack the job into a dictionary that can be serialized and used to
@@ -271,6 +284,7 @@ class Job:
             "l": [limit.serialize() for limit in self.limits],
             "u": self.unique_key,
             "q": self.queue,
+            "m": self.meta,
         }
 
     @classmethod
@@ -287,6 +301,7 @@ class Job:
             limits=[Limit.deserialize(limit) for limit in data["l"]],
             unique_key=data["u"],
             queue=data["q"],
+            meta=data["m"],
         )
 
 
@@ -305,19 +320,25 @@ class JobInstance(Job):
         RETRYING = "retrying"
         SUCCEEDED = "succeeded"
 
+    #: The unique identifier for this job instance.
     id: str
+    #: The time at which this job was started, if it has been started.
     started_at: Optional[datetime] = None
+    #: The time at which this job was completed, if it has been completed.
     completed_at: Optional[datetime] = None
+    #: The number of times this job has been attempted.
     attempts: int = 0
+    #: The current state of this job instance.
     state: State = State.PENDING
-    errors: list[str] = dataclasses.field(default_factory=list)
+    #: A list of errors that occurred during the execution of this job.
+    errors: list[ErrorT] = dataclasses.field(default_factory=list)
 
     @classmethod
     def unpack(cls, data: dict) -> "JobInstance":
         return cls(
             id=data["id"],
-            func=data["payload"]["func"],
-            kwargs=data["payload"]["kwargs"],
+            func=data["func"],
+            kwargs=data["kwargs"],
             priority=data["priority"],
             scheduled_at=data["scheduled_at"],
             started_at=data["started_at"],
@@ -328,7 +349,6 @@ class JobInstance(Job):
             unique_key=data["unique_key"],
             queue=data["queue"],
             errors=data["errors"],
-            limits=[
-                Limit.deserialize(limit) for limit in data["payload"]["limits"]
-            ],
+            limits=[Limit.deserialize(limit) for limit in data["limits"]],
+            meta=data["meta"],
         )

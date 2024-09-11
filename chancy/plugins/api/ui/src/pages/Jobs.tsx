@@ -35,13 +35,13 @@ export function Job() {
           <tr>
             <th>Function</th>
             <td>
-              <code>{job.payload.func}</code>
+              <code>{job.func}</code>
             </td>
           </tr>
           <tr>
             <th>Arguments</th>
             <td>
-              <pre className={"mb-0"}><code>{JSON.stringify(job.payload.kwargs)}</code></pre>
+              <pre className={"mb-0"}><code>{JSON.stringify(job.kwargs)}</code></pre>
             </td>
           </tr>
           <tr>
@@ -183,7 +183,7 @@ export function Jobs () {
             <tr key={job.id}>
               <td>
                 <Link to={`/jobs/${job.id}`}>
-                  <code>{job.payload.func}</code>
+                  <code>{job.func}</code>
                 </Link>
               </td>
               <td className={"text-center"}>

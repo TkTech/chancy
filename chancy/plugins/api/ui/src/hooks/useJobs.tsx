@@ -4,14 +4,13 @@ import {useMemo} from 'react';
 export interface Job {
   id: string,
   queue: string,
-  payload: {
-    func: string,
-    kwargs: any,
-    limits: {
-      key: string,
-      value: number
-    }[],
-  },
+  func: string,
+  kwargs: any,
+  limits: {
+    key: string,
+    value: number
+  }[],
+  meta: any,
   state: string,
   priority: number,
   attempts: number,

@@ -15,7 +15,10 @@ class V1Migration(Migration):
                 CREATE TABLE {jobs} (
                     id UUID PRIMARY KEY,
                     queue TEXT NOT NULL,
-                    payload JSON NOT NULL,
+                    func TEXT NOT NULL,
+                    kwargs JSON NOT NULL DEFAULT '{{}}',
+                    limits JSON NOT NULL DEFAULT '[]',
+                    meta JSON NOT NULL DEFAULT '{{}}',
                     state VARCHAR (25) NOT NULL DEFAULT 'pending',
                     priority INTEGER DEFAULT 10,
                     attempts INTEGER DEFAULT 0,

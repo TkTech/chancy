@@ -303,12 +303,27 @@ class BaseChancy(ABC):
                 {jobs} (
                     id,
                     queue,
-                    payload,
+                    func,
+                    kwargs,
+                    limits,
+                    meta,
                     priority,
                     max_attempts,
                     scheduled_at,
                     unique_key
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                )
+            VALUES (
+                %(id)s,
+                %(queue)s,
+                %(func)s,
+                %(kwargs)s,
+                %(limits)s,
+                %(meta)s,
+                %(priority)s,
+                %(max_attempts)s,
+                %(scheduled_at)s,
+                %(unique_key)s
+            )
             ON CONFLICT (unique_key)
             WHERE
                 unique_key IS NOT NULL
@@ -513,23 +528,18 @@ class SyncChancy(BaseChancy):
         for job in jobs:
             cursor.execute(
                 self._push_job_sql(),
-                (
-                    chancy_uuid(),
-                    job.queue,
-                    json_dumps(
-                        {
-                            "func": job.func,
-                            "kwargs": job.kwargs or {},
-                            "limits": [
-                                limit.serialize() for limit in job.limits
-                            ],
-                        }
-                    ),
-                    job.priority,
-                    job.max_attempts,
-                    job.scheduled_at,
-                    job.unique_key,
-                ),
+                {
+                    "id": chancy_uuid(),
+                    "queue": job.queue,
+                    "func": job.func,
+                    "kwargs": Json(job.kwargs or {}),
+                    "limits": Json([limit.serialize() for limit in job.limits]),
+                    "meta": Json(job.meta),
+                    "priority": job.priority,
+                    "max_attempts": job.max_attempts,
+                    "scheduled_at": job.scheduled_at,
+                    "unique_key": job.unique_key,
+                },
             )
             record = cursor.fetchone()
             references.append(Reference(record[0]))
@@ -762,23 +772,18 @@ class Chancy(BaseChancy):
         for job in jobs:
             await cursor.execute(
                 self._push_job_sql(),
-                (
-                    chancy_uuid(),
-                    job.queue,
-                    json_dumps(
-                        {
-                            "func": job.func,
-                            "kwargs": job.kwargs or {},
-                            "limits": [
-                                limit.serialize() for limit in job.limits
-                            ],
-                        }
-                    ),
-                    job.priority,
-                    job.max_attempts,
-                    job.scheduled_at,
-                    job.unique_key,
-                ),
+                {
+                    "id": chancy_uuid(),
+                    "queue": job.queue,
+                    "func": job.func,
+                    "kwargs": Json(job.kwargs or {}),
+                    "limits": Json([limit.serialize() for limit in job.limits]),
+                    "meta": Json(job.meta),
+                    "priority": job.priority,
+                    "max_attempts": job.max_attempts,
+                    "scheduled_at": job.scheduled_at,
+                    "unique_key": job.unique_key,
+                },
             )
             record = await cursor.fetchone()
             references.append(Reference(record[0]))
