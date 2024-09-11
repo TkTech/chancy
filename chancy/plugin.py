@@ -3,6 +3,7 @@ import enum
 import asyncio
 import typing
 
+from chancy.job import JobInstance
 from chancy.migrate import Migrator
 
 if typing.TYPE_CHECKING:
@@ -134,6 +135,25 @@ class Plugin(abc.ABC):
         If this plugin has an associated API component, returns the import
         string for the plugin.
         """
+
+    async def on_job_completed(
+        self,
+        job: JobInstance,
+        worker: "Worker",
+        *,
+        exc: Exception | None = None,
+    ) -> JobInstance:
+        """
+        Called after a job is completed (successfully or otherwise) and before
+        the JobInstance is updated in the database.
+
+        If an exception occurred during the job, `exc` will be the exception
+        instance instead of ``None``.
+
+        The passed job is immutable - to modify it, return a new JobInstance
+        object with the desired changes.
+        """
+        raise NotImplementedError()
 
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"
