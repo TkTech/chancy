@@ -1,49 +1,30 @@
-import React, { useCallback, useEffect, useMemo, useRef, useLayoutEffect, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Node,
   Edge,
-  Connection,
   useNodesState,
   useEdgesState,
-  addEdge,
   Position,
   Handle,
   NodeTypes,
-  useReactFlow, ReactFlowProvider
 } from '@xyflow/react';
+import type { NodeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
-
-interface Step {
-  step_id: string;
-  state: string;
-  job_id: string;
-  dependencies: string[];
-}
-
-interface Workflow {
-  id: string;
-  name: string;
-  state: string;
-  created_at: string;
-  updated_at: string;
-  steps?: {
-    [key: string]: Step;
-  };
-}
+import {Workflow} from '../hooks/useWorkflows.tsx';
 
 interface WorkflowChartProps {
   workflow: Workflow;
 }
 
-interface CustomNodeData {
-  label: string;
-  jobId: string;
-  color: string;
-}
+type CustomNode = Node<{
+  label: string,
+  jobId: string,
+  color: string
+}, 'custom'>;
 
-const CustomNode: React.FC<{ data: CustomNodeData }> = ({ data }) => {
+const CustomNode = ({ data }: NodeProps<CustomNode>) => {
   const nodeRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -90,7 +71,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
 
   dagre.layout(dagreGraph);
 
-  const layoutedNodes = nodes.map((node) => {
+  const layoutNodes = nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
     return {
       ...node,
@@ -101,12 +82,12 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
     };
   });
 
-  return { nodes: layoutedNodes, edges };
+  return { nodes: layoutNodes, edges };
 };
 
 const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
   const { initialNodes, initialEdges } = useMemo(() => {
-    const nodes: Node<CustomNodeData>[] = [];
+    const nodes: Node[] = [];
     const edges: Edge[] = [];
 
     Object.entries(workflow.steps || {}).forEach(([stepId, step]) => {
@@ -134,11 +115,10 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
     return { initialNodes: nodes, initialEdges: edges };
   }, [workflow.steps]);
 
-  const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(initialNodes, initialEdges);
+  const { nodes: layoutNodes, edges: layoutEdges } = getLayoutedElements(initialNodes, initialEdges);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
-  const { fitView } = useReactFlow();
+  const [nodes, , onNodesChange] = useNodesState(layoutNodes);
+  const [edges, , onEdgesChange] = useEdgesState(layoutEdges);
 
   return (
     <div style={{ width: '100%', height: '500px' }}>
