@@ -82,6 +82,16 @@ class Executor(abc.ABC):
                 completed_at=now,
             )
 
+        # Each plugin has a chance to modify the job instance after it's
+        # completed.
+        for plugin in self.worker.chancy.plugins:
+            try:
+                new_instance = await plugin.on_job_completed(
+                    new_instance, exc=exc
+                )
+            except NotImplementedError:
+                continue
+
         await self.worker.queue_update(new_instance)
 
     @abc.abstractmethod
