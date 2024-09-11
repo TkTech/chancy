@@ -4,6 +4,9 @@ import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {UpdatingTime} from '../components/UpdatingTime.tsx';
 import {statusToColor} from '../utils.tsx';
+import WorkflowChart from './WorkflowChart.tsx';
+import {ReactFlowProvider} from '@xyflow/react';
+
 
 export function Workflow() {
   const { url } = useServerConfiguration();
@@ -55,49 +58,61 @@ export function Workflow() {
         </table>
       </div>
       {workflow.steps && (
-        <div className={"card mt-4"}>
-          <div className={"card-header"}>
-            Steps
+        <>
+          <div className="card mt-4">
+            <div className="card-header">
+              Workflow Visualization
+            </div>
+            <div className="card-body">
+              <ReactFlowProvider>
+                <WorkflowChart workflow={workflow}/>
+              </ReactFlowProvider>
+            </div>
           </div>
-          <table className={"table table-striped table-hover mb-0"}>
-            <thead>
-            <tr>
-              <th>Step ID</th>
-              <th>State</th>
-              <th>Job ID</th>
-            </tr>
-            </thead>
-            <tbody>
-            {Object.entries(workflow.steps).map(([step_id, step]) => (
-              <tr key={step_id}>
-                <td>{step_id}</td>
-                <td>
-                  <span className={`badge bg-${statusToColor(step.state)}`}>{step.state}</span>
-                </td>
-                <td>
-                  <Link to={`/jobs/${step.job_id}`}>
-                    {step.job_id}
-                  </Link>
-                </td>
+          <div className={'card mt-4'}>
+            <div className={'card-header'}>
+              Steps
+            </div>
+            <table className={'table table-striped table-hover mb-0'}>
+              <thead>
+              <tr>
+                <th>Step ID</th>
+                <th>State</th>
+                <th>Job ID</th>
               </tr>
-            ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+              {Object.entries(workflow.steps).map(([step_id, step]) => (
+                <tr key={step_id}>
+                  <td>{step_id}</td>
+                  <td>
+                    <span className={`badge bg-${statusToColor(step.state)}`}>{step.state}</span>
+                  </td>
+                  <td>
+                    <Link to={`/jobs/${step.job_id}`}>
+                      {step.job_id}
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
-    </div>
-  );
-}
+        </div>
+      );
+      }
 
-export function Workflows() {
-  const { url } = useServerConfiguration();
-  const { data: workflows, isLoading } = useWorkflows({ url });
+      export function Workflows() {
+      const {url} = useServerConfiguration();
+      const {data: workflows, isLoading} = useWorkflows({url});
 
-  if (isLoading) return <Loading />;
+      if (isLoading) return <Loading />;
 
-  return (
-    <div className={"container"}>
-      <div className={"card"}>
+      return (
+      <div className={'container'}>
+      <div className={'card'}>
         <div className={"card-header"}>
           Workflows
         </div>
