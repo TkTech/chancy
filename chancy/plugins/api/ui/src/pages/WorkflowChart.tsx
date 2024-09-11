@@ -46,16 +46,11 @@ interface CustomNodeData {
 const CustomNode: React.FC<{ data: CustomNodeData }> = ({ data }) => {
   const nodeRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    if (nodeRef.current) {
-      const { width, height } = nodeRef.current.getBoundingClientRect();
-      nodeRef.current.style.width = `${width}px`;
-      nodeRef.current.style.height = `${height}px`;
-    }
-  }, []);
-
   return (
-    <div ref={nodeRef}>
+    <div ref={nodeRef} style={{
+      width: "350px",
+      height: "80px"
+    }}>
       <Handle type="target" position={Position.Top} />
       <div className={`p-2 border text-center shadow ${data.color}`}>
         <div className={"fw-bolder"}>{data.label}</div>
@@ -110,15 +105,10 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
 };
 
 const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [isLayoutApplied, setIsLayoutApplied] = useState(false);
-  const { fitView } = useReactFlow();
-
   const { initialNodes, initialEdges } = useMemo(() => {
     const nodes: Node<CustomNodeData>[] = [];
     const edges: Edge[] = [];
-    
+
     Object.entries(workflow.steps || {}).forEach(([stepId, step]) => {
       nodes.push({
         id: stepId,
@@ -130,7 +120,7 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
         },
         position: { x: 0, y: 0 },
       });
-      
+
       step.dependencies?.forEach((dependencyId) => {
         edges.push({
           id: `e${dependencyId}-${stepId}`,
@@ -140,26 +130,15 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
         });
       });
     });
-    
+
     return { initialNodes: nodes, initialEdges: edges };
   }, [workflow.steps]);
 
-  useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-  }, [initialNodes, initialEdges, setNodes, setEdges]);
+  const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(initialNodes, initialEdges);
 
-  useLayoutEffect(() => {
-    if (nodes.length > 0 && !isLayoutApplied) {
-      window.requestAnimationFrame(() => {
-        const {nodes: layoutedNodes, edges: layoutedEdges} = getLayoutedElements(nodes, edges);
-        setNodes([...layoutedNodes]);
-        setEdges([...layoutedEdges]);
-        setIsLayoutApplied(true);
-        fitView();
-      });
-    }
-  }, [nodes, edges, setNodes, setEdges, isLayoutApplied, fitView]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
+  const { fitView } = useReactFlow();
 
   return (
     <div style={{ width: '100%', height: '500px' }}>
@@ -175,6 +154,7 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
         proOptions={{
           hideAttribution: true,
         }}
+        fitView
       />
     </div>
   );
