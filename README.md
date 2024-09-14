@@ -11,7 +11,7 @@ A postgres-backed task queue for Python.
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
 - asyncio & sync APIs for easy integration with existing codebases
-- Plugins for workflows, cron jobs, and more
+- Plugins for a dashboard, workflows, cron jobs, and more
 
 ## Documentation
 
