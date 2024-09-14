@@ -65,7 +65,7 @@ class Pruner(Plugin):
 
     def __init__(
         self,
-        rule: SQLAble = Rules.Age() > 60,
+        rule: SQLAble = Rules.Age() > 60 * 60 * 24,
         *,
         maximum_to_prune: int = 10000,
         poll_interval: int = 60,

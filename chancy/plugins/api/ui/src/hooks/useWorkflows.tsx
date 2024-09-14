@@ -1,17 +1,20 @@
 import {useQuery} from '@tanstack/react-query';
 
-interface Workflow {
+export interface Step {
+  step_id: string;
+  state: string;
+  job_id: string;
+  dependencies: string[];
+}
+
+export interface Workflow {
   id: string,
   name: string,
   state: string,
   created_at: string,
   updated_at: string,
-  steps? : {
-    [key: string]: {
-      step_id: string,
-      state: string,
-      job_id: string
-    }
+  steps : {
+    [key: string]: Step
   }
 }
 

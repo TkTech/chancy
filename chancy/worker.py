@@ -135,6 +135,12 @@ class Worker:
         Will run indefinitely, polling the queues for new jobs and running any
         configured plugins.
         """
+        for plugin in self.chancy.plugins:
+            self.add_plugin(plugin)
+            self.chancy.log.info(
+                f"Started plugin {plugin.__class__.__name__!r}"
+            )
+
         self.manager.add(self._maintain_queues(), name="queues")
         self.manager.add(self._maintain_updates(), name="updates")
         self.manager.add(self._maintain_heartbeat(), name="heartbeat")
@@ -146,15 +152,10 @@ class Worker:
                 self._maintain_notifications(), name="notifications"
             )
 
-        for plugin in self.chancy.plugins:
-            self.add_plugin(plugin)
-            self.chancy.log.info(
-                f"Started plugin {plugin.__class__.__name__!r}"
-            )
-
         try:
             await self.manager.run()
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            self.chancy.log.info("Attempting a clean shutdown of the worker...")
             clean = await self.manager.shutdown(timeout=self.shutdown_timeout)
             if not clean:
                 self.chancy.log.error(
