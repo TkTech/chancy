@@ -95,9 +95,13 @@ export function Workflow() {
                     )}
                   </td>
                   <td>
-                    <Link to={`/jobs/${step.job_id}`}>
-                      {step.job_id}
-                    </Link>
+                    {step.job_id ? (
+                      <Link to={`/jobs/${step.job_id}`}>
+                        {step.job_id}
+                      </Link>
+                    ) : (
+                      <span className="text-muted">Waiting for dependencies</span>
+                    )}
                   </td>
                 </tr>
               ))}
