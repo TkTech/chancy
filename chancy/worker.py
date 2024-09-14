@@ -293,8 +293,8 @@ class Worker:
             )
 
             for job in jobs:
-                self.chancy.log.debug(
-                    f"Found job {job.id}, pushing to executor."
+                self.chancy.log.info(
+                    f"Pulled {job.id!r} ({job.func!r}) for queue {job.queue!r}"
                 )
                 await executor.push(job)
 
