@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 from pytest_postgresql import factories
 
+import chancy.cli.misc
 from chancy import Chancy, Worker
 
 
@@ -33,9 +34,9 @@ async def chancy(request, postgresql):
         dsn=f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
         **getattr(request, "param", {}),
     ) as chancy:
-        await chancy.migrate()
+        await chancy.cli.misc.migrate()
         yield chancy
-        await chancy.migrate(to_version=0)
+        await chancy.cli.misc.migrate(to_version=0)
 
 
 @pytest.fixture

@@ -126,10 +126,10 @@ Quick Start
 
   .. code-block:: bash
 
-     chancy --app worker.chancy migrate
+     chancy --app worker.chancy misc migrate
      chancy --app worker.chancy queue declare default --concurrency 10
-     chancy --app worker.chancy push worker.hello_world --kwargs '{"name": "world"}' --queue default
-     chancy --app worker.chancy worker
+     chancy --app worker.chancy queue push worker.hello_world --kwargs '{"name": "world"}' --queue default
+     chancy --app worker.chancy worker start
 
 
 Congratulations! You've just run your first Chancy job.
