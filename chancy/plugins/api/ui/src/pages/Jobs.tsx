@@ -41,7 +41,7 @@ export function Job() {
           <tr>
             <th>Arguments</th>
             <td>
-              <pre className={"mb-0"}><code>{JSON.stringify(job.kwargs)}</code></pre>
+              <pre className={'mb-0'}><code>{JSON.stringify(job.kwargs)}</code></pre>
             </td>
           </tr>
           <tr>
@@ -98,6 +98,33 @@ export function Job() {
               </td>
             </tr>
           )}
+          <tr>
+            <th>Limits</th>
+            <td>
+              {job.limits.length === 0 ? (
+                <div className={'alert alert-info mb-0'}>
+                  No resource limits defined.
+                </div>
+              ) : (
+                <table className={'table table-sm mb-0'}>
+                  <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {job.limits.map(limit => (
+                    <tr key={limit.key}>
+                      <td>{limit.key}</td>
+                      <td>{limit.value}</td>
+                    </tr>
+                  ))}
+                  </tbody>
+                </table>
+              )}
+            </td>
+          </tr>
           </tbody>
         </table>
       </div>
@@ -106,10 +133,10 @@ export function Job() {
           <div className={'card-header bg-danger-subtle'}>
             Errors
           </div>
-          <ul className={"list-group list-group-flush"}>
+          <ul className={'list-group list-group-flush'}>
             {job.errors.map((error, index) => (
-              <li key={index} className={"list-group-item text-danger"}>
-                <div className={"mb-3 py-1 border-bottom"}>
+              <li key={index} className={'list-group-item text-danger'}>
+                <div className={'mb-3 py-1 border-bottom'}>
                   <strong>Attempt #{error.attempt}</strong>
                 </div>
                 <pre><code>{error.traceback}</code></pre>
@@ -122,8 +149,8 @@ export function Job() {
   );
 }
 
-export function Jobs () {
-  const { url } = useServerConfiguration();
+export function Jobs() {
+  const {url} = useServerConfiguration();
   const [searchParams, setSearchParams] = useSearchParams();
   const state = searchParams.get('state') || 'pending';
 
