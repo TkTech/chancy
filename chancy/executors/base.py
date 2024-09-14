@@ -80,6 +80,7 @@ class Executor(abc.ABC):
                 job,
                 state=JobInstance.State.SUCCEEDED,
                 completed_at=now,
+                attempts=job.attempts + 1,
             )
 
         # Each plugin has a chance to modify the job instance after it's
