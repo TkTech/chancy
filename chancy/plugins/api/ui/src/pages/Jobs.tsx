@@ -90,6 +90,14 @@ export function Job() {
               {job.scheduled_at}
             </td>
           </tr>
+          {job.unique_key && (
+            <tr>
+              <th>Unique Key</th>
+              <td>
+                <code>{job.unique_key}</code>
+              </td>
+            </tr>
+          )}
           </tbody>
         </table>
       </div>
