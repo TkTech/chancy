@@ -86,7 +86,13 @@ export function Workflow() {
                 <tr key={step_id}>
                   <td>{step_id}</td>
                   <td>
-                    <span className={`badge bg-${statusToColor(step.state)}`}>{step.state}</span>
+                    {step.state ? (
+                      <span className={`badge bg-${statusToColor(step.state)}`}>
+                        {step.state}
+                      </span>
+                    ) : (
+                      <span className="badge bg-secondary">Waiting</span>
+                    )}
                   </td>
                   <td>
                     <Link to={`/jobs/${step.job_id}`}>

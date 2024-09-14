@@ -29,15 +29,14 @@ const CustomNode = ({ data }: NodeProps<CustomNode>) => {
 
   return (
     <div ref={nodeRef} style={{
-      width: "350px",
-      height: "80px"
+      minWidth: "350px",
     }}>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
       <div className={`p-2 border text-center shadow ${data.color}`}>
         <div className={"fw-bolder"}>{data.label}</div>
         <div className="text-xs">{data.jobId || "-"}</div>
       </div>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   );
 };
@@ -48,14 +47,16 @@ const nodeTypes: NodeTypes = {
 
 const getNodeColor = (state: string): string => {
   switch (state) {
-    case 'succeeded': return 'bg-success';
-    case 'running': return 'bg-primary';
-    case 'failed': return 'bg-danger';
-    default: return 'bg-gray-500';
+    case 'succeeded': return 'bg-success text-dark';
+    case 'pending': return 'bg-info text-dark';
+    case 'running': return 'bg-primary text-dark';
+    case 'failed': return 'bg-danger text-dark';
+    case 'retrying': return 'bg-warning text-dark';
+    default: return 'bg-secondary text-muted';
   }
 };
 
-const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
+const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
