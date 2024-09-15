@@ -1,13 +1,10 @@
 import asyncio
 import functools
 import logging
-import time
-from abc import abstractmethod, ABC
 from typing import Any, Iterator
 from functools import cached_property, cache
 
 from psycopg import sql, Cursor, AsyncCursor
-from psycopg.cursor import BaseCursor
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool, ConnectionPool
@@ -36,13 +33,44 @@ def _setup_default_logger():
     return logger
 
 
-class BaseChancy(ABC):
+class Chancy:
     """
-    The base class for the Chancy application.
+    A Chancy application, along with all of its configuration and common
+    functionality.
 
-    Don't use this directly - instead, use the :py:class:`Chancy` or
-    :py:class:`SyncChancy` class depending on whether you need an asyncio
-    compatible interface or not.
+    Chancy is asyncio-first, and all of its methods are async by default:
+
+    .. code-block:: python
+
+        import asyncio
+        from chancy import Chancy, Job, Queue
+
+        def my_job():
+            print("Hello, world!")
+
+        async def main():
+            async with Chancy("postgresql://localhost/chancy") as chancy:
+                await chancy.migrate()
+                await chancy.declare(Queue("default"))
+                await chancy.push(Job.from_func(my_job))
+
+        asyncio.run(main())
+
+    Chancy does also provide a minimal synchronous interface for pushing jobs
+    onto the queue for codebases that are not using asyncio:
+
+    .. code-block:: python
+
+        from chancy import Chancy, Job, Queue
+
+        def my_job():
+            print("Hello, world!")
+
+        with Chancy("postgresql://localhost/chancy") as chancy:
+            chancy.sync_push(Job.from_func(my_job))
+
+    And of course, it's just Postgres under the hood, so you can always just
+    insert jobs directly into the database if you're feeling brave.
 
     :param dsn: The DSN to connect to the database.
     :param plugins: The plugins to use with the application.
@@ -58,6 +86,58 @@ class BaseChancy(ABC):
         postgres's NOTIFY/LISTEN feature.
     :param log: The logger to use for all application logging.
     """
+
+    @staticmethod
+    def _ensure_pool_is_open(f):
+        """
+        A decorator which ensures the connection pool is open before calling
+        the wrapped function.
+
+        It's never ideal to rely on this, since it will never _close_ the pool,
+        but users expect to be able to just call push() and have it work.
+        """
+
+        @functools.wraps(f)
+        async def wrapper(self, *args, **kwargs):
+            await self.pool.open()
+            return await f(self, *args, **kwargs)
+
+        return wrapper
+
+    @staticmethod
+    def _ensure_sync_pool_is_open(f):
+        """
+        A decorator which ensures the connection pool is open before calling
+        the wrapped function.
+
+        It's never ideal to rely on this, since it will never _close_ the pool,
+        but users expect to be able to just call push() and have it work.
+        """
+
+        @functools.wraps(f)
+        def wrapper(self, *args, **kwargs):
+            self.sync_pool.open()
+            return f(self, *args, **kwargs)
+
+        return wrapper
+
+    @staticmethod
+    def _ensure_pool_is_open_async_iter(f):
+        """
+        A decorator which ensures the connection pool is open before calling
+        the wrapped function.
+
+        It's never ideal to rely on this, since it will never _close_ the pool,
+        but users expect to be able to just call push() and have it work.
+        """
+
+        @functools.wraps(f)
+        async def wrapper(self, *args, **kwargs):
+            await self.pool.open()
+            async for record in f(self, *args, **kwargs):
+                yield record
+
+        return wrapper
 
     def __init__(
         self,
@@ -91,8 +171,57 @@ class BaseChancy(ABC):
         #: The logger to use for all application logging.
         self.log = log or _setup_default_logger()
 
-    @abstractmethod
-    def migrate(self, *, to_version: int | None = None):
+    async def __aiter__(self):
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(self._get_all_queues_sql())
+                async for record in cursor:
+                    yield Queue.unpack(record)
+
+    async def __aenter__(self):
+        await self.pool.open()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.pool.close()
+
+    def __enter__(self):
+        self.sync_pool.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.sync_pool.close()
+        return False
+
+    @cached_property
+    def pool(self) -> AsyncConnectionPool:
+        """
+        The asyncio connection pool used to interact with the database.
+        """
+        return AsyncConnectionPool(
+            self.dsn,
+            min_size=self.min_connection_pool_size,
+            max_size=self.max_connection_pool_size,
+            reconnect_timeout=self.poll_reconnect_timeout,
+            # Opening the pool here is deprecated, and should be done
+            # explicitly by the user with a context manager or open/close.
+            open=False,
+        )
+
+    @cached_property
+    def sync_pool(self) -> ConnectionPool:
+        """
+        The synchronous connection pool used to interact with the database.
+        """
+        return ConnectionPool(
+            self.dsn,
+            min_size=self.min_connection_pool_size,
+            max_size=self.max_connection_pool_size,
+            reconnect_timeout=self.poll_reconnect_timeout,
+        )
+
+    @_ensure_pool_is_open
+    async def migrate(self, *, to_version: int | None = None):
         """
         Migrate the database to the latest version.
 
@@ -108,9 +237,15 @@ class BaseChancy(ABC):
         :param to_version: The version to migrate to. If not provided, the
             database will be migrated to the latest version.
         """
+        migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
+        async with self.pool.connection() as conn:
+            await migrator.migrate(conn, to_version=to_version)
 
-    @abstractmethod
-    def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
+        for plugin in self.plugins:
+            await plugin.migrate(self, to_version=to_version)
+
+    @_ensure_pool_is_open
+    async def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
         """
         Declare a queue in the database.
 
@@ -138,9 +273,50 @@ class BaseChancy(ABC):
             exists. Defaults to `False`.
         :return: The queue as it exists in the database.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                return await self.declare_ex(cursor, queue, upsert=upsert)
 
-    @abstractmethod
-    def push(self, job: Job) -> Reference:
+    async def declare_ex(
+        self, cursor: AsyncCursor, queue: Queue, *, upsert: bool = False
+    ) -> Queue:
+        """
+        Declare a queue in the database using a specific cursor.
+
+        This is a low-level method that allows for more control over the
+        database connection and transaction management. It is recommended to
+        use the higher-level `declare` method in most cases.
+        """
+        await cursor.execute(
+            self._declare_sql(upsert),
+            {
+                "name": queue.name,
+                "state": queue.state.value,
+                "concurrency": queue.concurrency,
+                "tags": list(queue.tags),
+                "executor": queue.executor,
+                "executor_options": Json(queue.executor_options),
+                "polling_interval": queue.polling_interval,
+                "rate_limit": queue.rate_limit,
+                "rate_limit_window": queue.rate_limit_window,
+            },
+        )
+
+        result = await cursor.fetchone()
+        return Queue(
+            name=queue.name,
+            state=result[0],
+            concurrency=result[1],
+            tags=set(result[2]),
+            polling_interval=result[3],
+            executor=result[4],
+            executor_options=result[5],
+            rate_limit=result[6],
+            rate_limit_window=result[7],
+        )
+
+    @_ensure_pool_is_open
+    async def push(self, job: Job) -> Reference:
         """
         Push a job onto the queue.
 
@@ -157,9 +333,32 @@ class BaseChancy(ABC):
         :param job: The job to push onto the queue.
         :return: A reference to the job in the queue.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                return (await self.push_many_ex(cursor, [job]))[0]
 
-    @abstractmethod
-    def push_many(
+    @_ensure_sync_pool_is_open
+    def sync_push(self, job: Job) -> Reference:
+        """
+        Synchronously push a job onto the queue.
+
+        This method provides a synchronous interface to push a job onto the
+        queue.
+
+        .. code-block:: python
+
+            with Chancy("postgresql://localhost/chancy") as chancy:
+                chancy.sync_push(Job.from_func(my_job))
+
+        :param job: The job to push onto the queue.
+        :return: A reference to the job in the queue.
+        """
+        with self.sync_pool.connection() as conn:
+            with conn.cursor() as cursor:
+                return self.sync_push_many_ex(cursor, [job])[0]
+
+    @_ensure_pool_is_open_async_iter
+    async def push_many(
         self, jobs: list[Job], *, batch_size: int = 1000
     ) -> Iterator[list[Reference]]:
         """
@@ -179,10 +378,38 @@ class BaseChancy(ABC):
             to 1000.
         :return: An iterator of lists of references to the jobs in the queue.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                for chunk in chunked(jobs, batch_size):
+                    async with conn.transaction():
+                        yield await self.push_many_ex(cursor, chunk)
 
-    @abstractmethod
-    def push_many_ex(
-        self, cursor: BaseCursor, jobs: list[Job]
+    @_ensure_sync_pool_is_open
+    def sync_push_many(
+        self, jobs: list[Job], *, batch_size: int = 1000
+    ) -> Iterator[list[Reference]]:
+        """
+        Synchronously push multiple jobs onto the queue.
+
+        This method provides a synchronous interface to push multiple jobs onto
+        the queue.
+
+        Returns an iterator of lists of references to the jobs in the queue,
+        one list per batch.
+
+        :param jobs: The jobs to push onto the queue.
+        :param batch_size: The number of jobs to push in each batch. Defaults
+            to 1000.
+        :return: An iterator of lists of references to the jobs in the queue.
+        """
+        with self.sync_pool.connection() as conn:
+            with conn.cursor() as cursor:
+                for chunk in chunked(jobs, batch_size):
+                    with conn.transaction():
+                        yield self.sync_push_many_ex(cursor, chunk)
+
+    async def push_many_ex(
+        self, cursor: AsyncCursor, jobs: list[Job]
     ) -> list[Reference]:
         """
         Push multiple jobs onto the queue using a specific cursor.
@@ -200,29 +427,66 @@ class BaseChancy(ABC):
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
+        references = []
+        for job in jobs:
+            await cursor.execute(
+                self._push_job_sql(),
+                self._get_job_params(job),
+            )
+            record = await cursor.fetchone()
+            references.append(Reference(record[0]))
 
-    @abstractmethod
-    def declare_ex(
-        self, cursor: BaseCursor, queue: Queue, *, upsert: bool = False
-    ) -> Queue:
+        if self.notifications:
+            for queue in set(job.queue for job in jobs):
+                await self.notify(cursor, "queue.pushed", {"q": queue})
+
+        return references
+
+    def sync_push_many_ex(
+        self, cursor: Cursor, jobs: list[Job]
+    ) -> list[Reference]:
         """
-        Declare a queue in the database using a specific cursor.
+        Synchronously push multiple jobs onto the queue using a specific cursor.
 
         This is a low-level method that allows for more control over the
         database connection and transaction management. It is recommended to
-        use the higher-level `declare` method in most cases.
-        """
+        use the higher-level `sync_push_many` method in most cases.
 
-    @abstractmethod
-    def get_job(self, ref: Reference) -> JobInstance | None:
+        :param cursor: The cursor to use for the operation.
+        :param jobs: The jobs to push onto the queue.
+        :return: A list of references to the jobs in the queue.
+        """
+        references = []
+        for job in jobs:
+            cursor.execute(
+                self._push_job_sql(),
+                self._get_job_params(job),
+            )
+            record = cursor.fetchone()
+            references.append(Reference(record[0]))
+
+        if self.notifications:
+            for queue in set(job.queue for job in jobs):
+                self.sync_notify(cursor, "queue.pushed", {"q": queue})
+
+        return references
+
+    @_ensure_pool_is_open
+    async def get_job(self, ref: Reference) -> JobInstance | None:
         """
         Resolve a reference to a job instance.
 
         If the job no longer exists, returns ``None``.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(self._get_job_sql(), [ref.identifier])
+                record = await cursor.fetchone()
+                if record is None:
+                    raise KeyError(f"Job {ref.identifier} not found.")
+                return JobInstance.unpack(record)
 
-    @abstractmethod
-    def wait_for_job(
+    async def wait_for_job(
         self, ref: Reference, *, interval: int = 1
     ) -> JobInstance | None:
         """
@@ -234,35 +498,86 @@ class BaseChancy(ABC):
 
         If the job no longer exists, returns ``None``.
         """
+        while True:
+            job = await self.get_job(ref)
+            if job is None or job.state in {
+                JobInstance.State.SUCCEEDED,
+                JobInstance.State.FAILED,
+            }:
+                return job
+            await asyncio.sleep(interval)
 
-    @abstractmethod
-    def get_all_queues(self) -> list[Queue]:
+    @_ensure_pool_is_open
+    async def get_all_queues(self) -> list[Queue]:
         """
         Get all queues known to the cluster, regardless of their status
         or if they're assigned to any workers.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(self._get_all_queues_sql())
+                return [Queue.unpack(record) async for record in cursor]
 
-    @abstractmethod
-    def get_queue(self, name: str) -> Queue:
+    @_ensure_pool_is_open
+    async def get_queue(self, name: str) -> Queue:
         """
         Get a specific queue by name.
 
         :param name: The name of the queue to retrieve.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(self._get_queue_sql(), [name])
+                record = await cursor.fetchone()
+                if record is None:
+                    raise KeyError(f"Queue {name!r} not found.")
+                return Queue.unpack(record)
 
-    @abstractmethod
-    def delete_queue(self, name: str):
+    async def delete_queue(self, name: str):
         """
         Delete a queue by name.
 
         :param name: The name of the queue to delete.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        DELETE FROM {queues}
+                        WHERE name = %s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    [name],
+                )
 
-    @abstractmethod
-    def get_all_workers(self) -> list[dict[str, Any]]:
+    @_ensure_pool_is_open
+    async def get_all_workers(self) -> list[dict[str, Any]]:
         """
         Get all workers known to the cluster, regardless of their status.
         """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(self._get_all_workers_sql())
+                return [record async for record in cursor]
+
+    async def notify(self, cursor, event: str, payload: dict[str, Any]):
+        await cursor.execute(
+            "SELECT pg_notify(%s, %s)",
+            [
+                f"{self.prefix}events",
+                json_dumps({"t": event, **payload}),
+            ],
+        )
+
+    def sync_notify(self, cursor: Cursor, event: str, payload: dict[str, Any]):
+        cursor.execute(
+            "SELECT pg_notify(%s, %s)",
+            [
+                f"{self.prefix}events",
+                json_dumps({"t": event, **payload}),
+            ],
+        )
 
     def _get_all_workers_sql(self):
         return sql.SQL(
@@ -409,463 +724,23 @@ class BaseChancy(ABC):
             action=action,
         )
 
-
-class SyncChancy(BaseChancy):
-    """
-    A synchronous version of the Chancy application.
-
-    This class provides a synchronous interface to the Chancy application, which
-    can be used in non-asyncio codebases or for pushing jobs from synchronous
-    code. It is recommended to use the async version of the Chancy application
-    whenever possible.
-
-    .. code-block:: python
-
-        from chancy import SyncChancy, Job, Queue
-
-        with SyncChancy("postgresql://localhost/chancy") as chancy:
-            chancy.migrate()
-            chancy.declare(Queue("default"))
-
-    """
-
     @staticmethod
-    def _ensure_pool_is_open(f):
+    def _get_job_params(job: Job) -> dict:
         """
-        A decorator which ensures the connection pool is open before calling
-        the wrapped function.
+        Get the parameters for a job to be inserted into the database.
 
-        It's never ideal to rely on this, since it will never _close_ the pool,
-        but users expect to be able to just call push() and have it work.
+        :param job: The job to get parameters for.
+        :return: A dictionary of parameters for the job.
         """
-
-        @functools.wraps(f)
-        def wrapper(self, *args, **kwargs):
-            self.pool.open()
-            return f(self, *args, **kwargs)
-
-        return wrapper
-
-    @cached_property
-    def pool(self):
-        return ConnectionPool(
-            self.dsn,
-            min_size=self.min_connection_pool_size,
-            max_size=self.max_connection_pool_size,
-            reconnect_timeout=self.poll_reconnect_timeout,
-        )
-
-    def __enter__(self):
-        self.pool.open()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.pool.close()
-        return False
-
-    @_ensure_pool_is_open
-    def migrate(self, *, to_version: int | None = None):
-        raise NotImplementedError(
-            "Migrations are not supported in the synchronous version of"
-            " the Chancy application."
-        )
-
-    @_ensure_pool_is_open
-    def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
-        with self.pool.connection() as conn:
-            with conn.cursor() as cursor:
-                return self.declare_ex(cursor, queue, upsert=upsert)
-
-    def declare_ex(
-        self, cursor: Cursor, queue: Queue, *, upsert: bool = False
-    ) -> Queue:
-        cursor.execute(
-            self._declare_sql(upsert),
-            {
-                "name": queue.name,
-                "state": queue.state.value,
-                "concurrency": queue.concurrency,
-                "tags": list(queue.tags),
-                "executor": queue.executor,
-                "executor_options": Json(queue.executor_options),
-                "polling_interval": queue.polling_interval,
-                "rate_limit": queue.rate_limit,
-                "rate_limit_window": queue.rate_limit_window,
-            },
-        )
-
-        result = cursor.fetchone()
-        return Queue(
-            name=queue.name,
-            state=result[0],
-            concurrency=result[1],
-            tags=set(result[2]),
-            polling_interval=result[3],
-            executor=result[4],
-            executor_options=result[5],
-            rate_limit=result[6],
-            rate_limit_window=result[7],
-        )
-
-    @_ensure_pool_is_open
-    def push(self, job: Job) -> Reference:
-        with self.pool.connection() as conn:
-            with conn.cursor() as cursor:
-                return self.push_many_ex(cursor, [job])[0]
-
-    @_ensure_pool_is_open
-    def push_many(
-        self, jobs: list[Job], *, batch_size: int = 1000
-    ) -> Iterator[list[Reference]]:
-        with self.pool.connection() as conn:
-            with conn.cursor() as cursor:
-                for chunk in chunked(jobs, batch_size):
-                    with conn.transaction():
-                        yield self.push_many_ex(cursor, chunk)
-
-    def push_many_ex(self, cursor: Cursor, jobs: list[Job]) -> list[Reference]:
-        references = []
-        for job in jobs:
-            cursor.execute(
-                self._push_job_sql(),
-                {
-                    "id": chancy_uuid(),
-                    "queue": job.queue,
-                    "func": job.func,
-                    "kwargs": Json(job.kwargs or {}),
-                    "limits": Json([limit.serialize() for limit in job.limits]),
-                    "meta": Json(job.meta),
-                    "priority": job.priority,
-                    "max_attempts": job.max_attempts,
-                    "scheduled_at": job.scheduled_at,
-                    "unique_key": job.unique_key,
-                },
-            )
-            record = cursor.fetchone()
-            references.append(Reference(record[0]))
-
-        if self.notifications:
-            for queue in set(job.queue for job in jobs):
-                self.notify(cursor, "queue.pushed", {"q": queue})
-
-        return references
-
-    @_ensure_pool_is_open
-    def get_job(self, ref: Reference) -> JobInstance:
-        with self.pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                cursor.execute(self._get_job_sql(), [ref.identifier])
-                record = cursor.fetchone()
-                if record is None:
-                    raise KeyError(f"Job {ref.identifier} not found.")
-                return JobInstance.unpack(record)
-
-    def wait_for_job(
-        self, ref: Reference, *, interval: int = 1
-    ) -> JobInstance | None:
-        while True:
-            job = self.get_job(ref)
-            if job is None or job.state in {
-                JobInstance.State.SUCCEEDED,
-                JobInstance.State.FAILED,
-            }:
-                return job
-            time.sleep(interval)
-
-    @_ensure_pool_is_open
-    def get_all_queues(self) -> list[Queue]:
-        with self.pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                cursor.execute(self._get_all_queues_sql())
-                return [Queue.unpack(record) for record in cursor]
-
-    @_ensure_pool_is_open
-    def get_queue(self, name: str) -> Queue:
-        with self.pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                cursor.execute(self._get_queue_sql(), [name])
-                record = cursor.fetchone()
-                if record is None:
-                    raise KeyError(f"Queue {name!r} not found.")
-                return Queue.unpack(record)
-
-    @_ensure_pool_is_open
-    def delete_queue(self, name: str):
-        with self.pool.connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    sql.SQL(
-                        """
-                        DELETE FROM {queues}
-                        WHERE name = %s
-                        """
-                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
-                    [name],
-                )
-
-    @_ensure_pool_is_open
-    def get_all_workers(self) -> list[dict[str, Any]]:
-        with self.pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                cursor.execute(self._get_all_workers_sql())
-                return [record for record in cursor]
-
-    def __iter__(self):
-        return iter(self.get_all_queues())
-
-    def notify(self, cursor, event: str, payload: dict[str, Any]):
-        cursor.execute(
-            "SELECT pg_notify(%s, %s)",
-            [
-                f"{self.prefix}events",
-                json_dumps({"t": event, **payload}),
-            ],
-        )
-
-
-class Chancy(BaseChancy):
-    """
-    An asyncio-compatible version of the Chancy application.
-
-    When possible, this is the preferred version of the Chancy application to
-    use, as it allows for more efficient use of system resources and better
-    integration with other asyncio-based libraries.
-
-    .. code-block:: python
-
-        import asyncio
-        from chancy import Chancy, Job, Queue
-
-        def my_job():
-            print("Hello, world!")
-
-        async def main():
-            async with Chancy("postgresql://localhost/chancy") as chancy:
-                await chancy.migrate()
-                await chancy.declare(Queue("default"))
-                await chancy.push(Job.from_func(my_job))
-
-        asyncio.run(main())
-    """
-
-    @staticmethod
-    def _ensure_pool_is_open(f):
-        """
-        A decorator which ensures the connection pool is open before calling
-        the wrapped function.
-
-        It's never ideal to rely on this, since it will never _close_ the pool,
-        but users expect to be able to just call push() and have it work.
-        """
-
-        @functools.wraps(f)
-        async def wrapper(self, *args, **kwargs):
-            await self.pool.open()
-            return await f(self, *args, **kwargs)
-
-        return wrapper
-
-    @staticmethod
-    def _ensure_pool_is_open_async_iter(f):
-        """
-        A decorator which ensures the connection pool is open before calling
-        the wrapped function.
-
-        It's never ideal to rely on this, since it will never _close_ the pool,
-        but users expect to be able to just call push() and have it work.
-        """
-
-        @functools.wraps(f)
-        async def wrapper(self, *args, **kwargs):
-            await self.pool.open()
-            async for record in f(self, *args, **kwargs):
-                yield record
-
-        return wrapper
-
-    @cached_property
-    def pool(self):
-        return AsyncConnectionPool(
-            self.dsn,
-            min_size=self.min_connection_pool_size,
-            max_size=self.max_connection_pool_size,
-            reconnect_timeout=self.poll_reconnect_timeout,
-            # Opening the pool here is deprecated, and should be done
-            # explicitly by the user with a context manager or open/close.
-            open=False,
-        )
-
-    async def __aenter__(self):
-        await self.pool.open()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.pool.close()
-        return False
-
-    @_ensure_pool_is_open
-    async def migrate(self, *, to_version: int | None = None):
-        migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
-        async with self.pool.connection() as conn:
-            await migrator.migrate(conn, to_version=to_version)
-
-        for plugin in self.plugins:
-            await plugin.migrate(self, to_version=to_version)
-
-    @_ensure_pool_is_open
-    async def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                return await self.declare_ex(cursor, queue, upsert=upsert)
-
-    async def declare_ex(
-        self, cursor: AsyncCursor, queue: Queue, *, upsert: bool = False
-    ) -> Queue:
-        await cursor.execute(
-            self._declare_sql(upsert),
-            {
-                "name": queue.name,
-                "state": queue.state.value,
-                "concurrency": queue.concurrency,
-                "tags": list(queue.tags),
-                "executor": queue.executor,
-                "executor_options": Json(queue.executor_options),
-                "polling_interval": queue.polling_interval,
-                "rate_limit": queue.rate_limit,
-                "rate_limit_window": queue.rate_limit_window,
-            },
-        )
-
-        result = await cursor.fetchone()
-        return Queue(
-            name=queue.name,
-            state=result[0],
-            concurrency=result[1],
-            tags=set(result[2]),
-            polling_interval=result[3],
-            executor=result[4],
-            executor_options=result[5],
-            rate_limit=result[6],
-            rate_limit_window=result[7],
-        )
-
-    @_ensure_pool_is_open
-    async def push(self, job: Job) -> Reference:
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                return (await self.push_many_ex(cursor, [job]))[0]
-
-    @_ensure_pool_is_open_async_iter
-    async def push_many(
-        self, jobs: list[Job], *, batch_size: int = 1000
-    ) -> Iterator[list[Reference]]:
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                for chunk in chunked(jobs, batch_size):
-                    async with conn.transaction():
-                        yield await self.push_many_ex(cursor, chunk)
-
-    async def push_many_ex(
-        self, cursor: AsyncCursor, jobs: list[Job]
-    ) -> list[Reference]:
-        references = []
-        for job in jobs:
-            await cursor.execute(
-                self._push_job_sql(),
-                {
-                    "id": chancy_uuid(),
-                    "queue": job.queue,
-                    "func": job.func,
-                    "kwargs": Json(job.kwargs or {}),
-                    "limits": Json([limit.serialize() for limit in job.limits]),
-                    "meta": Json(job.meta),
-                    "priority": job.priority,
-                    "max_attempts": job.max_attempts,
-                    "scheduled_at": job.scheduled_at,
-                    "unique_key": job.unique_key,
-                },
-            )
-            record = await cursor.fetchone()
-            references.append(Reference(record[0]))
-
-        if self.notifications:
-            for queue in set(job.queue for job in jobs):
-                await self.notify(cursor, "queue.pushed", {"q": queue})
-
-        return references
-
-    @_ensure_pool_is_open
-    async def get_job(self, ref: Reference) -> JobInstance:
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_job_sql(), [ref.identifier])
-                record = await cursor.fetchone()
-                if record is None:
-                    raise KeyError(f"Job {ref.identifier} not found.")
-                return JobInstance.unpack(record)
-
-    async def wait_for_job(
-        self, ref: Reference, *, interval: int = 1
-    ) -> JobInstance | None:
-        while True:
-            job = await self.get_job(ref)
-            if job is None or job.state in {
-                JobInstance.State.SUCCEEDED,
-                JobInstance.State.FAILED,
-            }:
-                return job
-            await asyncio.sleep(interval)
-
-    @_ensure_pool_is_open
-    async def get_all_queues(self) -> list[Queue]:
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_all_queues_sql())
-                return [Queue.unpack(record) async for record in cursor]
-
-    @_ensure_pool_is_open
-    async def get_queue(self, name: str) -> Queue:
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_queue_sql(), [name])
-                record = await cursor.fetchone()
-                if record is None:
-                    raise KeyError(f"Queue {name!r} not found.")
-                return Queue.unpack(record)
-
-    @_ensure_pool_is_open
-    async def delete_queue(self, name: str):
-        async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        DELETE FROM {queues}
-                        WHERE name = %s
-                        """
-                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
-                    [name],
-                )
-
-    @_ensure_pool_is_open
-    async def get_all_workers(self) -> list[dict[str, Any]]:
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_all_workers_sql())
-                return [record async for record in cursor]
-
-    async def __aiter__(self):
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_all_queues_sql())
-                async for record in cursor:
-                    yield Queue.unpack(record)
-
-    async def notify(self, cursor, event: str, payload: dict[str, Any]):
-        await cursor.execute(
-            "SELECT pg_notify(%s, %s)",
-            [
-                f"{self.prefix}events",
-                json_dumps({"t": event, **payload}),
-            ],
-        )
+        return {
+            "id": chancy_uuid(),
+            "queue": job.queue,
+            "func": job.func,
+            "kwargs": Json(job.kwargs or {}),
+            "limits": Json([limit.serialize() for limit in job.limits]),
+            "meta": Json(job.meta),
+            "priority": job.priority,
+            "max_attempts": job.max_attempts,
+            "scheduled_at": job.scheduled_at,
+            "unique_key": job.unique_key,
+        }

@@ -11,7 +11,6 @@ Key Features:
   global rate limits, memory limits, and more.
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
-- asyncio & sync APIs for easy integration with existing codebases
 - Plugins for a :class:`dashboard<chancy.plugins.api.Api>`,
   :class:`workflows<chancy.plugins.workflow.WorkflowPlugin>`,
   :class:`cron jobs<chancy.plugins.cron.Cron>`, and more
