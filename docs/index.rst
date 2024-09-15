@@ -3,12 +3,6 @@ Chancy
 
 A postgres-backed task queue for Python.
 
-.. warning::
-
-  This project is currently in the early stages of development and its
-  API may change often. Use at your own risk. It's practically guaranteed
-  to have bugs and missing features.
-
 
 Key Features:
 -------------
@@ -160,6 +154,7 @@ Similar Projects
    :caption: Contents:
    :hidden:
 
+   howto/index
    chancy
 
 
