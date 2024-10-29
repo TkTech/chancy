@@ -2,7 +2,6 @@ import asyncio
 
 from chancy.executors.base import Executor
 from chancy.job import JobInstance, Limit
-from chancy.utils import import_string
 
 
 class AsyncExecutor(Executor):
