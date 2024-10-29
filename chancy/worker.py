@@ -16,7 +16,7 @@ from chancy.app import Chancy
 from chancy.hub import Hub
 from chancy.queue import Queue
 from chancy.utils import TaskManager, import_string
-from chancy.job import JobInstance
+from chancy.job import QueuedJob
 
 
 class Worker:
@@ -490,7 +490,7 @@ class Worker:
             *self._extra_tags,
         }
 
-    async def queue_update(self, update: JobInstance):
+    async def queue_update(self, update: QueuedJob):
         """
         Enqueue an update to a job instance.
 
@@ -509,12 +509,12 @@ class Worker:
         conn: AsyncConnection,
         *,
         up_to: int = 1,
-    ) -> list[JobInstance]:
+    ) -> list[QueuedJob]:
         """
         Fetch jobs from the queue for processing.
 
         This method will fetch up to `up_to` jobs from the queue, mark them as
-        running, and return them as a list of `JobInstance` objects. If no jobs
+        running, and return them as a list of `QueuedJob` objects. If no jobs
         are available, an empty list will be returned.
 
         It's safe to call this method concurrently, as the jobs will be locked
@@ -634,7 +634,7 @@ class Worker:
                         (len(records), queue.name),
                     )
 
-                return [JobInstance.unpack(record) for record in records]
+                return [QueuedJob.unpack(record) for record in records]
 
     def register_signal_handlers(self):
         """

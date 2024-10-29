@@ -3,7 +3,7 @@ import enum
 import asyncio
 import typing
 
-from chancy.job import JobInstance
+from chancy.job import QueuedJob
 from chancy.migrate import Migrator
 
 if typing.TYPE_CHECKING:
@@ -138,19 +138,19 @@ class Plugin(abc.ABC):
 
     async def on_job_completed(
         self,
-        job: JobInstance,
+        job: QueuedJob,
         worker: "Worker",
         *,
         exc: Exception | None = None,
-    ) -> JobInstance:
+    ) -> QueuedJob:
         """
         Called after a job is completed (successfully or otherwise) and before
-        the JobInstance is updated in the database.
+        the QueuedJob is updated in the database.
 
         If an exception occurred during the job, `exc` will be the exception
         instance instead of ``None``.
 
-        The passed job is immutable - to modify it, return a new JobInstance
+        The passed job is immutable - to modify it, return a new QueuedJob
         object with the desired changes.
         """
         raise NotImplementedError()

@@ -306,7 +306,7 @@ class Job:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class JobInstance(Job):
+class QueuedJob(Job):
     """
     A job instance is a job that has been pushed onto a queue and now has
     stateful information associated with it, such as the number of attempts
@@ -334,7 +334,7 @@ class JobInstance(Job):
     errors: list[ErrorT] = dataclasses.field(default_factory=list)
 
     @classmethod
-    def unpack(cls, data: dict) -> "JobInstance":
+    def unpack(cls, data: dict) -> "QueuedJob":
         return cls(
             id=data["id"],
             func=data["func"],
@@ -345,7 +345,7 @@ class JobInstance(Job):
             completed_at=data["completed_at"],
             attempts=data["attempts"],
             max_attempts=data["max_attempts"],
-            state=JobInstance.State(data["state"]),
+            state=QueuedJob.State(data["state"]),
             unique_key=data["unique_key"],
             queue=data["queue"],
             errors=data["errors"],

@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, Job, JobInstance
+from chancy import Chancy, Worker, Queue, Job, QueuedJob
 
 
 def job_to_run():
@@ -13,11 +13,11 @@ async def async_job_to_run():
     pass
 
 
-def job_with_instance(*, job: JobInstance):
+def job_with_instance(*, job: QueuedJob):
     job.meta["received_instance"] = True
 
 
-async def async_job_with_instance(*, job: JobInstance):
+async def async_job_with_instance(*, job: QueuedJob):
     job.meta["received_instance"] = True
 
 
@@ -76,7 +76,7 @@ async def test_job_instance_kwarg(
     chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
 ):
     """
-    Test that jobs requesting a JobInstance kwarg receive the correct instance.
+    Test that jobs requesting a QueuedJob kwarg receive the correct instance.
     """
     await chancy.declare(Queue("low", executor=executor))
 
@@ -98,7 +98,7 @@ async def test_async_job_instance_kwarg(
     chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
 ):
     """
-    Test that async jobs requesting a JobInstance kwarg receive the correct
+    Test that async jobs requesting a QueuedJob kwarg receive the correct
     instance.
     """
     await chancy.declare(Queue("low", executor=executor))

@@ -3,7 +3,7 @@ import code
 
 import click
 
-from chancy import Chancy, Worker, Job, JobInstance, Limit, Reference, Queue
+from chancy import Chancy, Worker, Job, QueuedJob, Limit, Reference, Queue
 from chancy.cli import run_async_command
 
 
@@ -54,7 +54,7 @@ async def shell(ctx):
                 "chancy": chancy,
                 "Worker": Worker,
                 "Job": Job,
-                "JobInstance": JobInstance,
+                "QueuedJob": QueuedJob,
                 "Limit": Limit,
                 "Reference": Reference,
                 "Queue": Queue,

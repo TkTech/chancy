@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import pytest
 
-from chancy import Worker, Chancy, Job, Queue, JobInstance
+from chancy import Worker, Chancy, Job, Queue, QueuedJob
 from chancy.retry import Retry
 
 
@@ -11,7 +11,7 @@ def job_that_succeeds():
     return "success"
 
 
-def fail_then_succeed(*, job: JobInstance):
+def fail_then_succeed(*, job: QueuedJob):
     """Job that fails on first attempt but succeeds on retry"""
     if job.attempts == 0:
         raise ValueError("First attempt fails")
@@ -28,7 +28,7 @@ def job_with_explicit_retry():
     raise Retry(max_attempts=3, backoff=1, backoff_factor=2)
 
 
-def eventual_success(*, job: JobInstance):
+def eventual_success(*, job: QueuedJob):
     """Job that eventually succeeds after multiple retries"""
     if job.attempts < 2:
         raise Retry(max_attempts=3)
@@ -66,7 +66,7 @@ async def test_automatic_retry_on_failure(
     ref = await chancy.push(job)
     final_job = await chancy.wait_for_job(ref)
 
-    assert final_job.state == JobInstance.State.SUCCEEDED
+    assert final_job.state == QueuedJob.State.SUCCEEDED
     assert final_job.attempts == 2
     assert len(final_job.errors) == 1
     assert "First attempt fails" in final_job.errors[0]["traceback"]
@@ -84,7 +84,7 @@ async def test_max_attempts(
     ref = await chancy.push(job)
     final_job = await chancy.wait_for_job(ref)
 
-    assert final_job.state == JobInstance.State.FAILED
+    assert final_job.state == QueuedJob.State.FAILED
     assert final_job.attempts == 3
     assert len(final_job.errors) == 3
 
@@ -101,7 +101,7 @@ async def test_explicit_retry(
     ref = await chancy.push(job)
     final_job = await chancy.wait_for_job(ref)
 
-    assert final_job.state == JobInstance.State.FAILED
+    assert final_job.state == QueuedJob.State.FAILED
     assert final_job.attempts == 3
     assert "retry_count" in final_job.meta
 
@@ -118,7 +118,7 @@ async def test_increase_max_attempts(
     ref = await chancy.push(job)
     final_job = await chancy.wait_for_job(ref)
 
-    assert final_job.state == JobInstance.State.SUCCEEDED
+    assert final_job.state == QueuedJob.State.SUCCEEDED
     assert final_job.attempts == 3
     assert final_job.max_attempts == 3
 
@@ -157,7 +157,7 @@ async def test_retry_with_custom_max_attempts(
     ref = await chancy.push(job)
     final_job = await chancy.wait_for_job(ref)
 
-    assert final_job.state == JobInstance.State.FAILED
+    assert final_job.state == QueuedJob.State.FAILED
     assert final_job.max_attempts == 2
 
 

@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
 from chancy.executors.base import Executor
-from chancy.job import JobInstance, Limit
+from chancy.job import QueuedJob, Limit
 
 
 class _TimeoutThread(threading.Thread):
@@ -70,7 +70,7 @@ class ProcessExecutor(Executor):
     def __init__(self, worker, queue, *, maximum_jobs_per_worker: int = 100):
         super().__init__(worker, queue)
 
-        self.processes: dict[Future, JobInstance] = {}
+        self.processes: dict[Future, QueuedJob] = {}
         self.pool = ProcessPoolExecutor(
             max_workers=queue.concurrency,
             max_tasks_per_child=maximum_jobs_per_worker,
@@ -95,7 +95,7 @@ class ProcessExecutor(Executor):
             resources as the main process.
         """
 
-    async def push(self, job: JobInstance) -> Future:
+    async def push(self, job: QueuedJob) -> Future:
         future: Future = self.pool.submit(self.job_wrapper, job)
         future.add_done_callback(
             functools.partial(
@@ -109,7 +109,7 @@ class ProcessExecutor(Executor):
         return len(self.processes)
 
     @classmethod
-    def job_wrapper(cls, job: JobInstance):
+    def job_wrapper(cls, job: QueuedJob):
         """
         This is the function that is actually started by the process pool
         executor. It's responsible for setting up necessary signals and limits,

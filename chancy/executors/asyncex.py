@@ -1,7 +1,7 @@
 import asyncio
 
 from chancy.executors.base import Executor
-from chancy.job import JobInstance, Limit
+from chancy.job import QueuedJob, Limit
 
 
 class AsyncExecutor(Executor):
@@ -32,7 +32,7 @@ class AsyncExecutor(Executor):
         super().__init__(worker, queue)
         self.running_jobs: set[asyncio.Task] = set()
 
-    async def push(self, job: JobInstance):
+    async def push(self, job: QueuedJob):
         task = asyncio.create_task(self._job_wrapper(job))
         task.add_done_callback(self._job_cleanup)
         self.running_jobs.add(task)
@@ -44,7 +44,7 @@ class AsyncExecutor(Executor):
         self.running_jobs.discard(task)
         task.exception()
 
-    async def _job_wrapper(self, job: JobInstance):
+    async def _job_wrapper(self, job: QueuedJob):
         try:
             func, kwargs = Executor.get_function_and_kwargs(job)
             if not asyncio.iscoroutinefunction(func):

@@ -5,7 +5,7 @@ from typing import Dict
 import functools
 
 from chancy.executors.base import Executor
-from chancy.job import JobInstance, Limit
+from chancy.job import QueuedJob, Limit
 
 
 class ThreadedExecutor(Executor):
@@ -40,9 +40,9 @@ class ThreadedExecutor(Executor):
     def __init__(self, worker, queue):
         super().__init__(worker, queue)
         self.pool = ThreadPoolExecutor(max_workers=queue.concurrency)
-        self.jobs: Dict[Future, JobInstance] = {}
+        self.jobs: Dict[Future, QueuedJob] = {}
 
-    async def push(self, job: JobInstance) -> Future:
+    async def push(self, job: QueuedJob) -> Future:
         future: Future = self.pool.submit(self.job_wrapper, job)
         self.jobs[future] = job
         future.add_done_callback(
@@ -52,7 +52,7 @@ class ThreadedExecutor(Executor):
         )
         return future
 
-    def job_wrapper(self, job: JobInstance):
+    def job_wrapper(self, job: QueuedJob):
         """
         This is the function that is actually started by the thread pool
         executor. It's responsible for setting up necessary limits,

@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from chancy import Worker, Chancy, Job, Queue, JobInstance
+from chancy import Worker, Chancy, Job, Queue, QueuedJob
 
 
 def job_to_run():
@@ -27,7 +27,7 @@ async def test_basic_job(chancy: Chancy, worker: tuple[Worker, asyncio.Task]):
     )
     ref = await chancy.push(Job.from_func(job_to_run))
     job = await chancy.wait_for_job(ref)
-    assert job.state == JobInstance.State.SUCCEEDED
+    assert job.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -44,4 +44,4 @@ async def test_failing_job(chancy: Chancy, worker: tuple[Worker, asyncio.Task]):
     )
     ref = await chancy.push(Job.from_func(job_that_fails))
     job = await chancy.wait_for_job(ref)
-    assert job.state == JobInstance.State.FAILED
+    assert job.state == QueuedJob.State.FAILED

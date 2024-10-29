@@ -3,7 +3,7 @@ __all__ = (
     "Worker",
     "Queue",
     "Job",
-    "JobInstance",
+    "QueuedJob",
     "Limit",
     "Reference",
 )
@@ -11,4 +11,4 @@ __all__ = (
 from chancy.app import Chancy
 from chancy.queue import Queue
 from chancy.worker import Worker
-from chancy.job import Limit, Job, JobInstance, Reference
+from chancy.job import Limit, Job, QueuedJob, Reference

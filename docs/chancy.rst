@@ -24,4 +24,5 @@ Submodules
    chancy.migrate
    chancy.hub
    chancy.rule
+   chancy.retry
    chancy.utils

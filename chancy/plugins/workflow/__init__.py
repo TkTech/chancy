@@ -8,7 +8,7 @@ from psycopg.rows import dict_row
 from chancy.plugin import Plugin, PluginScope
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.job import Job, JobInstance
+from chancy.job import Job, QueuedJob
 from chancy.utils import json_dumps, chancy_uuid
 from chancy.rule import Rule
 
@@ -26,7 +26,7 @@ class WorkflowStep:
     #: A list of step IDs that this step depends on.
     dependencies: List[str] = field(default_factory=list)
     #: The current state of the step.
-    state: JobInstance.State | None = JobInstance.State.PENDING
+    state: QueuedJob.State | None = QueuedJob.State.PENDING
     #: The unique ID of a running Job which is associated with this step.
     job_id: str | None = None
 
@@ -92,7 +92,7 @@ class Workflow:
         del self.steps[key]
 
     @property
-    def steps_by_state(self) -> Dict[JobInstance.State, List[WorkflowStep]]:
+    def steps_by_state(self) -> Dict[QueuedJob.State, List[WorkflowStep]]:
         steps_by_state = {}
         for step in self.steps.values():
             steps_by_state.setdefault(step.state, []).append(step)
@@ -324,7 +324,7 @@ class WorkflowPlugin(Plugin):
                                 job=Job.unpack(step["job_data"]),
                                 dependencies=step["dependencies"],
                                 state=(
-                                    JobInstance.State(step["state"])
+                                    QueuedJob.State(step["state"])
                                     if step["state"]
                                     else None
                                 ),
@@ -358,14 +358,14 @@ class WorkflowPlugin(Plugin):
         for step_id, step in workflow.steps.items():
             # If the step is already in a terminal state, we can skip it.
             if step.state in [
-                JobInstance.State.SUCCEEDED,
-                JobInstance.State.FAILED,
+                QueuedJob.State.SUCCEEDED,
+                QueuedJob.State.FAILED,
             ]:
                 continue
 
             dependencies = [workflow.steps[dep] for dep in step.dependencies]
             if all(
-                dep.state == JobInstance.State.SUCCEEDED for dep in dependencies
+                dep.state == QueuedJob.State.SUCCEEDED for dep in dependencies
             ):
                 if step.job_id is None:
                     step.job_id = (await chancy.push(step.job)).identifier
@@ -373,9 +373,9 @@ class WorkflowPlugin(Plugin):
         # Are all jobs complete, or any jobs failed? If so, we can mark the
         # workflow as completed or failed.
         states = workflow.steps_by_state
-        if len(states.get(JobInstance.State.SUCCEEDED, [])) == len(workflow):
+        if len(states.get(QueuedJob.State.SUCCEEDED, [])) == len(workflow):
             workflow.state = Workflow.State.COMPLETED
-        elif states.get(JobInstance.State.FAILED):
+        elif states.get(QueuedJob.State.FAILED):
             workflow.state = Workflow.State.FAILED
 
         # We update the workflow in the database to reflect the new state
@@ -485,10 +485,10 @@ class WorkflowPlugin(Plugin):
 
         # Define color scheme
         colors = {
-            JobInstance.State.PENDING: "lightblue",
-            JobInstance.State.RUNNING: "yellow",
-            JobInstance.State.SUCCEEDED: "lightgreen",
-            JobInstance.State.FAILED: "lightpink",
+            QueuedJob.State.PENDING: "lightblue",
+            QueuedJob.State.RUNNING: "yellow",
+            QueuedJob.State.SUCCEEDED: "lightgreen",
+            QueuedJob.State.FAILED: "lightpink",
         }
 
         # Add nodes (steps)

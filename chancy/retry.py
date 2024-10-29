@@ -3,7 +3,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from chancy.job import JobInstance
+from chancy.job import QueuedJob
 
 
 class MaxRetriesExceededError(Exception):
@@ -57,8 +57,8 @@ class Retry(Exception):
 
 
 def handle_retry(
-    job_instance: "JobInstance", retry_exception: Retry
-) -> "JobInstance":
+    job_instance: "QueuedJob", retry_exception: Retry
+) -> "QueuedJob":
     """
     Handles a Retry exception, following the rules defined in the exception.
     Returns a new job instance with updated retry information.

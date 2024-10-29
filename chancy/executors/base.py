@@ -6,7 +6,7 @@ import dataclasses
 from datetime import datetime, timezone
 from typing import get_type_hints, Callable
 
-from chancy.job import JobInstance
+from chancy.job import QueuedJob
 from chancy.queue import Queue
 from chancy.retry import Retry, handle_retry, MaxRetriesExceededError
 
@@ -31,14 +31,12 @@ class Executor(abc.ABC):
         self.queue = queue
 
     @abc.abstractmethod
-    async def push(self, job: JobInstance):
+    async def push(self, job: QueuedJob):
         """
         Push a job onto the job pool.
         """
 
-    async def job_completed(
-        self, job: JobInstance, exc: Exception | None = None
-    ):
+    async def job_completed(self, job: QueuedJob, exc: Exception | None = None):
         """
         Called when a job has completed.
 
@@ -53,7 +51,7 @@ class Executor(abc.ABC):
             now = datetime.now(tz=timezone.utc)
             new_instance = dataclasses.replace(
                 job,
-                state=JobInstance.State.SUCCEEDED,
+                state=QueuedJob.State.SUCCEEDED,
                 completed_at=now,
                 attempts=job.attempts + 1,
             )
@@ -65,7 +63,7 @@ class Executor(abc.ABC):
                 # job as failed.
                 new_instance = dataclasses.replace(
                     job,
-                    state=JobInstance.State.FAILED,
+                    state=QueuedJob.State.FAILED,
                     completed_at=datetime.now(tz=timezone.utc),
                     attempts=job.attempts + 1,
                     errors=[
@@ -84,9 +82,9 @@ class Executor(abc.ABC):
             is_failure = job.attempts + 1 >= job.max_attempts
 
             new_state = (
-                JobInstance.State.FAILED
+                QueuedJob.State.FAILED
                 if is_failure
-                else JobInstance.State.RETRYING
+                else QueuedJob.State.RETRYING
             )
 
             new_instance = dataclasses.replace(
@@ -122,7 +120,7 @@ class Executor(abc.ABC):
         await self.worker.queue_update(new_instance)
 
     @staticmethod
-    def get_function_and_kwargs(job: JobInstance) -> tuple[Callable, dict]:
+    def get_function_and_kwargs(job: QueuedJob) -> tuple[Callable, dict]:
         """
         Finds the function which should be executed for the given job and
         returns its keyword arguments.
@@ -148,7 +146,7 @@ class Executor(abc.ABC):
         for param_name, param in sig.parameters.items():
             if (
                 param.kind == param.KEYWORD_ONLY
-                and type_hints.get(param_name) is JobInstance
+                and type_hints.get(param_name) is QueuedJob
             ):
                 kwargs[param_name] = job
 

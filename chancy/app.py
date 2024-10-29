@@ -11,7 +11,7 @@ from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
 from chancy.migrate import Migrator
 from chancy.queue import Queue
-from chancy.job import Reference, Job, JobInstance
+from chancy.job import Reference, Job, QueuedJob
 from chancy.plugin import Plugin
 from chancy.utils import chancy_uuid, chunked, json_dumps
 
@@ -472,7 +472,7 @@ class Chancy:
         return references
 
     @_ensure_pool_is_open
-    async def get_job(self, ref: Reference) -> JobInstance | None:
+    async def get_job(self, ref: Reference) -> QueuedJob | None:
         """
         Resolve a reference to a job instance.
 
@@ -484,11 +484,11 @@ class Chancy:
                 record = await cursor.fetchone()
                 if record is None:
                     raise KeyError(f"Job {ref.identifier} not found.")
-                return JobInstance.unpack(record)
+                return QueuedJob.unpack(record)
 
     async def wait_for_job(
         self, ref: Reference, *, interval: int = 1
-    ) -> JobInstance | None:
+    ) -> QueuedJob | None:
         """
         Wait for a job to complete.
 
@@ -501,8 +501,8 @@ class Chancy:
         while True:
             job = await self.get_job(ref)
             if job is None or job.state in {
-                JobInstance.State.SUCCEEDED,
-                JobInstance.State.FAILED,
+                QueuedJob.State.SUCCEEDED,
+                QueuedJob.State.FAILED,
             }:
                 return job
             await asyncio.sleep(interval)

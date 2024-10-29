@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from chancy import Worker, Chancy, Job, Queue, JobInstance
+from chancy import Worker, Chancy, Job, Queue, QueuedJob
 
 
 low = Queue("low", concurrency=1)
@@ -33,8 +33,8 @@ async def test_multiple_queues(
     job_low = await chancy.wait_for_job(ref_low)
     job_high = await chancy.wait_for_job(ref_high)
 
-    assert job_low.state == JobInstance.State.SUCCEEDED
-    assert job_high.state == JobInstance.State.SUCCEEDED
+    assert job_low.state == QueuedJob.State.SUCCEEDED
+    assert job_high.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
