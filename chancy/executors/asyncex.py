@@ -47,13 +47,11 @@ class AsyncExecutor(Executor):
 
     async def _job_wrapper(self, job: JobInstance):
         try:
-            func = import_string(job.func)
+            func, kwargs = Executor.get_function_and_kwargs(job)
             if not asyncio.iscoroutinefunction(func):
                 raise ValueError(
                     f"Function {job.func} is not a coroutine function"
                 )
-
-            kwargs = job.kwargs or {}
 
             timeout = next(
                 (

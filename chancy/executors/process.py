@@ -148,22 +148,15 @@ class ProcessExecutor(Executor):
                         )
                     )
 
-        mod_name, func_name = job.func.rsplit(".", 1)
-        mod = __import__(mod_name, fromlist=[func_name])
-        try:
-            func = getattr(mod, func_name)
-        except AttributeError:
-            raise AttributeError(
-                f"Could not find function {func_name} in module {mod_name}."
-            )
-
-        kwargs = job.kwargs or {}
+        func, kwargs = Executor.get_function_and_kwargs(job)
 
         try:
             func(**kwargs)
         finally:
             for clean in cleanup:
                 clean()
+
+        return job
 
     @staticmethod
     def job_signal_handler(signum: int, frame):
@@ -190,6 +183,8 @@ class ProcessExecutor(Executor):
     ):
         job = self.processes.pop(future)
         exc = future.exception()
+        if exc is None:
+            job = future.result()
 
         f = asyncio.run_coroutine_threadsafe(
             self.job_completed(job, exc),

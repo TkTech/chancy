@@ -2,8 +2,7 @@ import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, Job
-from chancy.utils import import_string
+from chancy import Chancy, Worker, Queue, Job, JobInstance
 
 
 def job_to_run():
@@ -12,6 +11,14 @@ def job_to_run():
 
 async def async_job_to_run():
     pass
+
+
+def job_with_instance(*, job: JobInstance):
+    job.meta["received_instance"] = True
+
+
+async def async_job_with_instance(*, job: JobInstance):
+    job.meta["received_instance"] = True
 
 
 @pytest.mark.asyncio
@@ -55,3 +62,49 @@ async def test_basic_job_async(
     job = await chancy.wait_for_job(ref)
 
     assert job.state == job.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "executor",
+    [
+        "chancy.executors.process.ProcessExecutor",
+        "chancy.executors.thread.ThreadedExecutor",
+    ],
+)
+async def test_job_instance_kwarg(
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
+):
+    """
+    Test that jobs requesting a JobInstance kwarg receive the correct instance.
+    """
+    await chancy.declare(Queue("low", executor=executor))
+
+    ref = await chancy.push(Job.from_func(job_with_instance, queue="low"))
+    job = await chancy.wait_for_job(ref)
+
+    assert job.state == job.State.SUCCEEDED
+    assert job.meta.get("received_instance") is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "executor",
+    [
+        "chancy.executors.asyncex.AsyncExecutor",
+    ],
+)
+async def test_async_job_instance_kwarg(
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
+):
+    """
+    Test that async jobs requesting a JobInstance kwarg receive the correct
+    instance.
+    """
+    await chancy.declare(Queue("low", executor=executor))
+
+    ref = await chancy.push(Job.from_func(async_job_with_instance, queue="low"))
+    job = await chancy.wait_for_job(ref)
+
+    assert job.state == job.State.SUCCEEDED
+    assert job.meta.get("received_instance") is True

@@ -379,7 +379,9 @@ class Worker:
                                         started_at = %(started_at)s,
                                         completed_at = %(completed_at)s,
                                         attempts = %(attempts)s,
-                                        errors = %(errors)s
+                                        errors = %(errors)s,
+                                        meta = %(meta)s,
+                                        max_attempts = %(max_attempts)s
                                     WHERE
                                         id = %(id)s
                                     """
@@ -396,6 +398,8 @@ class Worker:
                                         "completed_at": update.completed_at,
                                         "attempts": update.attempts,
                                         "errors": Json(update.errors),
+                                        "meta": Json(update.meta),
+                                        "max_attempts": update.max_attempts,
                                     }
                                     for update in pending_updates
                                 ],

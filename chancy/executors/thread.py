@@ -69,8 +69,7 @@ class ThreadedExecutor(Executor):
                 None,
             )
 
-            func = import_string(job.func)
-            kwargs = job.kwargs or {}
+            func, kwargs = Executor.get_function_and_kwargs(job)
 
             if time_limit:
                 timer = threading.Timer(time_limit, self._timeout_handler)
