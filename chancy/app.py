@@ -275,7 +275,9 @@ class Chancy:
         """
         async with self.pool.connection() as conn:
             async with conn.cursor() as cursor:
-                return await self.declare_ex(cursor, queue, upsert=upsert)
+                queue = await self.declare_ex(cursor, queue, upsert=upsert)
+                await self.notify(cursor, "queue.declared", {"q": queue.name})
+                return queue
 
     async def declare_ex(
         self, cursor: AsyncCursor, queue: Queue, *, upsert: bool = False
