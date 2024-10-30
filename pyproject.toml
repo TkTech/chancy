@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.10.9"
+version = "0.11.0"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"

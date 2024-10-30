@@ -5,3 +5,5 @@ How To...
    :maxdepth: 2
 
    django.rst
+   retry.rst
+   context.rst
