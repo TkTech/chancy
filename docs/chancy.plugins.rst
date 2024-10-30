@@ -18,3 +18,4 @@ Submodules
    chancy.plugins.cron
    chancy.plugins.api
    chancy.plugins.workflow
+   chancy.plugins.retry

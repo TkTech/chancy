@@ -20,4 +20,6 @@ Chancy comes with several built-in plugins:
     for viewing the state of the Chancy cluster.
 - :class:`chancy.plugins.workflow.WorkflowPlugin`: This plugin provides a
     workflow system for managing complex job dependencies.
+- :class:`chancy.plugins.retry.RetryPlugin`: This plugin provides a slightly
+    more advanced job retry system with jitter, backoff, and other features.
 """

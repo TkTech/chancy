@@ -8,7 +8,6 @@ from typing import get_type_hints, Callable
 
 from chancy.job import QueuedJob
 from chancy.queue import Queue
-from chancy.retry import Retry, handle_retry, MaxRetriesExceededError
 
 if typing.TYPE_CHECKING:
     from chancy.worker import Worker
@@ -55,29 +54,6 @@ class Executor(abc.ABC):
                 completed_at=now,
                 attempts=job.attempts + 1,
             )
-        elif isinstance(exc, Retry):
-            try:
-                new_instance = handle_retry(job, exc)
-            except MaxRetriesExceededError:
-                # We've exceeded the maximum number of retries, so mark the
-                # job as failed.
-                new_instance = dataclasses.replace(
-                    job,
-                    state=QueuedJob.State.FAILED,
-                    completed_at=datetime.now(tz=timezone.utc),
-                    attempts=job.attempts + 1,
-                    errors=[
-                        *job.errors,
-                        {
-                            "traceback": "".join(
-                                traceback.format_exception(
-                                    type(exc), exc, exc.__traceback__
-                                )
-                            ),
-                            "attempt": job.attempts,
-                        },
-                    ],
-                )
         else:
             is_failure = job.attempts + 1 >= job.max_attempts
 

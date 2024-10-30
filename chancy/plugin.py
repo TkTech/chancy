@@ -37,7 +37,6 @@ class Plugin(abc.ABC):
         Get the scope of this plugin.
         """
 
-    @abc.abstractmethod
     async def run(self, worker: "Worker", chancy: "Chancy"):
         """
         Runs the plugin.
