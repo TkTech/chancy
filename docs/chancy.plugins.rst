@@ -19,3 +19,4 @@ Submodules
    chancy.plugins.api
    chancy.plugins.workflow
    chancy.plugins.retry
+   chancy.plugins.reprioritize
