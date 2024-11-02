@@ -20,7 +20,7 @@ class V1Migration(Migration):
                     limits JSON NOT NULL DEFAULT '[]',
                     meta JSON NOT NULL DEFAULT '{{}}',
                     state VARCHAR (25) NOT NULL DEFAULT 'pending',
-                    priority INTEGER DEFAULT 10,
+                    priority INTEGER DEFAULT 0,
                     attempts INTEGER DEFAULT 0,
                     max_attempts INTEGER DEFAULT 1,
                     taken_by TEXT,

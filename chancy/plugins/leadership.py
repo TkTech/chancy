@@ -135,3 +135,23 @@ class Leadership(Plugin):
                                 "worker_id": worker.worker_id,
                             },
                         )
+
+
+class ImmediateLeadership(Plugin):
+    """
+    A plugin that simply sets the worker as the leader immediately upon startup.
+
+    This plugin is only ever intended for testing purposes, and should not be
+    used in a production environment.
+    """
+
+    @classmethod
+    def get_scope(cls) -> PluginScope:
+        return PluginScope.WORKER
+
+    async def run(self, worker: Worker, chancy: Chancy):
+        worker.is_leader.set()
+        chancy.log.info(
+            "Worker has been set as leader without going through election."
+            " This plugin should only be used for testing & debugging."
+        )

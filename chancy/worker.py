@@ -590,7 +590,7 @@ class Worker:
                             AND
                                 (scheduled_at IS NULL OR scheduled_at <= NOW())
                             ORDER BY
-                                priority ASC,
+                                priority DESC,
                                 id DESC
                             LIMIT
                                 %(maximum_jobs_to_fetch)s

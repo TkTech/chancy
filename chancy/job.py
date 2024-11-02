@@ -36,12 +36,13 @@ a new job with modified properties.
 Priority
 ^^^^^^^^
 
-Priority determines the order of execution. Lower values run first:
+Priority determines the order of execution. The higher the priority, the
+sooner the job will be executed:
 
 .. code-block:: python
 
-   high_priority_job = job.with_priority(-10)
-   low_priority_job = job.with_priority(10)
+   high_priority_job = job.with_priority(10)
+   low_priority_job = job.with_priority(-10)
 
 Retry Attempts
 ^^^^^^^^^^^^^^
