@@ -85,6 +85,7 @@ async def worker_no_start(chancy) -> Worker:
     params=[
         "chancy.executors.process.ProcessExecutor",
         "chancy.executors.thread.ThreadedExecutor",
+        "chancy.executors.sub.SubInterpreterExecutor",
     ]
 )
 def sync_executor(request):
