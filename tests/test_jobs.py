@@ -22,20 +22,13 @@ async def async_job_with_instance(*, job: QueuedJob):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "executor",
-    [
-        "chancy.executors.process.ProcessExecutor",
-        "chancy.executors.thread.ThreadedExecutor",
-    ],
-)
 async def test_basic_job_sync(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
 ):
     """
     Ensures that a basic job can be run on all built-in executors.
     """
-    await chancy.declare(Queue("low", executor=executor))
+    await chancy.declare(Queue("low", executor=sync_executor))
 
     ref = await chancy.push(Job.from_func(job_to_run, queue="low"))
     job = await chancy.wait_for_job(ref)
@@ -44,19 +37,13 @@ async def test_basic_job_sync(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "executor",
-    [
-        "chancy.executors.asyncex.AsyncExecutor",
-    ],
-)
 async def test_basic_job_async(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], async_executor: str
 ):
     """
     Ensures that a basic job can be run on all built-in executors.
     """
-    await chancy.declare(Queue("low", executor=executor))
+    await chancy.declare(Queue("low", executor=async_executor))
 
     ref = await chancy.push(Job.from_func(async_job_to_run, queue="low"))
     job = await chancy.wait_for_job(ref)
@@ -65,20 +52,13 @@ async def test_basic_job_async(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "executor",
-    [
-        "chancy.executors.process.ProcessExecutor",
-        "chancy.executors.thread.ThreadedExecutor",
-    ],
-)
 async def test_job_instance_kwarg(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
 ):
     """
     Test that jobs requesting a QueuedJob kwarg receive the correct instance.
     """
-    await chancy.declare(Queue("low", executor=executor))
+    await chancy.declare(Queue("low", executor=sync_executor))
 
     ref = await chancy.push(Job.from_func(job_with_instance, queue="low"))
     job = await chancy.wait_for_job(ref)
@@ -88,20 +68,14 @@ async def test_job_instance_kwarg(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "executor",
-    [
-        "chancy.executors.asyncex.AsyncExecutor",
-    ],
-)
 async def test_async_job_instance_kwarg(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], executor: str
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], async_executor: str
 ):
     """
     Test that async jobs requesting a QueuedJob kwarg receive the correct
     instance.
     """
-    await chancy.declare(Queue("low", executor=executor))
+    await chancy.declare(Queue("low", executor=async_executor))
 
     ref = await chancy.push(Job.from_func(async_job_with_instance, queue="low"))
     job = await chancy.wait_for_job(ref)

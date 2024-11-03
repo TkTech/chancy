@@ -230,7 +230,8 @@ class Worker:
                         name=f"queue_{queue_name}",
                     )
                     self.chancy.log.info(
-                        f"Adding queue {queue_name!r} to worker."
+                        f"Adding queue {queue_name!r} to worker using executor"
+                        f" {queue.executor!r}."
                     )
                 else:
                     if self._queues[queue_name] != queue:
