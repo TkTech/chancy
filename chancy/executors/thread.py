@@ -58,31 +58,32 @@ class ThreadedExecutor(Executor):
         executor. It's responsible for setting up necessary limits,
         running the job, and returning the result.
         """
-        try:
-            time_limit = next(
-                (
-                    limit.value
-                    for limit in job.limits
-                    if limit.type_ == Limit.Type.TIME
-                ),
-                None,
+        func, kwargs = Executor.get_function_and_kwargs(job)
+        if asyncio.iscoroutinefunction(func):
+            raise ValueError(
+                f"Function {job.func!r} is an async function, which is not"
+                f" supported by the {self.__class__.__name__!r} executor. Use"
+                f" the AsyncExecutor instead."
             )
 
-            func, kwargs = Executor.get_function_and_kwargs(job)
+        time_limit = next(
+            (
+                limit.value
+                for limit in job.limits
+                if limit.type_ == Limit.Type.TIME
+            ),
+            None,
+        )
 
-            if time_limit:
-                timer = threading.Timer(time_limit, self._timeout_handler)
-                timer.start()
-                try:
-                    func(**kwargs)
-                finally:
-                    timer.cancel()
-            else:
+        if time_limit:
+            timer = threading.Timer(time_limit, self._timeout_handler)
+            timer.start()
+            try:
                 func(**kwargs)
-
-        except Exception as exc:
-            return exc
-        return None
+            finally:
+                timer.cancel()
+        else:
+            func(**kwargs)
 
     @staticmethod
     def _timeout_handler():
