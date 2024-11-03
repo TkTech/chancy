@@ -3,17 +3,27 @@ Chancy
 
 A postgres-backed task queue for Python.
 
+.. image:: https://img.shields.io/github/license/tktech/chancy
+   :alt: MIT License
+
+.. image:: https://img.shields.io/pypi/pyversions/chancy
+   :alt: Supported Versions
+
 
 Key Features:
 -------------
 
 - Support for job priorities, retries, timeouts, scheduling,
-  global rate limits, memory limits, and more.
+  global rate limits, memory limits, unique jobs, and more
+- asyncio-based worker with support for asyncio, threading, and
+  process-based job executors
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
 - Plugins for a :class:`dashboard<chancy.plugins.api.Api>`,
   :class:`workflows<chancy.plugins.workflow.WorkflowPlugin>`,
-  :class:`cron jobs<chancy.plugins.cron.Cron>`, and more
+  :class:`cron jobs<chancy.plugins.cron.Cron>`, and much more
+- Optional transactional enqueueing for atomic job creation
+- asyncio & sync APIs for easy integration with existing codebases
 
 Quick Start
 -----------
