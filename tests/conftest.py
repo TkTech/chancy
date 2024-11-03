@@ -79,3 +79,28 @@ async def worker_no_start(chancy) -> Worker:
     Returns a Worker instance that has not been started.
     """
     return Worker(chancy)
+
+
+@pytest.fixture(
+    params=[
+        "chancy.executors.process.ProcessExecutor",
+        "chancy.executors.thread.ThreadedExecutor",
+    ]
+)
+def sync_executor(request):
+    """
+    Provides a parameterized fixture for all sync executors.
+    """
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        "chancy.executors.asyncex.AsyncExecutor",
+    ]
+)
+def async_executor(request):
+    """
+    Provides a parameterized fixture for all async executors.
+    """
+    return request.param
