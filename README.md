@@ -4,8 +4,8 @@
 
 A postgres-backed task queue for Python.
 
-![MIT License](https://img.shields.io/github/license/:user/:repo)
-![Supported Version](https://img.shields.io/pypi/pyversions/:packageName)
+![MIT License](https://img.shields.io/github/license/tktech/chancy)
+![Supported Version](https://img.shields.io/pypi/pyversions/chancy)
 
 
 ## Key Features
