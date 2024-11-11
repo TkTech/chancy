@@ -75,7 +75,7 @@ class SubInterpreterExecutor(Executor):
         It can be used to perform any necessary setup, such as loading NLTK
         datasets or calling ``django.setup()``.
 
-        By default, it replaces the worker's ``sys.path`` with the workers.
+        By default, it replaces the running job's ``sys.path`` with the workers.
         """
         # Unlike all other executors, the InterpreterPoolExecutor does not
         # automatically inherit the parent process's sys.path. This is a
@@ -96,7 +96,7 @@ class SubInterpreterExecutor(Executor):
     @staticmethod
     def job_wrapper(job: QueuedJob):
         """
-        This is the function that is actually started by the thread pool
+        This is the function that is actually started by the sub-interpreter
         executor. It's responsible for setting up necessary limits,
         running the job, and returning the result.
         """

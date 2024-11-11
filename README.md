@@ -12,8 +12,8 @@ A postgres-backed task queue for Python.
 
 - Support for job priorities, retries, timeouts, scheduling,
   global rate limits, memory limits, unique jobs, and more
-- asyncio-based worker with support for asyncio, threading, and
-  process-based job executors
+- asyncio-based worker with support for asyncio, threading, 
+  process, and sub-interpreter job executors
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
 - Plugins for a dashboard, workflows, cron jobs, and more
