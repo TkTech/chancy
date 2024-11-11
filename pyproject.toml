@@ -3,7 +3,7 @@ name = "chancy"
 version = "0.12.2"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
-requires-python = ">=3.11,<4"
+requires-python = ">=3.11"
 authors = [
     { name = "Tyler Kennedy", email = "tk@tkte.ch" }
 ]
