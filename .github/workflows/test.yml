@@ -71,7 +71,7 @@ jobs:
 
     - name: Running tests
       run: |
-        uv run pytest --cov=chancy --cov-report=xml
+        uv run pytest --cov=chancy --cov-report=xml -s
 
     - name: Uploading coverage
       uses: codecov/codecov-action@v4
