@@ -140,32 +140,37 @@ class TaskManager:
 
     def __init__(self):
         self.tasks: set[asyncio.Task] = set()
+        self.wake_for_new_task = asyncio.Event()
 
     def add(self, coro, *, name: str | None = None) -> asyncio.Task:
         """
         Add a task to the manager.
         """
         task = asyncio.create_task(coro)
-        task.add_done_callback(self.tasks.remove)
         self.tasks.add(task)
         if name:
             task.set_name(name)
+        self.wake_for_new_task.set()
         return task
-
-    def remove(self, task: asyncio.Task):
-        """
-        Remove a task from the manager.
-        """
-        task.result()
-        task.cancel()
-        self.tasks.discard(task)
 
     async def run(self):
         """
         Wait for all tasks to complete.
         """
         while self.tasks:
-            await asyncio.wait(self.tasks, return_when=asyncio.ALL_COMPLETED)
+            p = asyncio.create_task(self.wake_for_new_task.wait())
+            p.add_done_callback(lambda _: self.wake_for_new_task.clear())
+            self.tasks.add(p)
+
+            done, pending = await asyncio.wait(
+                self.tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            for task in done:
+                await task
+                self.tasks.discard(task)
+            self.tasks.discard(p)
 
     async def shutdown(self, *, timeout: int | None = None) -> bool:
         """
