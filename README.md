@@ -4,14 +4,21 @@
 
 A postgres-backed task queue for Python.
 
+![MIT License](https://img.shields.io/github/license/tktech/chancy)
+![Supported Version](https://img.shields.io/pypi/pyversions/chancy)
+
+
 ## Key Features
 
 - Support for job priorities, retries, timeouts, scheduling,
-  global rate limits, memory limits, and more.
+  global rate limits, memory limits, unique jobs, and more
+- asyncio-based worker with support for asyncio, threading, and
+  process-based job executors
 - Configurable job retention for easy debugging and tracking
 - Minimal dependencies (only psycopg3 required)
-- asyncio & sync APIs for easy integration with existing codebases
 - Plugins for a dashboard, workflows, cron jobs, and more
+- Optional transactional enqueueing for atomic job creation
+- asyncio & sync APIs for easy integration with existing codebases
 
 ## Documentation
 

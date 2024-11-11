@@ -49,7 +49,9 @@ class AsyncExecutor(Executor):
             func, kwargs = Executor.get_function_and_kwargs(job)
             if not asyncio.iscoroutinefunction(func):
                 raise ValueError(
-                    f"Function {job.func} is not a coroutine function"
+                    f"Function {job.func!r} is not an async function, which is"
+                    f" required for the AsyncExecutor. Please use the"
+                    f" ThreadedExecutor or ProcessExecutor instead."
                 )
 
             timeout = next(

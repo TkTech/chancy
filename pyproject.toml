@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.12.0"
+version = "0.12.2"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11,<4"
@@ -10,9 +10,20 @@ authors = [
 dependencies = [
     "psycopg[pool]>=3.2.1",
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 
 [project.urls]
 Repository = "https://github.com/tktech/chancy"
+Documentation = "https://tkte.ch/chancy/"
 
 [project.optional-dependencies]
 cron = ["croniter>=2.0.5"]
@@ -41,6 +52,7 @@ dev-dependencies = [
     "pytest-cov>=5.0.0",
     "sentry-sdk>=2.3.1",
     "ghp-import>=2.1.0",
+    "pytest-benchmark>=5.1.0",
 ]
 
 [tool.hatch.build.targets.wheel]
