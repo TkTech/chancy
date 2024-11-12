@@ -132,68 +132,70 @@ def chunked(iterable, size):
 class TaskManager:
     """
     A simple task manager that keeps track of tasks.
-
-    The asyncio.TaskGroup is not used here for a couple of reasons, but mostly
-    because it's only available in Python 3.11+ and we want to maintain
-    compatibility with earlier versions.
     """
 
     def __init__(self):
         self.tasks: set[asyncio.Task] = set()
-        self.wake_for_new_task = asyncio.Event()
+        # Triggered when the manager is shutting down.
+        self._shutdown_event = asyncio.Event()
+        # Triggered when a task is added to the manager.
+        self._task_added_event = asyncio.Event()
 
-    def add(self, coro, *, name: str | None = None) -> asyncio.Task:
+    def add(self, task, *, name: str | None = None) -> asyncio.Task:
         """
         Add a task to the manager.
         """
-        task = asyncio.create_task(coro)
+        if not asyncio.iscoroutine(task):
+            raise TypeError("Expected a coroutine object.")
+
+        if not isinstance(task, asyncio.Task):
+            task = asyncio.create_task(task)
+
+        task.add_done_callback(self.tasks.discard)
         self.tasks.add(task)
+
         if name:
             task.set_name(name)
-        self.wake_for_new_task.set()
+
+        self._task_added_event.set()
         return task
 
-    async def run(self):
+    async def wait_until_complete(self):
         """
-        Wait for all tasks to complete.
+        Wait until all tasks are complete, including any that are added
+        after this method is called.
         """
         while self.tasks:
-            p = asyncio.create_task(self.wake_for_new_task.wait())
-            p.add_done_callback(lambda _: self.wake_for_new_task.clear())
-            self.tasks.add(p)
-
-            done, pending = await asyncio.wait(
-                self.tasks,
-                return_when=asyncio.FIRST_COMPLETED,
+            w = asyncio.create_task(self._task_added_event.wait())
+            done, self.tasks = await asyncio.wait(
+                [*self.tasks, w], return_when=asyncio.FIRST_COMPLETED
             )
 
             for task in done:
-                await task
-                self.tasks.discard(task)
-            self.tasks.discard(p)
+                if task.cancelled():
+                    continue
 
-    async def shutdown(self, *, timeout: int | None = None) -> bool:
+                task.result()
+
+            self.tasks.discard(w)
+
+    async def cancel_all(self):
         """
         Cancel all tasks and wait for them to complete.
-
-        :param timeout: The number of seconds to wait for a clean shutdown
-                        before forcing the tasks to stop.
-        :return: False if a timeout occurred trying to cancel the tasks, True
-                 if shutdown was successful.
         """
         for task in self.tasks:
             task.cancel()
 
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*self.tasks, return_exceptions=True),
-                timeout=timeout,
-            )
-        except (asyncio.TimeoutError, TimeoutError):
-            self.tasks = {task for task in self.tasks if not task.done()}
-            return False
-        except asyncio.CancelledError:
-            pass
+        await self.wait_until_complete()
 
-        self.tasks.clear()
-        return True
+    def __len__(self):
+        return len(self.tasks)
+
+    def __iter__(self):
+        return iter(self.tasks)
+
+    def __contains__(self, task):
+        return task in self.tasks
+
+    def __repr__(self):
+        return f"<TaskManager tasks={len(self.tasks)}>"

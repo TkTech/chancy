@@ -65,6 +65,9 @@ artifacts = [
     "chancy/plugins/api/dist/**"
 ]
 
+[tool.ruff]
+line-length = 80
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

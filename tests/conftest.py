@@ -59,19 +59,8 @@ async def worker(chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
     If the worker is not stopped by the time the test completes, it will be
     cancelled.
     """
-    worker = Worker(chancy)
-    worker_task = asyncio.create_task(worker.start())
-
-    try:
-        yield worker, worker_task
-    finally:
-        if not worker_task.done():
-            worker_task.cancel()
-
-        try:
-            await asyncio.gather(worker_task)
-        except asyncio.CancelledError:
-            pass
+    async with Worker(chancy):
+        yield worker
 
 
 @pytest_asyncio.fixture()

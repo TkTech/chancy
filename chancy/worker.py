@@ -79,7 +79,6 @@ class Worker:
     :param shutdown_timeout: The number of seconds to wait for a clean shutdown
                                 before forcing the worker to stop.
     :param tags: Extra tags to associate with the worker.
-    :param register_signal_handlers: Whether to register signal handlers.
     """
 
     def __init__(
@@ -92,7 +91,6 @@ class Worker:
         queue_change_poll_interval: int = 10,
         shutdown_timeout: int = 30,
         tags: set[str] | None = None,
-        register_signal_handlers: bool = True,
     ):
         #: The Chancy application that the worker is associated with.
         self.chancy = chancy
@@ -124,11 +122,9 @@ class Worker:
         self._queues: dict[str, Queue] = {}
         self.manager = TaskManager()
         self.outgoing = asyncio.Queue()
+        self.shutdown_event = asyncio.Event()
 
-        if register_signal_handlers:
-            self.register_signal_handlers()
-
-    async def start(self):
+    async def start(self, *, register_signal_handlers: bool = True):
         """
         Start the worker.
 
@@ -136,7 +132,10 @@ class Worker:
         configured plugins.
         """
         for plugin in self.chancy.plugins:
-            self.add_plugin(plugin)
+            self.manager.add(
+                plugin.run(self, self.chancy),
+                name=plugin.__class__.__name__,
+            )
             self.chancy.log.info(
                 f"Started plugin {plugin.__class__.__name__!r}"
             )
@@ -152,27 +151,10 @@ class Worker:
                 self._maintain_notifications(), name="notifications"
             )
 
-        try:
-            await self.manager.run()
-        except (asyncio.CancelledError, KeyboardInterrupt):
-            self.chancy.log.info("Attempting a clean shutdown of the worker...")
-            clean = await self.manager.shutdown(timeout=self.shutdown_timeout)
-            if not clean:
-                self.chancy.log.error(
-                    f"Failed to shutdown worker tasks within"
-                    f" {self.shutdown_timeout} seconds."
-                )
+        if register_signal_handlers:
+            await self.register_signal_handlers()
 
-    def add_plugin(self, plugin):
-        """
-        Add a plugin to the worker.
-
-        :param plugin: The plugin to add.
-        """
-        self.manager.add(
-            plugin.run(self, self.chancy),
-            name=plugin.__class__.__name__,
-        )
+        await self.manager.wait_until_complete()
 
     async def _maintain_queues(self):
         """
@@ -637,31 +619,46 @@ class Worker:
 
                 return [QueuedJob.unpack(record) for record in records]
 
-    def register_signal_handlers(self):
+    async def register_signal_handlers(self):
         """
         Registers signal handlers.
         """
-        signal.signal(signal.SIGTERM, self._on_sigterm)
+        loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+        for sig in {signal.SIGTERM, signal.SIGINT}:
+            loop.add_signal_handler(
+                sig,
+                lambda: asyncio.create_task(self.on_signal(sig)),
+            )
 
-    def _on_sigterm(self, signum: int, frame):
+    async def on_signal(self, signum: int):
         """
-        Signal handler for SIGTERM, which we use to attempt a relatively
-        clean shutdown.
+        Called when a signal is received.
 
-        Docker, for example, will send a SIGTERM, wait a bit, and then send a
-        SIGKILL if the process hasn't exited. This gives us a chance to clean
-        up any resources before being terminated.
+        By default, handles SIGTERM and SIGINT by starting worker shutdown. If
+        the signal is received again, it will force a shutdown.
         """
-        self.chancy.log.info("Received SIGTERM, shutting down worker...")
-        loop = asyncio.get_event_loop()
-        if not loop.is_running():
-            return
+        if self.shutdown_event.is_set():
+            # Force a shutdown if we get a signal twice
+            self.chancy.log.warning("Received signal again, forcing shutdown.")
+            asyncio.get_running_loop().stop()
 
-        # This is not currently a "clean" shutdown. We rely on the recovery
-        # plugin to handle any jobs that were running when the worker was
-        # terminated. We should expand on this to deregister the worker, allow
-        # executors to clean up, etc.
-        loop.create_task(self.manager.shutdown())
+        self.shutdown_event.set()
+        await self.manager.cancel_all()
+
+    async def stop(self):
+        """
+        Stop the worker.
+
+        This will initiate a clean shutdown, waiting for all jobs to complete
+        before returning.
+        """
+        await self.manager.cancel_all()
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"
+
+    async def __aenter__(self):
+        return asyncio.create_task(self.start())
+
+    async def __aexit__(self, *args):
+        await self.manager.cancel_all()
