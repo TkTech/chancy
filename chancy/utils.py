@@ -136,10 +136,6 @@ class TaskManager:
 
     def __init__(self):
         self.tasks: set[asyncio.Task] = set()
-        # Triggered when the manager is shutting down.
-        self._shutdown_event = asyncio.Event()
-        # Triggered when a task is added to the manager.
-        self._task_added_event = asyncio.Event()
 
     def add(self, task, *, name: str | None = None) -> asyncio.Task:
         """
@@ -157,7 +153,6 @@ class TaskManager:
         if name:
             task.set_name(name)
 
-        self._task_added_event.set()
         return task
 
     async def wait_until_complete(self):
@@ -166,9 +161,8 @@ class TaskManager:
         after this method is called.
         """
         while self.tasks:
-            w = asyncio.create_task(self._task_added_event.wait())
             done, self.tasks = await asyncio.wait(
-                [*self.tasks, w], return_when=asyncio.FIRST_COMPLETED
+                self.tasks, return_when=asyncio.FIRST_COMPLETED
             )
 
             for task in done:
@@ -176,8 +170,6 @@ class TaskManager:
                     continue
 
                 task.result()
-
-            self.tasks.discard(w)
 
     async def cancel_all(self):
         """
