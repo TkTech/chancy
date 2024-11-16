@@ -12,6 +12,7 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
+from chancy import utils
 from chancy.app import Chancy
 from chancy.hub import Hub
 from chancy.queue import Queue
@@ -123,6 +124,7 @@ class Worker:
         self.manager = TaskManager()
         self.outgoing = asyncio.Queue()
         self.shutdown_event = asyncio.Event()
+        self._notifications_ready = asyncio.Event()
 
     async def start(self, *, register_signal_handlers: bool = True):
         """
@@ -150,6 +152,7 @@ class Worker:
             self.manager.add(
                 self._maintain_notifications(), name="notifications"
             )
+            await self._notifications_ready.wait()
 
         if register_signal_handlers:
             await self.register_signal_handlers()
@@ -164,7 +167,10 @@ class Worker:
         that the worker should be processing, and update the worker's queues
         accordingly.
         """
-        while True:
+        while await utils.sleep(
+            self.queue_change_poll_interval,
+            events=[self.hub.wait_for("queue.declared")],
+        ):
             self.chancy.log.debug("Polling for queue changes.")
             async with self.chancy.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cursor:
@@ -222,8 +228,6 @@ class Worker:
                             f"Updated configuration for the queue"
                             f" {queue_name!r}."
                         )
-
-            await asyncio.sleep(self.queue_change_poll_interval)
 
     async def _maintain_queue(self, queue_name: str):
         """
@@ -317,6 +321,7 @@ class Worker:
             )
         )
         self.chancy.log.info("Started listening for realtime notifications.")
+        self._notifications_ready.set()
         async for notification in connection.notifies():
             j = json.loads(notification.payload)
             await self.hub.emit(j.pop("t"), j)
@@ -654,11 +659,19 @@ class Worker:
         """
         await self.manager.cancel_all()
 
+    async def wait_until_ready(self):
+        """
+        Wait until the worker is ready to process jobs.
+        """
+        if self.chancy.notifications:
+            await self._notifications_ready.wait()
+
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"
 
-    async def __aenter__(self):
-        return asyncio.create_task(self.start())
+    async def __aenter__(self) -> "Worker":
+        asyncio.create_task(self.start())
+        return self
 
     async def __aexit__(self, *args):
         await self.manager.cancel_all()

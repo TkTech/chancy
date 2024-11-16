@@ -276,7 +276,10 @@ class Chancy:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cursor:
                 queue = await self.declare_ex(cursor, queue, upsert=upsert)
-                await self.notify(cursor, "queue.declared", {"q": queue.name})
+                if self.notifications:
+                    await self.notify(
+                        cursor, "queue.declared", {"q": queue.name}
+                    )
                 return queue
 
     async def declare_ex(
@@ -489,7 +492,7 @@ class Chancy:
                 return QueuedJob.unpack(record)
 
     async def wait_for_job(
-        self, ref: Reference, *, interval: int = 1
+        self, ref: Reference, *, interval: int = 1, timeout: float | None = None
     ) -> QueuedJob | None:
         """
         Wait for a job to complete.
@@ -499,15 +502,21 @@ class Chancy:
         the job status is checked.
 
         If the job no longer exists, returns ``None``.
+
+        :param ref: The reference to the job to wait for.
+        :param interval: The number of seconds to wait between checks.
+        :param timeout: The maximum number of seconds to wait for the job to
+            complete. If not provided, the method will wait indefinitely.
         """
-        while True:
-            job = await self.get_job(ref)
-            if job is None or job.state in {
-                QueuedJob.State.SUCCEEDED,
-                QueuedJob.State.FAILED,
-            }:
-                return job
-            await asyncio.sleep(interval)
+        async with asyncio.timeout(timeout):
+            while True:
+                job = await self.get_job(ref)
+                if job is None or job.state in {
+                    QueuedJob.State.SUCCEEDED,
+                    QueuedJob.State.FAILED,
+                }:
+                    return job
+                await asyncio.sleep(interval)
 
     @_ensure_pool_is_open
     async def get_all_queues(self) -> list[Queue]:

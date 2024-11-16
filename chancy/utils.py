@@ -8,6 +8,32 @@ import json
 import secrets
 import itertools
 import contextlib
+from typing import Iterable, Coroutine
+
+
+async def sleep(
+    seconds: int, *, events: Iterable[Coroutine] | None = None
+) -> bool:
+    """
+    Sleep for a specified number of seconds, or until one of the given events
+    occurs.
+    """
+    if not events:
+        await asyncio.sleep(seconds)
+        return True
+
+    tasks = [asyncio.create_task(event) for event in events]
+
+    done, pending = await asyncio.wait(
+        tasks,
+        timeout=seconds,
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    for task in pending:
+        task.cancel()
+
+    return True
 
 
 @contextlib.contextmanager

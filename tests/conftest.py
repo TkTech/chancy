@@ -52,14 +52,15 @@ def chancy_just_app(postgresql):
 
 
 @pytest_asyncio.fixture()
-async def worker(chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
+async def worker(request, chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
     """
     Starts and returns a Worker and the task associated with it.
 
     If the worker is not stopped by the time the test completes, it will be
     cancelled.
     """
-    async with Worker(chancy):
+    async with Worker(chancy, **getattr(request, "param", {})) as worker:
+        await worker.wait_until_ready()
         yield worker
 
 
