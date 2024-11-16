@@ -67,7 +67,7 @@ jobs:
       run: pip install uv
 
     - name: Installing dependencies (Python)
-      run: uv sync
+      run: uv sync --all-extras
 
     - name: Running tests
       run: |
