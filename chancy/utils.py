@@ -162,6 +162,7 @@ class TaskManager:
 
     def __init__(self):
         self.tasks: set[asyncio.Task] = set()
+        self._added_event = asyncio.Event()
 
     def add(self, task, *, name: str | None = None) -> asyncio.Task:
         """
@@ -179,6 +180,7 @@ class TaskManager:
         if name:
             task.set_name(name)
 
+        self._added_event.set()
         return task
 
     async def wait_until_complete(self):
@@ -186,16 +188,25 @@ class TaskManager:
         Wait until all tasks are complete, including any that are added
         after this method is called.
         """
+        added_task = asyncio.create_task(self._added_event.wait())
         while self.tasks:
-            done, self.tasks = await asyncio.wait(
-                self.tasks, return_when=asyncio.FIRST_COMPLETED
+            done, pending = await asyncio.wait(
+                {*self.tasks, added_task},
+                return_when=asyncio.FIRST_COMPLETED,
             )
 
             for task in done:
                 if task.cancelled():
                     continue
-
                 task.result()
+
+            if added_task in done:
+                added_task = asyncio.create_task(self._added_event.wait())
+
+            if len(pending) == 1 and added_task in pending:
+                return
+
+            self.tasks = pending
 
     async def cancel_all(self):
         """
