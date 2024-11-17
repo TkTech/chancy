@@ -8,6 +8,36 @@ import json
 import secrets
 import itertools
 import contextlib
+from typing import Iterable, Coroutine
+
+
+async def sleep(
+    seconds: int, *, events: Iterable[Coroutine] | None = None
+) -> bool:
+    """
+    Sleep for a specified number of seconds, or until one of the given events
+    occurs.
+    """
+    if not events:
+        await asyncio.sleep(seconds)
+        return True
+
+    tasks = [asyncio.create_task(event) for event in events]
+    try:
+        done, pending = await asyncio.wait(
+            tasks,
+            timeout=seconds,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        for task in pending:
+            task.cancel()
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+
+    return True
 
 
 @contextlib.contextmanager
@@ -132,63 +162,98 @@ def chunked(iterable, size):
 class TaskManager:
     """
     A simple task manager that keeps track of tasks.
-
-    The asyncio.TaskGroup is not used here for a couple of reasons, but mostly
-    because it's only available in Python 3.11+ and we want to maintain
-    compatibility with earlier versions.
     """
 
     def __init__(self):
         self.tasks: set[asyncio.Task] = set()
+        # An event triggered whenever add() is called to ensure that
+        # wait_until_complete() will pick up new tasks.
+        self._added_event = asyncio.Event()
 
-    def add(self, coro, *, name: str | None = None) -> asyncio.Task:
+    def add(self, task, *, name: str | None = None) -> asyncio.Task:
         """
         Add a task to the manager.
         """
-        task = asyncio.create_task(coro)
-        task.add_done_callback(self.tasks.remove)
+        if not asyncio.iscoroutine(task) and not isinstance(task, asyncio.Task):
+            raise TypeError("Expected a coroutine or Task.")
+
+        if not isinstance(task, asyncio.Task):
+            task = asyncio.create_task(task)
+
+        task.add_done_callback(self.tasks.discard)
         self.tasks.add(task)
+
         if name:
             task.set_name(name)
+
+        self._added_event.set()
         return task
 
-    def remove(self, task: asyncio.Task):
+    async def wait_until_complete(self):
         """
-        Remove a task from the manager.
-        """
-        task.result()
-        task.cancel()
-        self.tasks.discard(task)
-
-    async def run(self):
-        """
-        Wait for all tasks to complete.
+        Wait until all tasks are complete, including any that are added
+        after this method is called.
         """
         while self.tasks:
-            await asyncio.wait(self.tasks, return_when=asyncio.ALL_COMPLETED)
+            added_task = asyncio.create_task(
+                self._added_event.wait(),
+                name="TaskManager._added_event",
+            )
 
-    async def shutdown(self, *, timeout: int | None = None) -> bool:
+            try:
+                done, pending = await asyncio.wait(
+                    self.tasks | {added_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                added_task.cancel()
+                self._added_event.clear()
+
+                for task in done:
+                    if task is added_task:
+                        continue
+
+                    if task.cancelled():
+                        continue
+
+                    task.result()
+
+                self.tasks.intersection_update(pending)
+                if not self.tasks:
+                    break
+            except Exception:
+                for task in self.tasks:
+                    if not task.done():
+                        task.cancel()
+                raise
+            finally:
+                added_task.cancel()
+                self._added_event.clear()
+
+    async def cancel_all(self):
         """
         Cancel all tasks and wait for them to complete.
-
-        :param timeout: The number of seconds to wait for a clean shutdown
-                        before forcing the tasks to stop.
-        :return: False if a timeout occurred trying to cancel the tasks, True
-                 if shutdown was successful.
         """
+        if not self.tasks:
+            return
+
         for task in self.tasks:
-            task.cancel()
+            if not task.done():
+                task.cancel()
 
         try:
-            await asyncio.wait_for(
-                asyncio.gather(*self.tasks, return_exceptions=True),
-                timeout=timeout,
-            )
-        except (asyncio.TimeoutError, TimeoutError):
-            self.tasks = {task for task in self.tasks if not task.done()}
-            return False
-        except asyncio.CancelledError:
-            pass
+            await asyncio.gather(*self.tasks, return_exceptions=True)
+        finally:
+            self.tasks.clear()
 
-        self.tasks.clear()
-        return True
+    def __len__(self):
+        return len(self.tasks)
+
+    def __iter__(self):
+        return iter(self.tasks)
+
+    def __contains__(self, task):
+        return task in self.tasks
+
+    def __repr__(self):
+        return f"<TaskManager tasks={len(self.tasks)}>"

@@ -26,6 +26,10 @@ async def async_job_with_instance(*, job: QueuedJob):
     job.meta["received_instance"] = True
 
 
+def slow_job_to_run():
+    time.sleep(5)
+
+
 @pytest.mark.asyncio
 async def test_basic_job_sync(
     chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
@@ -54,6 +58,25 @@ async def test_basic_job_async(
     job = await chancy.wait_for_job(ref, timeout=30)
 
     assert job.state == job.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_wait_for_job_timeout(
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
+):
+    """
+    Ensures that waiting for a job times out as expected.
+    """
+    await chancy.declare(Queue("low", executor=sync_executor))
+
+    ref = await chancy.push(Job.from_func(job_to_run, queue="low"))
+    job = await chancy.wait_for_job(ref, timeout=10)
+
+    assert job.state == job.State.SUCCEEDED
+
+    ref = await chancy.push(Job.from_func(slow_job_to_run, queue="low"))
+    with pytest.raises(asyncio.TimeoutError):
+        await chancy.wait_for_job(ref, timeout=0.1)
 
 
 @pytest.mark.asyncio

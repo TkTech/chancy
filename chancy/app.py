@@ -431,8 +431,9 @@ class Chancy:
             record = await cursor.fetchone()
             references.append(Reference(record[0]))
 
-        for queue in set(job.queue for job in jobs):
-            await self.notify(cursor, "queue.pushed", {"q": queue})
+        if self.notifications:
+            for queue in set(job.queue for job in jobs):
+                await self.notify(cursor, "queue.pushed", {"q": queue})
 
         return references
 

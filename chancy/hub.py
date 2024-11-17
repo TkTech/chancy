@@ -10,7 +10,7 @@ class Hub:
 
     def __init__(self):
         self._handlers: dict[str, list[Callable[..., Awaitable[None]]]] = {}
-        self._waiters: dict[str, list[asyncio.Future]] = {}
+        self._waiters: dict[str, set[asyncio.Future]] = {}
 
     def on(self, event: str, f: Callable[..., Awaitable[None]]):
         """
@@ -26,6 +26,19 @@ class Hub:
             self._handlers.get(event, []).remove(handler)
         except ValueError:
             pass
+
+    def clear(self):
+        """
+        Clear all handlers.
+        """
+        self._handlers = {}
+
+        for event in self._waiters:
+            for waiter in self._waiters[event]:
+                if not waiter.done():
+                    waiter.cancel()
+
+        self._waiters = {}
 
     async def emit(self, event: str, body):
         """
@@ -51,18 +64,7 @@ class Hub:
         for waiter in waiters:
             if not waiter.done():
                 waiter.set_result(body)
-        self._waiters[event] = [w for w in waiters if not w.done()]
-
-    def off(self, event: str, callback: Callable[..., Awaitable[None]]):
-        """
-        Remove a callback from an event.
-
-        :param event: The event to remove the callback from.
-        :param callback: The callback to remove.
-        """
-        self._handlers[event] = [
-            h for h in self._handlers[event] if h != callback
-        ]
+        self._waiters[event] = {w for w in waiters if not w.done()}
 
     async def wait_for(self, event: str, timeout: float | None = None):
         """
@@ -70,17 +72,20 @@ class Hub:
 
         :param event: The event to wait for.
         :param timeout: The maximum time to wait for the event (in seconds).
-        :return: The data associated with the event.
-        :raises TimeoutError: If the timeout is reached before the event occurs.
         """
         future = asyncio.get_running_loop().create_future()
-        self._waiters.setdefault(event, []).append(future)
+        future.add_done_callback(
+            lambda _: self._waiters.get(event, set()).discard(future)
+        )
+        self._waiters.setdefault(event, set()).add(future)
 
-        try:
-            return await asyncio.wait_for(future, timeout)
-        except TimeoutError:
-            self._waiters[event].remove(future)
-            raise
-        finally:
-            if not future.done():
-                future.cancel()
+        done, pending = await asyncio.wait(
+            [future],
+            timeout=timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        for task in pending:
+            task.cancel()
+
+        return

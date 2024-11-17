@@ -31,6 +31,7 @@ jobs:
   build:
     name: Running tests.
 
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -72,7 +73,7 @@ jobs:
 
     - name: Running tests
       run: |
-        uv run pytest --cov=chancy --cov-report=xml
+        uv run pytest -s -vvvvv --cov=chancy --cov-report=xml
 
     - name: Uploading coverage
       uses: codecov/codecov-action@v4

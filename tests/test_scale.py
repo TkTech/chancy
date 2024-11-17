@@ -50,7 +50,6 @@ async def test_busy_chancy(chancy: Chancy, worker_no_start: Worker):
                     " FROM STDIN"
                 ).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs"))
             ) as copy:
-
                 for i in range(10_000_000):
                     await copy.write_row(
                         (

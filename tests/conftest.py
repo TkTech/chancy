@@ -51,26 +51,15 @@ def chancy_just_app(postgresql):
 
 
 @pytest_asyncio.fixture()
-async def worker(chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
+async def worker(request, chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
     """
     Starts and returns a Worker and the task associated with it.
 
     If the worker is not stopped by the time the test completes, it will be
     cancelled.
     """
-    worker = Worker(chancy)
-    worker_task = asyncio.create_task(worker.start())
-
-    try:
-        yield worker, worker_task
-    finally:
-        if not worker_task.done():
-            worker_task.cancel()
-
-        try:
-            await asyncio.gather(worker_task)
-        except asyncio.CancelledError:
-            pass
+    async with Worker(chancy, **getattr(request, "param", {})) as worker:
+        yield worker
 
 
 @pytest_asyncio.fixture()
@@ -82,10 +71,15 @@ async def worker_no_start(chancy) -> Worker:
 
 
 @pytest.fixture(
-    params=[
-        "chancy.executors.process.ProcessExecutor",
-        "chancy.executors.thread.ThreadedExecutor",
-    ]
+    params=(
+        [
+            "chancy.executors.process.ProcessExecutor",
+            "chancy.executors.thread.ThreadedExecutor",
+        ]
+        # + ["chancy.executors.sub.SubInterpreterExecutor"]
+        # if sys.version_info >= (3, 13)
+        # else []
+    )
 )
 def sync_executor(request):
     """

@@ -3,6 +3,7 @@ import enum
 import asyncio
 import typing
 
+from chancy import utils
 from chancy.job import QueuedJob
 from chancy.migrate import Migrator
 
@@ -89,17 +90,7 @@ class Plugin(abc.ABC):
         Sleep for a specified number of seconds, but allow the plugin to be
         woken up early.
         """
-        wakeup = asyncio.create_task(self.wakeup_signal.wait())
-
-        done, pending = await asyncio.wait(
-            [wakeup],
-            timeout=seconds,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-
-        for task in pending:
-            task.cancel()
-
+        await utils.sleep(seconds, events=[self.wakeup_signal.wait()])
         self.wakeup_signal.clear()
         return True
 
