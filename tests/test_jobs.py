@@ -31,7 +31,7 @@ async def test_basic_job_sync(
     await chancy.declare(Queue("low", executor=sync_executor))
 
     ref = await chancy.push(Job.from_func(job_to_run, queue="low"))
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
 
     assert job.state == job.State.SUCCEEDED
 
@@ -46,7 +46,7 @@ async def test_basic_job_async(
     await chancy.declare(Queue("low", executor=async_executor))
 
     ref = await chancy.push(Job.from_func(async_job_to_run, queue="low"))
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
 
     assert job.state == job.State.SUCCEEDED
 
@@ -61,7 +61,7 @@ async def test_job_instance_kwarg(
     await chancy.declare(Queue("low", executor=sync_executor))
 
     ref = await chancy.push(Job.from_func(job_with_instance, queue="low"))
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
 
     assert job.state == job.State.SUCCEEDED
     assert job.meta.get("received_instance") is True
@@ -78,7 +78,7 @@ async def test_async_job_instance_kwarg(
     await chancy.declare(Queue("low", executor=async_executor))
 
     ref = await chancy.push(Job.from_func(async_job_with_instance, queue="low"))
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
 
     assert job.state == job.State.SUCCEEDED
     assert job.meta.get("received_instance") is True

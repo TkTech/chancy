@@ -25,7 +25,7 @@ async def test_retry_with_default_settings(
 
     ref = await chancy.push(Job.from_func(job_that_fails, max_attempts=3))
 
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
     assert job.state == QueuedJob.State.FAILED
     assert job.attempts == 3
     assert len(job.errors) == 3
@@ -61,7 +61,7 @@ async def test_retry_with_custom_settings(
         )
     )
 
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
     assert job.state == QueuedJob.State.FAILED
     assert job.attempts == 3
     assert len(job.errors) == 3
@@ -91,7 +91,7 @@ async def test_no_retry_on_success(chancy, worker: tuple[Worker, asyncio.Task]):
         )
     )
 
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
     assert job.state == QueuedJob.State.SUCCEEDED
     assert job.attempts == 1
     assert len(job.errors) == 0
@@ -122,7 +122,7 @@ async def test_respect_max_attempts(
         )
     )
 
-    job = await chancy.wait_for_job(ref)
+    job = await chancy.wait_for_job(ref, timeout=30)
     assert job.state == QueuedJob.State.FAILED
     assert job.attempts == 2
     assert len(job.errors) == 2
