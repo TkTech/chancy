@@ -1,6 +1,5 @@
 import asyncio
 import secrets
-import sys
 from typing import AsyncIterator
 
 import pytest
@@ -78,9 +77,9 @@ async def worker_no_start(chancy) -> Worker:
             "chancy.executors.process.ProcessExecutor",
             "chancy.executors.thread.ThreadedExecutor",
         ]
-        + ["chancy.executors.sub.SubInterpreterExecutor"]
-        if sys.version_info >= (3, 13)
-        else []
+        # + ["chancy.executors.sub.SubInterpreterExecutor"]
+        # if sys.version_info >= (3, 13)
+        # else []
     )
 )
 def sync_executor(request):

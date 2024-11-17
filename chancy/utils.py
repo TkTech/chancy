@@ -23,15 +23,19 @@ async def sleep(
         return True
 
     tasks = [asyncio.create_task(event) for event in events]
+    try:
+        done, pending = await asyncio.wait(
+            tasks,
+            timeout=seconds,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
 
-    done, pending = await asyncio.wait(
-        tasks,
-        timeout=seconds,
-        return_when=asyncio.FIRST_COMPLETED,
-    )
-
-    for task in pending:
-        task.cancel()
+        for task in pending:
+            task.cancel()
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
     return True
 
@@ -162,14 +166,16 @@ class TaskManager:
 
     def __init__(self):
         self.tasks: set[asyncio.Task] = set()
+        # An event triggered whenever add() is called to ensure that
+        # wait_until_complete() will pick up new tasks.
         self._added_event = asyncio.Event()
 
     def add(self, task, *, name: str | None = None) -> asyncio.Task:
         """
         Add a task to the manager.
         """
-        if not asyncio.iscoroutine(task):
-            raise TypeError("Expected a coroutine object.")
+        if not asyncio.iscoroutine(task) and not isinstance(task, asyncio.Task):
+            raise TypeError("Expected a coroutine or Task.")
 
         if not isinstance(task, asyncio.Task):
             task = asyncio.create_task(task)
@@ -188,34 +194,57 @@ class TaskManager:
         Wait until all tasks are complete, including any that are added
         after this method is called.
         """
-        added_task = asyncio.create_task(self._added_event.wait())
         while self.tasks:
-            done, pending = await asyncio.wait(
-                {*self.tasks, added_task},
-                return_when=asyncio.FIRST_COMPLETED,
+            added_task = asyncio.create_task(
+                self._added_event.wait(),
+                name="TaskManager._added_event",
             )
 
-            for task in done:
-                if task.cancelled():
-                    continue
-                task.result()
+            try:
+                done, pending = await asyncio.wait(
+                    self.tasks | {added_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
 
-            if added_task in done:
-                added_task = asyncio.create_task(self._added_event.wait())
+                added_task.cancel()
+                self._added_event.clear()
 
-            if len(pending) == 1 and added_task in pending:
-                return
+                for task in done:
+                    if task is added_task:
+                        continue
 
-            self.tasks = pending
+                    if task.cancelled():
+                        continue
+
+                    task.result()
+
+                self.tasks.intersection_update(pending)
+                if not self.tasks:
+                    break
+            except Exception:
+                for task in self.tasks:
+                    if not task.done():
+                        task.cancel()
+                raise
+            finally:
+                added_task.cancel()
+                self._added_event.clear()
 
     async def cancel_all(self):
         """
         Cancel all tasks and wait for them to complete.
         """
-        for task in self.tasks:
-            task.cancel()
+        if not self.tasks:
+            return
 
-        await self.wait_until_complete()
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
+
+        try:
+            await asyncio.gather(*self.tasks, return_exceptions=True)
+        finally:
+            self.tasks.clear()
 
     def __len__(self):
         return len(self.tasks)

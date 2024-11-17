@@ -113,17 +113,24 @@ class Worker:
         self.queue_change_poll_interval = queue_change_poll_interval
         #: An event hub with cluster and local telemetry, useful for plugins.
         self.hub = Hub()
-        #: An event that is set when the worker is the leader.
-        #: This functionality is not enabled by default - a leadership plugin
-        #: must be used to enable this event.
-        self.is_leader = asyncio.Event()
         # Extra tags to associate with the worker.
         self._extra_tags = tags or set()
 
         self._queues: dict[str, Queue] = {}
+        #: The task manager for the worker, responsible for managing all of the
+        #: worker's internal asyncio tasks.
         self.manager = TaskManager()
-        self.outgoing = asyncio.Queue()
+        #: A queue of updates waiting to be sent to the database.
+        self.outgoing: asyncio.Queue[QueuedJob] = asyncio.Queue()
+
+        #: An event that is set when the worker is the leader.
+        #: This functionality is not enabled by default - a leadership plugin
+        #: must be used to enable this event.
+        self.is_leader = asyncio.Event()
+        #: An event that is set when the worker is shutting down due to
+        #: receiving a signal.
         self.shutdown_event = asyncio.Event()
+        # Set once the notifications listener is ready.
         self._notifications_ready = asyncio.Event()
 
     async def start(self, *, register_signal_handlers: bool = True):
@@ -669,9 +676,24 @@ class Worker:
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"
 
+    def __iter__(self):
+        return iter(self._queues.values())
+
+    def __getitem__(self, key):
+        return self._queues[key]
+
+    def __contains__(self, key):
+        return key in self._queues
+
+    def __len__(self):
+        return len(self._queues)
+
     async def __aenter__(self) -> "Worker":
-        asyncio.create_task(self.start())
+        self.manager.add(self.start())
         return self
 
     async def __aexit__(self, *args):
+        # Ensure that we cancel all pending wait_for events.
+        self.hub.clear()
+        # And ensure we cancel all of our internal housekeeping tasks.
         await self.manager.cancel_all()

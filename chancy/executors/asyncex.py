@@ -71,6 +71,6 @@ class AsyncExecutor(Executor):
                 raise asyncio.TimeoutError(
                     f"Job {job.id} timed out after {timeout} seconds"
                 )
-            self.worker.manager.add(self.job_completed(job))
+            await self.job_completed(job)
         except Exception as exc:
-            self.worker.manager.add(self.job_completed(job, exc))
+            await self.job_completed(job, exc)
