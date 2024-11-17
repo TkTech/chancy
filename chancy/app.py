@@ -171,13 +171,6 @@ class Chancy:
         #: The logger to use for all application logging.
         self.log = log or _setup_default_logger()
 
-    async def __aiter__(self):
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_all_queues_sql())
-                async for record in cursor:
-                    yield Queue.unpack(record)
-
     async def __aenter__(self):
         await self.pool.open()
         return self
