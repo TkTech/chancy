@@ -72,17 +72,17 @@ jobs:
 
     - name: Running tests
       run: |
-        uv run pytest -s
+        uv run pytest -s -vvvvv --cov=chancy --cov-report=xml
 
-    # - name: Uploading coverage
-    #   uses: codecov/codecov-action@v4
-    #   with:
-    #     env_vars: OS,PYTHON
-    #     fail_ci_if_error: true
-    #     flags: unittests
-    #     token: ${{ secrets.CODECOV_TOKEN }}
-    #     verbose: true
-    #     slug: TkTech/chancy
+    - name: Uploading coverage
+      uses: codecov/codecov-action@v4
+      with:
+        env_vars: OS,PYTHON
+        fail_ci_if_error: true
+        flags: unittests
+        token: ${{ secrets.CODECOV_TOKEN }}
+        verbose: true
+        slug: TkTech/chancy
 
     - name: Building docs
       run: |
