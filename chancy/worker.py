@@ -690,6 +690,7 @@ class Worker:
 
     async def __aenter__(self) -> "Worker":
         self.manager.add(self.start())
+        await self.wait_until_ready()
         return self
 
     async def __aexit__(self, *args):

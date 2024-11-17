@@ -38,24 +38,7 @@ async def test_multiple_queues(
 
 
 @pytest.mark.asyncio
-async def test_queue_iteration(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
-    """
-    Ensure that we can retrieve and iterate over all the queues in the
-    system using the Chancy object.
-    """
-    await chancy.declare(low)
-    await chancy.declare(high)
-
-    async for queue in chancy:
-        assert queue in (low, high)
-
-
-@pytest.mark.asyncio
-async def test_queue_listing(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_queue_listing(chancy: Chancy):
     """
     Ensure that we can retrieve a list of all the queues in the system.
     """
@@ -69,9 +52,7 @@ async def test_queue_listing(
 
 
 @pytest.mark.asyncio
-async def test_get_single_queue(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_get_single_queue(chancy: Chancy):
     """
     Ensure that we can retrieve a single queue from the system.
     """

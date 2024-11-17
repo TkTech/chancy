@@ -59,7 +59,6 @@ async def worker(request, chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
     cancelled.
     """
     async with Worker(chancy, **getattr(request, "param", {})) as worker:
-        await worker.wait_until_ready()
         yield worker
 
 
