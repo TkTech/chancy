@@ -431,9 +431,8 @@ class Chancy:
             record = await cursor.fetchone()
             references.append(Reference(record[0]))
 
-        if self.notifications:
-            for queue in set(job.queue for job in jobs):
-                await self.notify(cursor, "queue.pushed", {"q": queue})
+        for queue in set(job.queue for job in jobs):
+            await self.notify(cursor, "queue.pushed", {"q": queue})
 
         return references
 
@@ -460,9 +459,8 @@ class Chancy:
             record = cursor.fetchone()
             references.append(Reference(record[0]))
 
-        if self.notifications:
-            for queue in set(job.queue for job in jobs):
-                self.sync_notify(cursor, "queue.pushed", {"q": queue})
+        for queue in set(job.queue for job in jobs):
+            self.sync_notify(cursor, "queue.pushed", {"q": queue})
 
         return references
 
@@ -557,6 +555,16 @@ class Chancy:
                 return [record async for record in cursor]
 
     async def notify(self, cursor, event: str, payload: dict[str, Any]):
+        """
+        Send a notification via Postgres NOTIFY/LISTEN to all other listening
+        workers.
+
+        If notifications are disabled on the associated Chancy app, this
+        method will do nothing.
+        """
+        if not self.notifications:
+            return
+
         await cursor.execute(
             "SELECT pg_notify(%s, %s)",
             [
@@ -566,6 +574,9 @@ class Chancy:
         )
 
     def sync_notify(self, cursor: Cursor, event: str, payload: dict[str, Any]):
+        if not self.notifications:
+            return
+
         cursor.execute(
             "SELECT pg_notify(%s, %s)",
             [
