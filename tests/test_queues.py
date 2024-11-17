@@ -38,9 +38,7 @@ async def test_multiple_queues(
 
 
 @pytest.mark.asyncio
-async def test_queue_listing(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_queue_listing(chancy: Chancy):
     """
     Ensure that we can retrieve a list of all the queues in the system.
     """
@@ -54,9 +52,7 @@ async def test_queue_listing(
 
 
 @pytest.mark.asyncio
-async def test_get_single_queue(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_get_single_queue(chancy: Chancy):
     """
     Ensure that we can retrieve a single queue from the system.
     """
