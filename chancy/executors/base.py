@@ -128,8 +128,19 @@ class Executor(abc.ABC):
 
         return func, kwargs
 
+    async def stop(self):
+        """
+        Stop the executor.
+        """
+
     @abc.abstractmethod
     def __len__(self):
         """
         Get the number of pending and running jobs in the pool.
         """
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.stop()

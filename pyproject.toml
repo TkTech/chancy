@@ -34,9 +34,6 @@ web = [
 cli = [
     "click"
 ]
-sub = [
-    "interpreters-pep-734>=0.4.1; python_version >= '3.13'",
-]
 
 [project.scripts]
 chancy = "chancy.cli.cli:main"
@@ -64,9 +61,6 @@ artifacts = [
 artifacts = [
     "chancy/plugins/api/dist/**"
 ]
-
-[tool.ruff]
-line-length = 80
 
 [build-system]
 requires = ["hatchling"]

@@ -76,9 +76,6 @@ async def worker_no_start(chancy) -> Worker:
             "chancy.executors.process.ProcessExecutor",
             "chancy.executors.thread.ThreadedExecutor",
         ]
-        # + ["chancy.executors.sub.SubInterpreterExecutor"]
-        # if sys.version_info >= (3, 13)
-        # else []
     )
 )
 def sync_executor(request):

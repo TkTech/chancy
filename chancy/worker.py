@@ -12,7 +12,6 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
-from chancy import utils
 from chancy.app import Chancy
 from chancy.hub import Hub
 from chancy.queue import Queue
@@ -80,6 +79,7 @@ class Worker:
     :param shutdown_timeout: The number of seconds to wait for a clean shutdown
                                 before forcing the worker to stop.
     :param tags: Extra tags to associate with the worker.
+    :param register_signal_handlers: Whether to register signal handlers.
     """
 
     def __init__(
@@ -92,6 +92,7 @@ class Worker:
         queue_change_poll_interval: int = 10,
         shutdown_timeout: int = 30,
         tags: set[str] | None = None,
+        register_signal_handlers: bool = True,
     ):
         #: The Chancy application that the worker is associated with.
         self.chancy = chancy
@@ -113,6 +114,8 @@ class Worker:
         self.queue_change_poll_interval = queue_change_poll_interval
         #: An event hub with cluster and local telemetry, useful for plugins.
         self.hub = Hub()
+        #: Whether to register signal handlers on startup of the worker.
+        self.register_signal_handlers = register_signal_handlers
         # Extra tags to associate with the worker.
         self._extra_tags = tags or set()
 
@@ -131,9 +134,9 @@ class Worker:
         #: receiving a signal.
         self.shutdown_event = asyncio.Event()
         # Set once the notifications listener is ready.
-        self._notifications_ready = asyncio.Event()
+        self._notifications_ready_event = asyncio.Event()
 
-    async def start(self, *, register_signal_handlers: bool = True):
+    async def start(self):
         """
         Start the worker.
 
@@ -159,12 +162,26 @@ class Worker:
             self.manager.add(
                 self._maintain_notifications(), name="notifications"
             )
-            await self._notifications_ready.wait()
+            await self._notifications_ready_event.wait()
 
-        if register_signal_handlers:
-            await self.register_signal_handlers()
+        if self.register_signal_handlers:
+            loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
+            for sig in {signal.SIGTERM, signal.SIGINT}:
+                loop.add_signal_handler(
+                    sig,
+                    lambda: asyncio.create_task(self.on_signal(sig)),
+                )
 
-        await self.manager.wait_until_complete()
+    def add_plugin(self, plugin):
+        """
+        Add a plugin to the worker.
+
+        :param plugin: The plugin to add.
+        """
+        self.manager.add(
+            plugin.run(self, self.chancy),
+            name=plugin.__class__.__name__,
+        )
 
     async def _maintain_queues(self):
         """
@@ -174,10 +191,7 @@ class Worker:
         that the worker should be processing, and update the worker's queues
         accordingly.
         """
-        while await utils.sleep(
-            self.queue_change_poll_interval,
-            events=[self.hub.wait_for("queue.declared")],
-        ):
+        while True:
             self.chancy.log.debug("Polling for queue changes.")
             async with self.chancy.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cursor:
@@ -236,6 +250,14 @@ class Worker:
                             f" {queue_name!r}."
                         )
 
+            try:
+                await self.hub.wait_for(
+                    "queue.declared",
+                    timeout=self.queue_change_poll_interval,
+                )
+            except asyncio.TimeoutError:
+                pass
+
     async def _maintain_queue(self, queue_name: str):
         """
         Maintain a single queue.
@@ -246,53 +268,52 @@ class Worker:
         :param queue_name: The queue to maintain.
         """
         queue = self._queues[queue_name]
-        executor = import_string(queue.executor)(
-            self, queue, **queue.executor_options
-        )
+        cls = import_string(queue.executor)
 
-        while True:
-            try:
-                queue = self._queues[queue_name]
-            except KeyError:
-                self.chancy.log.info(
-                    f"Queue {queue_name!r} no longer exists, stopping its"
-                    f" maintenance loop."
+        async with cls(self, queue, **queue.executor_options) as executor:
+            while True:
+                try:
+                    queue = self._queues[queue_name]
+                except KeyError:
+                    self.chancy.log.info(
+                        f"Queue {queue_name!r} no longer exists, stopping its"
+                        f" maintenance loop."
+                    )
+                    return
+
+                maximum_jobs_to_poll = queue.concurrency - len(executor)
+                if maximum_jobs_to_poll <= 0:
+                    await asyncio.sleep(queue.polling_interval)
+                    continue
+
+                if queue.state == Queue.State.PAUSED:
+                    self.chancy.log.debug(
+                        f"Queue {queue.name!r} is paused, skipping polling."
+                    )
+                    await asyncio.sleep(queue.polling_interval)
+                    continue
+
+                async with self.chancy.pool.connection() as conn:
+                    jobs = await self.fetch_jobs(
+                        queue, conn, up_to=maximum_jobs_to_poll
+                    )
+
+                await self.hub.emit(
+                    "queue.polled",
+                    {
+                        "fetched": len(jobs),
+                        "worker_id": self.worker_id,
+                        "queue": queue.name,
+                    },
                 )
-                return
 
-            maximum_jobs_to_poll = queue.concurrency - len(executor)
-            if maximum_jobs_to_poll <= 0:
+                for job in jobs:
+                    self.chancy.log.info(
+                        f"Pulled {job.id!r} ({job.func!r}) for queue {job.queue!r}"
+                    )
+                    await executor.push(job)
+
                 await asyncio.sleep(queue.polling_interval)
-                continue
-
-            if queue.state == Queue.State.PAUSED:
-                self.chancy.log.debug(
-                    f"Queue {queue.name!r} is paused, skipping polling."
-                )
-                await asyncio.sleep(queue.polling_interval)
-                continue
-
-            async with self.chancy.pool.connection() as conn:
-                jobs = await self.fetch_jobs(
-                    queue, conn, up_to=maximum_jobs_to_poll
-                )
-
-            await self.hub.emit(
-                "queue.polled",
-                {
-                    "fetched": len(jobs),
-                    "worker_id": self.worker_id,
-                    "queue": queue.name,
-                },
-            )
-
-            for job in jobs:
-                self.chancy.log.info(
-                    f"Pulled {job.id!r} ({job.func!r}) for queue {job.queue!r}"
-                )
-                await executor.push(job)
-
-            await asyncio.sleep(queue.polling_interval)
 
     async def _maintain_heartbeat(self):
         """
@@ -328,7 +349,7 @@ class Worker:
             )
         )
         self.chancy.log.info("Started listening for realtime notifications.")
-        self._notifications_ready.set()
+        self._notifications_ready_event.set()
         async for notification in connection.notifies():
             j = json.loads(notification.payload)
             await self.hub.emit(j.pop("t"), j)
@@ -631,17 +652,6 @@ class Worker:
 
                 return [QueuedJob.unpack(record) for record in records]
 
-    async def register_signal_handlers(self):
-        """
-        Registers signal handlers.
-        """
-        loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
-        for sig in {signal.SIGTERM, signal.SIGINT}:
-            loop.add_signal_handler(
-                sig,
-                lambda: asyncio.create_task(self.on_signal(sig)),
-            )
-
     async def on_signal(self, signum: int):
         """
         Called when a signal is received.
@@ -661,17 +671,12 @@ class Worker:
         """
         Stop the worker.
 
-        This will initiate a clean shutdown, waiting for all jobs to complete
-        before returning.
+        Attempts to stop the worker gracefully, sending a CancelledError to all
+        running tasks and waiting for them to complete. If the tasks do not
+        complete within the `shutdown_timeout`, they will be forcibly cancelled.
         """
-        await self.manager.cancel_all()
-
-    async def wait_until_ready(self):
-        """
-        Wait until the worker is ready to process jobs.
-        """
-        if self.chancy.notifications:
-            await self._notifications_ready.wait()
+        async with asyncio.timeout(self.shutdown_timeout):
+            await self.manager.cancel_all()
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"
@@ -688,13 +693,13 @@ class Worker:
     def __len__(self):
         return len(self._queues)
 
-    async def __aenter__(self) -> "Worker":
-        self.manager.add(self.start())
-        await self.wait_until_ready()
+    async def __aenter__(self):
+        self.manager.add(self.start(), name="worker")
+        if self.chancy.notifications:
+            # Wait for notifications to enable so we pickup events immediately,
+            # which improves reactivity in tests.
+            await self._notifications_ready_event.wait()
         return self
 
-    async def __aexit__(self, *args):
-        # Ensure that we cancel all pending wait_for events.
-        self.hub.clear()
-        # And ensure we cancel all of our internal housekeeping tasks.
-        await self.manager.cancel_all()
+    async def __aexit__(self, *exc):
+        await self.stop()

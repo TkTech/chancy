@@ -1,6 +1,9 @@
 import asyncio
 import functools
+import multiprocessing
 import os
+from multiprocessing.context import BaseContext
+
 import resource
 import signal
 import threading
@@ -65,9 +68,19 @@ class ProcessExecutor(Executor):
     :param queue: The queue that this executor is associated with.
     :param maximum_jobs_per_worker: The maximum number of jobs that each worker
                                     can run before being replaced.
+    :param mp_context: The multiprocessing context to use. If not provided, the
+                       default "spawn" context will be used, which is the
+                       safest option on all platforms.
     """
 
-    def __init__(self, worker, queue, *, maximum_jobs_per_worker: int = 100):
+    def __init__(
+        self,
+        worker,
+        queue,
+        *,
+        maximum_jobs_per_worker: int = 100,
+        mp_context: BaseContext | None = None,
+    ):
         super().__init__(worker, queue)
 
         self.processes: dict[Future, QueuedJob] = {}
@@ -75,6 +88,11 @@ class ProcessExecutor(Executor):
             max_workers=queue.concurrency,
             max_tasks_per_child=maximum_jobs_per_worker,
             initializer=self.on_initialize_worker,
+            # Becomes the default on Linux as of 3.14 due to potential crashes
+            # in the `fork` method if the child process also works with threads.
+            # We're using `spawn` explicitly to get ahead of the curve, however
+            # this is slower than `fork`.
+            mp_context=mp_context or multiprocessing.get_context("spawn"),
         )
 
     @staticmethod
@@ -196,3 +214,10 @@ class ProcessExecutor(Executor):
             loop,
         )
         f.result()
+
+    async def stop(self):
+        """
+        Stop the executor and clean up any resources.
+        """
+        # self.pool.shutdown(cancel_futures=True)
+        await super().stop()
