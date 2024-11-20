@@ -34,6 +34,9 @@ web = [
 cli = [
     "click"
 ]
+sub = [
+    "interpreters-pep-734>=0.4.1; python_version >= '3.13'",
+]
 
 [project.scripts]
 chancy = "chancy.cli.cli:main"

@@ -80,10 +80,11 @@ Quick Start
              await chancy.declare(Queue("default", concurrency=10))
              # Push a job onto the default queue
              await chancy.push(
-                Job.from_func(hello_world, kwargs={"name": "world"}, queue="default")
+                 Job.from_func(hello_world, kwargs={"name": "world"}, queue="default")
              )
              # Start the worker and keep it running until we terminate it.
-             await Worker(chancy).start()
+             async with Worker(chancy) as worker:
+                 await worker.wait_until_complete()
 
      if __name__ == "__main__":
          asyncio.run(main())

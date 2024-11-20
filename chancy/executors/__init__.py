@@ -14,6 +14,8 @@ Chancy comes with two built-in executors:
     asyncio jobs in the same process as the worker.
 - :class:`chancy.executors.thread.ThreadedExecutor`: This executor will execute
     jobs in a separate thread.
+- :class:`chancy.executors.sub.SubInterpreterExecutor`: This executor will
+    execute jobs in a separate thread.
 
 You can implement your own executor by subclassing the
 :class:`chancy.executors.base.Executor` class and implementing the

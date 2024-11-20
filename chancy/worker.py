@@ -32,7 +32,8 @@ class Worker:
             dsn="postgresql://localhost/postgres",
         ) as chancy:
             await chancy.migrate()
-            await Worker(chancy).start()
+            async with Worker(chancy) as worker:
+                await worker.wait_until_complete()
 
     Worker Tags
     -----------
@@ -48,7 +49,8 @@ class Worker:
 
     .. code-block:: python
 
-        await Worker(chancy, tags={"has=gpu", "has=large-disk"}).start()
+        async with Worker(chancy, tags={"has=gpu", "has=large-disk"}) as worker:
+            await worker.wait_until_complete()
 
     You could then assign a queue to only run on workers with the ``has=gpu`` tag:
 
@@ -138,10 +140,10 @@ class Worker:
 
     async def start(self):
         """
-        Start the worker.
+        Start the worker and begin processing jobs.
 
-        Will run indefinitely, polling the queues for new jobs and running any
-        configured plugins.
+        Unlike `run`, this method does not wait for the worker to complete and
+        returns immediately.
         """
         for plugin in self.chancy.plugins:
             self.manager.add(
@@ -172,16 +174,11 @@ class Worker:
                     lambda: asyncio.create_task(self.on_signal(sig)),
                 )
 
-    def add_plugin(self, plugin):
+    async def wait_until_complete(self):
         """
-        Add a plugin to the worker.
-
-        :param plugin: The plugin to add.
+        Wait until the worker is stopped.
         """
-        self.manager.add(
-            plugin.run(self, self.chancy),
-            name=plugin.__class__.__name__,
-        )
+        await self.manager.wait_until_complete()
 
     async def _maintain_queues(self):
         """
@@ -672,8 +669,8 @@ class Worker:
         Stop the worker.
 
         Attempts to stop the worker gracefully, sending a CancelledError to all
-        running tasks and waiting for them to complete. If the tasks do not
-        complete within the `shutdown_timeout`, they will be forcibly cancelled.
+        running tasks and waiting up to `shutdown_timeout` seconds for them to
+        complete before returning.
         """
         async with asyncio.timeout(self.shutdown_timeout):
             await self.manager.cancel_all()
@@ -694,11 +691,7 @@ class Worker:
         return len(self._queues)
 
     async def __aenter__(self):
-        self.manager.add(self.start(), name="worker")
-        if self.chancy.notifications:
-            # Wait for notifications to enable so we pickup events immediately,
-            # which improves reactivity in tests.
-            await self._notifications_ready_event.wait()
+        await self.start()
         return self
 
     async def __aexit__(self, *exc):
