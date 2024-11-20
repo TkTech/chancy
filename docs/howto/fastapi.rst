@@ -25,20 +25,13 @@ application by using FastAPI's lifespan events:
       FastAPI lifespan handler that starts and stops the Chancy worker.
       This ensures the worker starts when FastAPI starts and shuts down properly.
       """
-      await chancy.pool.open()
       await chancy.migrate()
 
       # Declare any queues we need
       await chancy.declare(Queue("default"))
 
-      # Create and start the worker
-      worker = Worker(chancy)
-      asyncio.create_task(worker.start())
-
-      try:
-          yield
-      finally:
-          await chancy.pool.close()
+      async with Worker(chancy) as worker:
+        yield
 
 
   app = FastAPI(lifespan=lifespan)
