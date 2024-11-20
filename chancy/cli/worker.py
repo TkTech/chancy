@@ -32,11 +32,10 @@ async def worker_command(
     chancy: Chancy = ctx.obj["app"]
 
     async with chancy:
-        await Worker(
-            chancy,
-            worker_id=worker_id,
-            tags=set(tags) if tags else None,
-        ).start()
+        async with Worker(
+            chancy, worker_id=worker_id, tags=set(tags) if tags else None
+        ) as worker:
+            await worker.wait_until_complete()
 
 
 @worker_group.command("web")
