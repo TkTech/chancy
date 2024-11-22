@@ -140,11 +140,6 @@ Quick Start
 
 Congratulations! You've just run your first Chancy job.
 
-Get the code
-------------
-
--
-
 
 Similar Projects
 ----------------
