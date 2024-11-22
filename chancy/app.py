@@ -227,6 +227,19 @@ class Chancy:
             async with Chancy("postgresql://localhost/chancy") as chancy:
                 await chancy.migrate()
 
+        Can also be run with the CLI:
+
+        .. code-block:: bash
+
+            chancy --app worker.chancy misc migrate
+
+        .. warning::
+
+            You should never run migrations in production without first testing
+            them in a development environment. Migrations can be destructive and
+            may cause data loss if not written carefully, or take a long time to
+            complete if the database is large.
+
         :param to_version: The version to migrate to. If not provided, the
             database will be migrated to the latest version.
         """
@@ -281,6 +294,11 @@ class Chancy:
         This is a low-level method that allows for more control over the
         database connection and transaction management. It is recommended to
         use the higher-level `declare` method in most cases.
+
+        :param cursor: The cursor to use for the operation.
+        :param queue: The queue to declare.
+        :param upsert: If `True`, the queue will be updated if it already
+            exists. Defaults to `False`.
         """
         await cursor.execute(
             self._declare_sql(upsert),
@@ -325,6 +343,10 @@ class Chancy:
             async with Chancy("postgresql://localhost/chancy") as chancy:
                 await chancy.push(Job.from_func(my_job))
 
+        .. seealso::
+
+            :meth:`sync_push` for a synchronous version of this method.
+
         :param job: The job to push onto the queue.
         :return: A reference to the job in the queue.
         """
@@ -344,6 +366,10 @@ class Chancy:
 
             with Chancy("postgresql://localhost/chancy") as chancy:
                 chancy.sync_push(Job.from_func(my_job))
+
+        .. seealso::
+
+            :meth:`push` for an asynchronous version of this method.
 
         :param job: The job to push onto the queue.
         :return: A reference to the job in the queue.
@@ -367,6 +393,10 @@ class Chancy:
 
         Returns an iterator of lists of references to the jobs in the queue,
         one list per batch.
+
+        .. seealso::
+
+            :meth:`sync_push_many` for a synchronous version of this method.
 
         :param jobs: The jobs to push onto the queue.
         :param batch_size: The number of jobs to push in each batch. Defaults
@@ -392,6 +422,10 @@ class Chancy:
         Returns an iterator of lists of references to the jobs in the queue,
         one list per batch.
 
+        .. seealso::
+
+            :meth:`push_many` for an asynchronous version of this method.
+
         :param jobs: The jobs to push onto the queue.
         :param batch_size: The number of jobs to push in each batch. Defaults
             to 1000.
@@ -416,7 +450,11 @@ class Chancy:
         The main advantage of using this function is to ensure your jobs are
         only pushed if some other operation is successful. For example, you
         only want to send an email confirmation if account creation actually
-        succeeds.
+        succeeds. For example:
+
+        .. seealso::
+
+            :meth:`sync_push_many_ex` for a synchronous version of this method.
 
         :param cursor: The cursor to use for the operation.
         :param jobs: The jobs to push onto the queue.
@@ -447,6 +485,10 @@ class Chancy:
         database connection and transaction management. It is recommended to
         use the higher-level `sync_push_many` method in most cases.
 
+        .. seealso::
+
+            :meth:`push_many_ex` for an asynchronous version of this method.
+
         :param cursor: The cursor to use for the operation.
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
@@ -471,6 +513,8 @@ class Chancy:
         Resolve a reference to a job instance.
 
         If the job no longer exists, returns ``None``.
+
+        :param ref: The reference to the job to retrieve.
         """
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
@@ -492,7 +536,8 @@ class Chancy:
 
         This method will loop until the job referenced by the provided
         reference has completed. The interval parameter controls how often
-        the job status is checked.
+        the job status is checked. This will not block the event loop, so
+        other tasks can run while waiting for the job to complete.
 
         If the job no longer exists, returns ``None``.
 
@@ -537,11 +582,17 @@ class Chancy:
                     raise KeyError(f"Queue {name!r} not found.")
                 return Queue.unpack(record)
 
-    async def delete_queue(self, name: str):
+    async def delete_queue(self, name: str, *, purge_jobs: bool = True):
         """
         Delete a queue by name.
 
+        By default, also deletes all jobs in the queue. If you want to keep
+        the jobs, set `purge_jobs` to `False`.
+
         :param name: The name of the queue to delete.
+        :param purge_jobs: If `True`, all jobs in the queue will be deleted
+            along with the queue. If `False`, the jobs will be left in the
+            database.
         """
         async with self.pool.connection() as conn:
             async with conn.cursor() as cursor:
@@ -554,6 +605,16 @@ class Chancy:
                     ).format(queues=sql.Identifier(f"{self.prefix}queues")),
                     [name],
                 )
+                if purge_jobs:
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            DELETE FROM {jobs}
+                            WHERE queue = %s
+                            """
+                        ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
+                        [name],
+                    )
 
     @_ensure_pool_is_open
     async def get_all_workers(self) -> list[dict[str, Any]]:
@@ -565,13 +626,19 @@ class Chancy:
                 await cursor.execute(self._get_all_workers_sql())
                 return [record async for record in cursor]
 
-    async def notify(self, cursor, event: str, payload: dict[str, Any]):
+    async def notify(
+        self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
+    ):
         """
         Send a notification via Postgres NOTIFY/LISTEN to all other listening
         workers.
 
         If notifications are disabled on the associated Chancy app, this
         method will do nothing.
+
+        .. seealso::
+
+            :meth:`sync_notify` for a synchronous version of this method.
         """
         if not self.notifications:
             return
@@ -585,6 +652,17 @@ class Chancy:
         )
 
     def sync_notify(self, cursor: Cursor, event: str, payload: dict[str, Any]):
+        """
+        Send a notification via Postgres NOTIFY/LISTEN to all other listening
+        workers.
+
+        If notifications are disabled on the associated Chancy app, this
+        method will do nothing.
+
+        .. seealso::
+
+            :meth:`notify` for an asynchronous version of this method.
+        """
         if not self.notifications:
             return
 
