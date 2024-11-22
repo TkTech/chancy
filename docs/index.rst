@@ -24,6 +24,8 @@ Key Features:
   :class:`cron jobs<chancy.plugins.cron.Cron>`, and much more
 - Optional transactional enqueueing for atomic job creation
 - asyncio & sync APIs for easy integration with existing codebases
+- 100% open & free - no enterprise or paid features. Checkout
+  the repo on `GitHub <https://github.com/tktech/chancy>`_.
 
 Quick Start
 -----------
@@ -137,6 +139,11 @@ Quick Start
 
 
 Congratulations! You've just run your first Chancy job.
+
+Get the code
+------------
+
+-
 
 
 Similar Projects
