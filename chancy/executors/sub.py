@@ -146,5 +146,8 @@ class SubInterpreterExecutor(Executor):
         )
         f.result()
 
+    def stop(self):
+        self.pool.shutdown(cancel_futures=True)
+
     def __len__(self):
         return len(self.jobs)

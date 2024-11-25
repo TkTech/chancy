@@ -123,9 +123,6 @@ class ProcessExecutor(Executor):
         self.processes[future] = job
         return future
 
-    def __len__(self):
-        return len(self.processes)
-
     @classmethod
     def job_wrapper(cls, job: QueuedJob):
         """
@@ -219,5 +216,7 @@ class ProcessExecutor(Executor):
         """
         Stop the executor and clean up any resources.
         """
-        # self.pool.shutdown(cancel_futures=True)
-        await super().stop()
+        self.pool.shutdown(cancel_futures=True)
+
+    def __len__(self):
+        return len(self.processes)

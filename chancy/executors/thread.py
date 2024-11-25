@@ -105,3 +105,7 @@ class ThreadedExecutor(Executor):
 
     def __len__(self):
         return len(self.jobs)
+
+    async def stop(self):
+        self.pool.shutdown(cancel_futures=True)
+        await super().stop()
