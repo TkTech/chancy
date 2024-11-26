@@ -85,6 +85,8 @@ class ThreadedExecutor(Executor):
         else:
             func(**kwargs)
 
+        return job
+
     @staticmethod
     def _timeout_handler():
         raise TimeoutError("Job timed out.")
@@ -96,7 +98,7 @@ class ThreadedExecutor(Executor):
 
         exc = future.exception()
         if exc is None:
-            exc = future.result()
+            job = future.result()
 
         asyncio.run_coroutine_threadsafe(
             self.job_completed(job, exc),
