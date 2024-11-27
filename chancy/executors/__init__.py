@@ -26,7 +26,7 @@ capabilities of each executor:
      - ✓
      - ✓
      - ✓
-   * - AsyncExecutor  
+   * - AsyncExecutor
      - ✓
      - ✓
      - ✗
