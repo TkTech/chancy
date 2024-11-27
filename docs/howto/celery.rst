@@ -34,18 +34,17 @@ limit.
 Chancy has built-in support for globally rate limiting a queue.
 
 
-Asyncio
--------
+Asyncio-first (but everything else too)
+---------------------------------------
 
 Celery predates the existence of asyncio, and to this day it doesn't have
 any support for running asyncio workers nor for executing asyncio tasks.
 When your tasks are I/O bound, this can be a significant drawback, such as when
 calling external APIs.
 
-Chancy is built on top of asyncio and can offer drastically improved performance
-for I/O bound tasks using its :class:`~chancy.executors.asyncex.AsyncExecutor`.
-Indeed, Chancy lets you mix asyncio, process-based, thread-based and even
-experimental sub-interpreter-based executors *in the same worker*.
+Chancy is built on top of asyncio and can offer drastically improved resource
+utilization for I/O bound tasks using its
+:class:`~chancy.executors.asyncex.AsyncExecutor`.
 
 Introspection
 -------------
@@ -66,6 +65,20 @@ how many of each type of job is in the queue? Just run a query.
 Chancy also comes with a built-in :class:`~chancy.plugins.api.Api` plugin that
 provides a dashboard for monitoring the state of your workers, queues,
 workflows, and cron jobs. No extra setup or services required.
+
+
+Mixed-mode Workers
+------------------
+
+Celery has a number of different worker pool implementations, like processes,
+gevent, eventlet and threads. However, a single worker process can only *use*
+one of these pools at a time.
+
+In Chancy, every queue can specify its own pool (which we call Executors),
+allowing a single worker to mix-and-match pools to optimize for different
+types of jobs without having to run multiple workers. One worker can have
+thousands of parallel asyncio tasks pulling reports from an external API
+while using another core to generate PDFs.
 
 
 .. _Celery: https://docs.celeryproject.org/en/stable/

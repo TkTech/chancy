@@ -3,57 +3,29 @@ import functools
 import multiprocessing
 import os
 from multiprocessing.context import BaseContext
+from multiprocessing.managers import DictProxy
 
 import resource
 import signal
-import threading
-from asyncio import Future
+from asyncio import Future, CancelledError
 from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
-from chancy.executors.base import Executor
+from chancy import Reference
+from chancy.executors.base import Executor, ConcurrentExecutor
 from chancy.job import QueuedJob, Limit
 
 
-class _TimeoutThread(threading.Thread):
+class ProcessExecutor(ConcurrentExecutor):
     """
-    A thread that will raise a TimeoutError after a specified number of
-    seconds.
-    """
-
-    def __init__(self, timeout: int, cancel: threading.Event):
-        super().__init__()
-        self.timeout = timeout
-        self.cancel = cancel
-
-    def run(self):
-        if self.cancel.wait(self.timeout) is True:
-            # Our call to wait() returning True means that the flag was set
-            # before the timeout elapsed, so we should cancel our alarm.
-            return
-
-        # If we reach this point, the timeout has elapsed, and we should raise
-        # a TimeoutError back in the main process thread.
-        os.kill(os.getpid(), signal.SIGALRM)
-
-
-class ProcessExecutor(Executor):
-    """
-    .. note::
-
-        Currently, this is the default executor used by Chancy.
-
     An Executor which uses a process pool to run its jobs.
 
     This executor is useful for running jobs that are CPU-bound, avoiding the
-    GIL (Global Interpreter Lock) that Python uses to ensure thread safety.
-
-    If a timeout is requested for a job, a separate thread will be spawned
-    within each process to raise a TimeoutError if the job takes too long to
-    complete.
+    GIL (Global SubInterpreter Lock) that Python uses to ensure thread safety.
 
     To use this executor, simply pass the import path to this class in the
-    ``executor`` field of your queue configuration:
+    ``executor`` field of your queue configuration or use the
+    :class:`~chancy.app.Chancy.Executor` shortcut:
 
     .. code-block:: python
 
@@ -61,13 +33,19 @@ class ProcessExecutor(Executor):
             await chancy.declare(
                 Queue(
                     name="default",
-                    executor="chancy.executors.process.ProcessExecutor"
+                    concurrency=10,
+                    executor=Chancy.Executor.Process,
+                    executor_options={
+                        "maximum_jobs_per_worker": 100,
+                    }
                 )
             )
 
+
     :param queue: The queue that this executor is associated with.
     :param maximum_jobs_per_worker: The maximum number of jobs that each worker
-                                    can run before being replaced.
+                                    can run before being replaced. Handy if you
+                                    are stuck using a library with memory leaks.
     :param mp_context: The multiprocessing context to use. If not provided, the
                        default "spawn" context will be used, which is the
                        safest option on all platforms.
@@ -82,21 +60,24 @@ class ProcessExecutor(Executor):
         mp_context: BaseContext | None = None,
     ):
         super().__init__(worker, queue)
+        # Becomes the default on Linux as of 3.14 due to potential crashes
+        # in the `fork` method if the child process also works with threads.
+        # We're using `spawn` explicitly to get ahead of the curve, however
+        # this is slower than `fork`.
+        ctx = mp_context or multiprocessing.get_context("spawn")
 
-        self.processes: dict[Future, QueuedJob] = {}
+        self.manager = ctx.Manager()
+        self.pids_for_job = self.manager.dict()
+        self.timeouts: dict[str, asyncio.Task] = {}
         self.pool = ProcessPoolExecutor(
             max_workers=queue.concurrency,
             max_tasks_per_child=maximum_jobs_per_worker,
             initializer=self.on_initialize_worker,
-            # Becomes the default on Linux as of 3.14 due to potential crashes
-            # in the `fork` method if the child process also works with threads.
-            # We're using `spawn` explicitly to get ahead of the curve, however
-            # this is slower than `fork`.
-            mp_context=mp_context or multiprocessing.get_context("spawn"),
+            mp_context=ctx,
         )
 
-    @staticmethod
-    def on_initialize_worker():
+    @classmethod
+    def on_initialize_worker(cls):
         """
         This method is called in each worker process before it begins running
         jobs. It can be used to perform any necessary setup, such as loading
@@ -112,19 +93,45 @@ class ProcessExecutor(Executor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
+        signal.signal(signal.SIGALRM, cls.job_signal_handler)
+        signal.signal(signal.SIGUSR1, cls.job_signal_handler)
 
     async def push(self, job: QueuedJob) -> Future:
-        future: Future = self.pool.submit(self.job_wrapper, job)
+        future: Future = self.pool.submit(
+            self.job_wrapper, job, self.pids_for_job
+        )
         future.add_done_callback(
             functools.partial(
                 self._on_job_completed, loop=asyncio.get_running_loop()
             )
         )
-        self.processes[future] = job
+        self.jobs[future] = job
+        time_limit = next(
+            (
+                limit.value
+                for limit in job.limits
+                if limit.type_ == Limit.Type.TIME
+            ),
+            None,
+        )
+        if time_limit is not None:
+            self.timeouts[job.id] = asyncio.create_task(
+                self._handle_timeout(job.id, time_limit)
+            )
+
         return future
 
+    async def _handle_timeout(self, job_id: str, time_limit: int):
+        try:
+            await asyncio.sleep(time_limit)
+            pid = self.pids_for_job.get(job_id)
+            if pid is not None:
+                os.kill(pid, signal.SIGALRM)
+        except asyncio.CancelledError:
+            pass
+
     @classmethod
-    def job_wrapper(cls, job: QueuedJob):
+    def job_wrapper(cls, job: QueuedJob, pids_for_job: DictProxy[str, int]):
         """
         This is the function that is actually started by the process pool
         executor. It's responsible for setting up necessary signals and limits,
@@ -139,40 +146,35 @@ class ProcessExecutor(Executor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        func, kwargs = Executor.get_function_and_kwargs(job)
-        if asyncio.iscoroutinefunction(func):
-            raise ValueError(
-                f"Function {job.func!r} is an async function, which is not"
-                f" supported by the {cls.__name__!r} executor. Use the "
-                "AsyncExecutor instead."
-            )
-
         cleanup: list[Callable] = []
-        for limit in job.limits:
-            match limit.type_:
-                case Limit.Type.TIME:
-                    # We need this to work on platforms that don't support
-                    # SIGALRM (looking at you, Windows). So we use a separate
-                    # thread to raise a TimeoutError if the job takes too long.
-                    signal.signal(signal.SIGALRM, cls.job_signal_handler)
-                    cancel = threading.Event()
-                    timeout_thread = _TimeoutThread(limit.value, cancel)
-                    timeout_thread.start()
-                    cleanup.append(
-                        lambda: cancel.set() and timeout_thread.join()
-                    )
-                case Limit.Type.MEMORY:
-                    previous_soft, _ = resource.getrlimit(resource.RLIMIT_AS)
-                    resource.setrlimit(resource.RLIMIT_AS, (limit.value, -1))
-                    cleanup.append(
-                        lambda: resource.setrlimit(
-                            resource.RLIMIT_AS, (previous_soft, -1)
-                        )
-                    )
-
         try:
+            pids_for_job[job.id] = os.getpid()
+            func, kwargs = cls.get_function_and_kwargs(job)
+            if asyncio.iscoroutinefunction(func):
+                raise ValueError(
+                    f"Function {job.func!r} is an async function, which is not"
+                    f" supported by the {cls.__name__!r} executor. Use the "
+                    "AsyncExecutor instead."
+                )
+
+            for limit in job.limits:
+                match limit.type_:
+                    case Limit.Type.MEMORY:
+                        previous_soft, _ = resource.getrlimit(
+                            resource.RLIMIT_AS
+                        )
+                        resource.setrlimit(
+                            resource.RLIMIT_AS, (limit.value, -1)
+                        )
+                        cleanup.append(
+                            lambda: resource.setrlimit(
+                                resource.RLIMIT_AS, (previous_soft, -1)
+                            )
+                        )
+
             func(**kwargs)
         finally:
+            pids_for_job.pop(job.id)
             for clean in cleanup:
                 clean()
 
@@ -192,16 +194,20 @@ class ProcessExecutor(Executor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        # If we receive a SIGALRM signal, we should raise a TimeoutError, as
-        # this is our _TimeoutThread telling us that the job has taken too long
-        # to complete.
         if signum == signal.SIGALRM:
             raise TimeoutError("Job timed out.")
+        if signum == signal.SIGUSR1:
+            raise CancelledError("Job was cancelled.")
 
     def _on_job_completed(
         self, future: Future, loop: asyncio.AbstractEventLoop
     ):
-        job = self.processes.pop(future)
+        job = self.jobs.pop(future)
+
+        timeout_task = self.timeouts.pop(job.id, None)
+        if timeout_task is not None:
+            timeout_task.cancel()
+
         exc = future.exception()
         if exc is None:
             job = future.result()
@@ -213,10 +219,24 @@ class ProcessExecutor(Executor):
         f.result()
 
     async def stop(self):
-        """
-        Stop the executor and clean up any resources.
-        """
-        self.pool.shutdown(cancel_futures=True)
+        for task in self.timeouts.values():
+            task.cancel()
 
-    def __len__(self):
-        return len(self.processes)
+        self.pool.shutdown(cancel_futures=True)
+        self.manager.shutdown()
+
+    async def cancel(self, ref: Reference):
+        """
+        Make an attempt to cancel a running job.
+
+        It's not guaranteed that the job will be cancelled, nor is it
+        guaranteed that the job will be cancelled in a timely manner. For
+        example if the job is running a long computation in a C extension,
+        it may not be possible to interrupt it until it returns.
+
+        :param ref: The reference to the job to cancel.
+        """
+        await super().cancel(ref)
+        pid = self.pids_for_job.get(ref.identifier)
+        if pid is not None:
+            os.kill(pid, signal.SIGUSR1)

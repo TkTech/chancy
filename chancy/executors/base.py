@@ -3,10 +3,12 @@ import inspect
 import typing
 import traceback
 import dataclasses
+from abc import ABC
+from asyncio import Future
 from datetime import datetime, timezone
 from typing import get_type_hints, Callable
 
-from chancy.job import QueuedJob
+from chancy.job import QueuedJob, Reference
 from chancy.queue import Queue
 
 if typing.TYPE_CHECKING:
@@ -120,23 +122,44 @@ class Executor(abc.ABC):
         sig = inspect.signature(func)
         kwargs = job.kwargs or {}
         for param_name, param in sig.parameters.items():
-            if (
-                param.kind == param.KEYWORD_ONLY
-                and type_hints.get(param_name) is QueuedJob
-            ):
+            if not param.kind == param.KEYWORD_ONLY:
+                continue
+
+            type_hint = type_hints.get(param_name)
+            if type_hint is None:
+                continue
+
+            if issubclass(type_hint, QueuedJob):
                 kwargs[param_name] = job
 
         return func, kwargs
 
+    @abc.abstractmethod
     async def stop(self):
         """
-        Stop the executor.
+        Stop the executor, giving it a chance to clean up any resources it
+        may have allocated to running jobs.
+
+        It is not safe to use the executor after this method has been
+        called.
+        """
+
+    @abc.abstractmethod
+    async def cancel(self, ref: Reference):
+        """
+        Attempt to cancel a running job.
+
+        It's not guaranteed that the job will be cancelled, as it may have
+        already completed by the time this method is called or the executor
+        may not support cancellation.
+
+        :param ref: The reference to the job to cancel.
         """
 
     @abc.abstractmethod
     def __len__(self):
         """
-        Get the number of pending and running jobs in the pool.
+        Get the number of jobs currently within the executor.
         """
 
     async def __aenter__(self):
@@ -144,3 +167,23 @@ class Executor(abc.ABC):
 
     async def __aexit__(self, exc_type, exc, tb):
         await self.stop()
+
+
+class ConcurrentExecutor(Executor, ABC):
+    """
+    Base class for executors based off of the concurrent.futures.Executor
+    class with common functionality.
+    """
+
+    def __init__(self, worker: "Worker", queue: "Queue"):
+        super().__init__(worker, queue)
+        self.jobs: dict[Future, QueuedJob] = {}
+
+    async def cancel(self, ref: Reference):
+        for future, job in self.jobs.items():
+            if job.id == ref.identifier:
+                future.cancel()
+                return
+
+    def __len__(self):
+        return len(self.jobs)

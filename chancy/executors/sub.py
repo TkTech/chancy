@@ -1,10 +1,12 @@
 import asyncio
 import threading
 import functools
-from typing import Dict
 from concurrent.futures import Future
 
 import sys
+
+from chancy.worker import Worker
+from chancy.queue import Queue
 
 try:
     # Only available in 3.14+
@@ -20,11 +22,11 @@ except ImportError:
             "The SubInterpreterExecutor requires Python 3.13 or later."
         )
 
-from chancy.executors.base import Executor
+from chancy.executors.base import Executor, ConcurrentExecutor
 from chancy.job import QueuedJob, Limit
 
 
-class SubInterpreterExecutor(Executor):
+class SubInterpreterExecutor(ConcurrentExecutor):
     """
     .. note::
 
@@ -39,7 +41,8 @@ class SubInterpreterExecutor(Executor):
             pip install chancy[sub]
 
     To use this executor, simply pass the import path to this class in the
-    ``executor`` field of your queue configuration:
+    ``executor`` field of your queue configuration or use the
+    :class:`~chancy.app.Chancy.Executor` shortcut:
 
     .. code-block:: python
 
@@ -47,7 +50,7 @@ class SubInterpreterExecutor(Executor):
             await chancy.declare(
                 Queue(
                     name="default",
-                    executor="chancy.executors.sub.SubInterpreterExecutor",
+                    executor=Chancy.Executor.SubInterpreter,
                 )
             )
 
@@ -59,14 +62,13 @@ class SubInterpreterExecutor(Executor):
     :param queue: The queue that this executor is associated with.
     """
 
-    def __init__(self, worker, queue):
+    def __init__(self, worker: Worker, queue: Queue):
         super().__init__(worker, queue)
         self.pool = InterpreterPoolExecutor(
             max_workers=queue.concurrency,
             initializer=self.on_initialize_worker,
             initargs=(sys.path,),
         )
-        self.jobs: Dict[Future, QueuedJob] = {}
 
     @staticmethod
     def on_initialize_worker(parent_sys_path: list[str]):
@@ -146,8 +148,5 @@ class SubInterpreterExecutor(Executor):
         )
         f.result()
 
-    def stop(self):
+    async def stop(self):
         self.pool.shutdown(cancel_futures=True)
-
-    def __len__(self):
-        return len(self.jobs)

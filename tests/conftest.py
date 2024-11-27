@@ -73,11 +73,8 @@ async def worker_no_start(chancy) -> Worker:
 
 @pytest.fixture(
     params=(
-        [
-            "chancy.executors.process.ProcessExecutor",
-            "chancy.executors.thread.ThreadedExecutor",
-        ]
-        + ["chancy.executors.sub.SubInterpreterExecutor"]
+        [Chancy.Executor.Process, Chancy.Executor.Threaded]
+        + [Chancy.Executor.SubInterpreter]
         if sys.version_info >= (3, 13)
         else []
     )
@@ -89,11 +86,7 @@ def sync_executor(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[
-        "chancy.executors.asyncex.AsyncExecutor",
-    ]
-)
+@pytest.fixture(params=[Chancy.Executor.Async])
 def async_executor(request):
     """
     Provides a parameterized fixture for all async executors.

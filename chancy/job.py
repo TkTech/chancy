@@ -337,7 +337,7 @@ class QueuedJob(Job):
     @classmethod
     def unpack(cls, data: dict) -> "QueuedJob":
         return cls(
-            id=data["id"],
+            id=str(data["id"]),
             func=data["func"],
             kwargs=data["kwargs"],
             priority=data["priority"],

@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import functools
 import logging
 from typing import Any, Iterator
@@ -86,6 +87,21 @@ class Chancy:
         postgres's NOTIFY/LISTEN feature.
     :param log: The logger to use for all application logging.
     """
+
+    class Executor(enum.StrEnum):
+        """
+        Shortcuts for the built-in executors.
+        """
+
+        #: The default executor, which runs jobs in a process pool.
+        Process = "chancy.executors.process.ProcessExecutor"
+        #: The threaded executor, which runs jobs in a thread pool.
+        Threaded = "chancy.executors.thread.ThreadedExecutor"
+        #: The asyncio executor, which runs jobs in an asyncio event loop.
+        Async = "chancy.executors.asyncex.AsyncExecutor"
+        #: The subprocess executor, which runs jobs in an experimental
+        #: subinterpreter.
+        SubInterpreter = "chancy.executors.sub.SubInterpreterExecutor"
 
     @staticmethod
     def _ensure_pool_is_open(f):
@@ -673,6 +689,35 @@ class Chancy:
                 json_dumps({"t": event, **payload}),
             ],
         )
+
+    async def cancel_job(self, ref: Reference):
+        """
+        Cancel a job by reference.
+
+        This will attempt to cancel a job that is currently running, if it
+        is possible to do so. Notifications must be enabled for this to work.
+
+        :param ref: The reference to the job to cancel.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                async with conn.transaction():
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            UPDATE {jobs}
+                            SET state = 'failed'
+                            WHERE id = %s
+                            """
+                        ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
+                        [ref.identifier],
+                    )
+
+                    # Tell any workers that might have already snagged the job
+                    # to cancel it.
+                    await self.notify(
+                        cursor, "job.cancelled", {"j": ref.identifier}
+                    )
 
     def _get_all_workers_sql(self):
         return sql.SQL(

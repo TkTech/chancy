@@ -13,10 +13,11 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from chancy.app import Chancy
-from chancy.hub import Hub
+from chancy.executors.base import Executor
+from chancy.hub import Hub, Event
 from chancy.queue import Queue
 from chancy.utils import TaskManager, import_string
-from chancy.job import QueuedJob
+from chancy.job import QueuedJob, Reference
 
 
 class Worker:
@@ -121,10 +122,10 @@ class Worker:
         # Extra tags to associate with the worker.
         self._extra_tags = tags or set()
 
-        self._queues: dict[str, Queue] = {}
-        #: The task manager for the worker, responsible for managing all of the
+        #: The task manager for the worker, responsible for managing all the
         #: worker's internal asyncio tasks.
         self.manager = TaskManager()
+
         #: A queue of updates waiting to be sent to the database.
         self.outgoing: asyncio.Queue[QueuedJob] = asyncio.Queue()
 
@@ -135,8 +136,13 @@ class Worker:
         #: An event that is set when the worker is shutting down due to
         #: receiving a signal.
         self.shutdown_event = asyncio.Event()
+
         # Set once the notifications listener is ready.
         self._notifications_ready_event = asyncio.Event()
+        # The queues that the worker is currently processing.
+        self._queues: dict[str, Queue] = {}
+        # The executors that the worker is currently using.
+        self._executors: dict[str, Executor] = {}
 
     async def start(self):
         """
@@ -145,6 +151,8 @@ class Worker:
         Unlike `run`, this method does not wait for the worker to complete and
         returns immediately.
         """
+        self.hub.on("job.cancelled", self._handle_cancellation)
+
         for plugin in self.chancy.plugins:
             self.manager.add(
                 plugin.run(self, self.chancy),
@@ -232,7 +240,7 @@ class Worker:
                 if queue_name not in self._queues:
                     self._queues[queue_name] = queue
                     self.manager.add(
-                        self._maintain_queue(queue_name),
+                        self._maintain_queue(queue),
                         name=f"queue_{queue_name}",
                     )
                     self.chancy.log.info(
@@ -255,27 +263,29 @@ class Worker:
             except asyncio.TimeoutError:
                 pass
 
-    async def _maintain_queue(self, queue_name: str):
+    async def _maintain_queue(self, queue: Queue):
         """
         Maintain a single queue.
 
         Responsible for polling a queue for new jobs and pushing them to the
         executor.
 
-        :param queue_name: The queue to maintain.
+        :param queue: The queue to maintain.
         """
-        queue = self._queues[queue_name]
         cls = import_string(queue.executor)
 
         async with cls(self, queue, **queue.executor_options) as executor:
+            self._executors[queue.name] = executor
+
             while True:
                 try:
-                    queue = self._queues[queue_name]
+                    queue = self._queues[queue.name]
                 except KeyError:
                     self.chancy.log.info(
-                        f"Queue {queue_name!r} no longer exists, stopping its"
+                        f"Queue {queue.name!r} no longer exists, stopping its"
                         f" maintenance loop."
                     )
+                    self._executors.pop(queue.name)
                     return
 
                 maximum_jobs_to_poll = queue.concurrency - len(executor)
@@ -294,15 +304,6 @@ class Worker:
                     jobs = await self.fetch_jobs(
                         queue, conn, up_to=maximum_jobs_to_poll
                     )
-
-                await self.hub.emit(
-                    "queue.polled",
-                    {
-                        "fetched": len(jobs),
-                        "worker_id": self.worker_id,
-                        "queue": queue.name,
-                    },
-                )
 
                 for job in jobs:
                     self.chancy.log.info(
@@ -656,13 +657,17 @@ class Worker:
         By default, handles SIGTERM and SIGINT by starting worker shutdown. If
         the signal is received again, it will force a shutdown.
         """
-        if self.shutdown_event.is_set():
-            # Force a shutdown if we get a signal twice
-            self.chancy.log.warning("Received signal again, forcing shutdown.")
-            asyncio.get_running_loop().stop()
+        if signum in (signal.SIGTERM, signal.SIGINT):
+            # If the worker is already shutting down, we force an immediate
+            # shutdown.
+            if self.shutdown_event.is_set():
+                self.chancy.log.warning(
+                    "Received signal again, forcing shutdown."
+                )
+                asyncio.get_running_loop().stop()
 
-        self.shutdown_event.set()
-        await self.manager.cancel_all()
+            self.shutdown_event.set()
+            await self.manager.cancel_all()
 
     async def stop(self):
         """
@@ -674,6 +679,13 @@ class Worker:
         """
         async with asyncio.timeout(self.shutdown_timeout):
             await self.manager.cancel_all()
+
+    async def _handle_cancellation(self, event: Event):
+        self.chancy.log.info(
+            f"Received cancellation request for job {event.body['j']!r}"
+        )
+        for executor in self._executors.values():
+            await executor.cancel(Reference(event.body["j"]))
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"

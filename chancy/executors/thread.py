@@ -1,27 +1,27 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 import asyncio
-from typing import Dict
 import functools
 
-from chancy.executors.base import Executor
+from chancy.executors.base import Executor, ConcurrentExecutor
 from chancy.job import QueuedJob, Limit
 
 
-class ThreadedExecutor(Executor):
+class ThreadedExecutor(ConcurrentExecutor):
     """
     An Executor which uses a thread pool to run its jobs.
 
     This executor is useful for running I/O-bound jobs concurrently without the
     overhead of separate processes. It's not suitable for CPU-bound tasks due
-    to Python's Global Interpreter Lock (GIL).
+    to Python's Global SubInterpreter Lock (GIL).
 
     When working with existing asyncio code, it's often easier and more
     efficient to use the :class:`~chancy.executors.asyncex.AsyncExecutor`
     instead, as it can run a very large number of jobs concurrently.
 
     To use this executor, simply pass the import path to this class in the
-    ``executor`` field of your queue configuration:
+    ``executor`` field of your queue configuration or use the
+    :class:`~chancy.app.Chancy.Executor` shortcut:
 
     .. code-block:: python
 
@@ -29,7 +29,7 @@ class ThreadedExecutor(Executor):
             await chancy.declare(
                 Queue(
                     name="default",
-                    executor="chancy.executors.thread.ThreadedExecutor",
+                    executor=Chancy.Executor.Threaded,
                 )
             )
 
@@ -40,7 +40,6 @@ class ThreadedExecutor(Executor):
     def __init__(self, worker, queue):
         super().__init__(worker, queue)
         self.pool = ThreadPoolExecutor(max_workers=queue.concurrency)
-        self.jobs: Dict[Future, QueuedJob] = {}
 
     async def push(self, job: QueuedJob) -> Future:
         future: Future = self.pool.submit(self.job_wrapper, job)
@@ -104,9 +103,6 @@ class ThreadedExecutor(Executor):
             self.job_completed(job, exc),
             loop,
         )
-
-    def __len__(self):
-        return len(self.jobs)
 
     async def stop(self):
         self.pool.shutdown(cancel_futures=True)

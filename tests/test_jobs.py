@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, Job, QueuedJob
+from chancy import Chancy, Worker, Queue, Job, QueuedJob, Reference
 
 
 def slow_job_to_run():
@@ -24,6 +24,14 @@ def job_with_instance(*, job: QueuedJob):
 
 async def async_job_with_instance(*, job: QueuedJob):
     job.meta["received_instance"] = True
+
+
+async def very_long_job():
+    await asyncio.sleep(60 * 60)
+
+
+def sync_very_long_job():
+    time.sleep(60)
 
 
 @pytest.mark.asyncio
@@ -106,3 +114,29 @@ async def test_async_job_instance_kwarg(
 
     assert job.state == job.State.SUCCEEDED
     assert job.meta.get("received_instance") is True
+
+
+@pytest.mark.asyncio
+async def test_job_cancellation(
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
+):
+    """
+    Test that jobs can be cancelled on supporting executors.
+    """
+
+    async def cancel_in_a_bit(to_cancel: Reference):
+        await asyncio.sleep(10)
+        await chancy.cancel_job(to_cancel)
+
+    await chancy.declare(Queue("async", executor=Chancy.Executor.Async))
+    await chancy.declare(Queue("sync", executor=Chancy.Executor.Process))
+
+    ref = await chancy.push(Job.from_func(very_long_job, queue="async"))
+    asyncio.create_task(cancel_in_a_bit(ref))
+    job = await chancy.wait_for_job(ref, timeout=30)
+    assert job.state == job.State.FAILED
+
+    ref = await chancy.push(Job.from_func(sync_very_long_job, queue="sync"))
+    asyncio.create_task(cancel_in_a_bit(ref))
+    job = await chancy.wait_for_job(ref, timeout=30)
+    assert job.state == job.State.FAILED

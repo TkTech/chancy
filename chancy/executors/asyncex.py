@@ -1,5 +1,7 @@
 import asyncio
+from asyncio import CancelledError
 
+from chancy import Reference
 from chancy.executors.base import Executor
 from chancy.job import QueuedJob, Limit
 
@@ -15,7 +17,8 @@ class AsyncExecutor(Executor):
     prevent other jobs & queues from running.
 
     To use this executor, simply pass the import path to this class in the
-    ``executor`` field of your queue configuration:
+    ``executor`` field of your queue configuration or use the
+    :class:`~chancy.app.Chancy.Executor` shortcut:
 
     .. code-block:: python
 
@@ -23,26 +26,22 @@ class AsyncExecutor(Executor):
             await chancy.declare(
                 Queue(
                     name="default",
-                    executor="chancy.executors.asyncex.AsyncExecutor",
+                    executor=Chancy.Executor.Async,
                 )
             )
     """
 
     def __init__(self, worker, queue):
         super().__init__(worker, queue)
-        self.running_jobs: set[asyncio.Task] = set()
+        self.jobs: dict[asyncio.Task, QueuedJob] = {}
 
     async def push(self, job: QueuedJob):
         task = asyncio.create_task(self._job_wrapper(job))
-        task.add_done_callback(self._job_cleanup)
-        self.running_jobs.add(task)
+        self.jobs[task] = job
+        task.add_done_callback(self.jobs.pop)
 
     def __len__(self):
-        return len(self.running_jobs)
-
-    def _job_cleanup(self, task: asyncio.Task):
-        self.running_jobs.discard(task)
-        task.exception()
+        return len(self.jobs)
 
     async def _job_wrapper(self, job: QueuedJob):
         try:
@@ -63,14 +62,23 @@ class AsyncExecutor(Executor):
                 None,
             )
 
-            try:
-                # This annoyingly creates quite the excessive traceback,
-                # we should revisit this and clean it up.
-                await asyncio.wait_for(func(**kwargs), timeout=timeout)
-            except (asyncio.TimeoutError, TimeoutError):
-                raise asyncio.TimeoutError(
-                    f"Job {job.id} timed out after {timeout} seconds"
-                )
+            async with asyncio.timeout(timeout):
+                await func(**kwargs)
             await self.job_completed(job)
-        except Exception as exc:
+        except (Exception, CancelledError) as exc:
             await self.job_completed(job, exc)
+
+    async def cancel(self, ref: Reference):
+        for task, job in self.jobs.items():
+            if job.id == ref.identifier:
+                task.cancel()
+                return
+
+    async def stop(self):
+        """
+        Stop the executor, giving it a chance to clean up any resources it
+        may have allocated to running jobs.
+        """
+        for task in self.jobs:
+            task.cancel()
+        await asyncio.gather(*self.jobs)
