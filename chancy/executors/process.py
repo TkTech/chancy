@@ -3,7 +3,6 @@ import functools
 import multiprocessing
 import os
 from multiprocessing.context import BaseContext
-from multiprocessing.managers import DictProxy
 
 import resource
 import signal
@@ -12,7 +11,7 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Callable
 
 from chancy import Reference
-from chancy.executors.base import Executor, ConcurrentExecutor
+from chancy.executors.base import ConcurrentExecutor
 from chancy.job import QueuedJob, Limit
 
 
@@ -131,7 +130,7 @@ class ProcessExecutor(ConcurrentExecutor):
             pass
 
     @classmethod
-    def job_wrapper(cls, job: QueuedJob, pids_for_job: DictProxy[str, int]):
+    def job_wrapper(cls, job: QueuedJob, pids_for_job):
         """
         This is the function that is actually started by the process pool
         executor. It's responsible for setting up necessary signals and limits,
