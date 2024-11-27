@@ -74,9 +74,11 @@ async def worker_no_start(chancy) -> Worker:
 @pytest.fixture(
     params=(
         [Chancy.Executor.Process, Chancy.Executor.Threaded]
-        + [Chancy.Executor.SubInterpreter]
-        if sys.version_info >= (3, 13)
-        else []
+        + (
+            [Chancy.Executor.SubInterpreter]
+            if sys.version_info >= (3, 13)
+            else []
+        )
     )
 )
 def sync_executor(request):
