@@ -32,6 +32,7 @@ look into the status of your queues:
 
 ![Workflows](misc/ux_workflow.png)
 ![Queue Details](misc/ux_queue.png)
+![Jobs](misc/ux_jobs.png)
 ![Job](misc/ux_job_failed.png)
 
 ## Similar Work
