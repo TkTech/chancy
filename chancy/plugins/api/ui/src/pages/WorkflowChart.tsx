@@ -32,9 +32,6 @@ const CustomNode = ({ data }: NodeProps<CustomNode>) => {
       }} />
       <div className={`p-3 border border-2 border-${statusToColor(data.state)}`}>
         <div className={"fw-bolder"}>{data.label}</div>
-        <div className={"text-xs"}>
-          {data.job.func.split(".").slice(-1)[0]}
-        </div>
         <div className="text-xs">
           {data.jobId ? (
             <Link to={`/jobs/${data.jobId}`}>
