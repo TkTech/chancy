@@ -8,7 +8,7 @@ interface Cron {
   job: {
     func: string,
     queue: string,
-    kwargs: any,
+    kwargs: unknown,
     priority: number,
     max_attempts: number,
     limits: {

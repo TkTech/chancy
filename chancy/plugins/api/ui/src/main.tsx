@@ -24,7 +24,7 @@ const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: "/", loader: () => redirect("/queues") },
+      { path: "/", loader: () => redirect("/jobs") },
       { path: "/queues", element: <Queues /> },
       { path: "/queues/:name", element: <Queue /> },
       { path: "/workers",  element: <Workers /> },

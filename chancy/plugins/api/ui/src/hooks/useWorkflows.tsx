@@ -5,6 +5,17 @@ export interface Step {
   state: string;
   job_id: string;
   dependencies: string[];
+  job: {
+    func: string,
+    queue: string,
+    kwargs: unknown,
+    priority: number,
+    max_attempts: number,
+    limits: {
+      key: string,
+      value: number
+    }[]
+  }
 }
 
 export interface Workflow {
@@ -20,10 +31,14 @@ export interface Workflow {
 
 export function useWorkflow ({
   url,
-  workflow_id
+  workflow_id,
+  options = {}
 }: {
   url: string | null,
-  workflow_id: string | undefined
+  workflow_id: string | undefined,
+  options?: {
+    refetchInterval?: number,
+  }
 }) {
   return useQuery<Workflow>({
     queryKey: ['workflow', url, workflow_id],
@@ -31,7 +46,8 @@ export function useWorkflow ({
       const response = await fetch(`${url}/api/v1/workflows/${workflow_id}`);
       return await response.json();
     },
-    enabled: url !== null && workflow_id !== undefined
+    enabled: url !== null && workflow_id !== undefined,
+    ...options
   });
 }
 

@@ -60,14 +60,14 @@ function Layout() {
       </div>
     )
   }
-
-  function navLink(link: {to: string, text: string, needs?: string[]}) {
+  
+    function navLink(link: {to: string, text: string, needs?: string[]}) {
     if (link.needs && configuration && !link.needs.every(need => configuration.plugins.includes(need))) {
       return null;
     }
 
     return (
-      <li className="nav-item">
+      <li className="nav-item w-100 mb-2">
         <NavLink
           to={link.to}
           className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}
@@ -79,18 +79,20 @@ function Layout() {
   }
 
   return (
-    <>
-      <header className={"bg-body-tertiary mb-4 py-3 d-flex flex-wrap justify-content-center"}>
-          <ul className="nav nav-pills">
-            {navLink({to: "/queues", text: "Queues"})}
-            {navLink({to: "/workers", text: "Workers"})}
-            {navLink({to: "/jobs", text: "Jobs"})}
-            {navLink({to: "/crons", text: "Cron", needs: ["Cron"]})}
-            {navLink({to: "/workflows", text: "Workflows", needs: ["WorkflowPlugin"]})}
-          </ul>
-      </header>
-      <Outlet/>
-    </>
+    <div className="d-flex">
+      <div className="flex-shrink-0 vh-100 border-end" style={{width: "280px"}}>
+        <ul className="nav nav-pills flex-column mb-auto p-3">
+          {navLink({to: "/jobs", text: "Jobs"})}
+          {navLink({to: "/queues", text: "Queues"})}
+          {navLink({to: "/workers", text: "Workers"})}
+          {navLink({to: "/crons", text: "Cron", needs: ["Cron"]})}
+          {navLink({to: "/workflows", text: "Workflows", needs: ["WorkflowPlugin"]})}
+        </ul>
+      </div>
+      <div className="flex-grow-1 overflow-x-scroll vh-100 p-3">
+          <Outlet/>
+      </div>
+    </div>
   );
 }
 

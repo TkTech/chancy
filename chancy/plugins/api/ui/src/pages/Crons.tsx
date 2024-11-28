@@ -2,7 +2,7 @@ import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {useCrons} from '../hooks/useCrons.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
-import {UpdatingTime} from '../components/UpdatingTime.tsx';
+import {CountdownTimer} from '../components/UpdatingTime.tsx';
 
 export function Cron() {
   const { url } = useServerConfiguration();
@@ -15,7 +15,7 @@ export function Cron() {
 
   if (!cron) {
     return (
-      <div className={"container"}>
+      <div className={"container-fluid"}>
         <h2 className={"mb-4"}>Cron - {cron_id}</h2>
         <div className={"alert alert-danger"}>Cron not found.</div>
       </div>
@@ -23,7 +23,7 @@ export function Cron() {
   }
 
   return (
-    <div className={"container"}>
+    <div className={"container-fluid"}>
       <div className={'card'}>
         <div className={'card-header'}>
           Cron - {cron_id}
@@ -139,49 +139,45 @@ export function Crons() {
   if (isLoading) return <Loading />;
 
   return (
-    <div className={"container"}>
-      <div className={"card mb-4"}>
-        <div className={"card-header"}>
-          Crons
-        </div>
-        <table className={"table mb-0"}>
-          <thead>
+    <div className={"container-fluid"}>
+      <h2 className={"mb-4"}>Crons</h2>
+      <table className={"table mb-0"}>
+        <thead>
+        <tr>
+          <th>Key</th>
+          <th className={"w-100"}>Function</th>
+          <th>Expression</th>
+          <th className={"text-nowrap text-center"}>Next Run</th>
+          <th className={"text-nowrap text-center"}>Last Run</th>
+        </tr>
+        </thead>
+        <tbody>
+        {crons?.length === 0 && (
           <tr>
-            <th>Key</th>
-            <th>Function</th>
-            <th>Expression</th>
-            <th>Next Run</th>
-            <th>Last Run</th>
+            <td colSpan={5} className={"text-center table-info"}>
+              No crons found.
+            </td>
           </tr>
-          </thead>
-          <tbody>
-          {crons?.length === 0 && (
-            <tr>
-              <td colSpan={5} className={"text-center table-info"}>
-                No crons found.
-              </td>
-            </tr>
-          )}
-          {crons?.map(cron => (
-            <tr key={cron.unique_key}>
-              <td>
-                <Link to={`/crons/${cron.unique_key}`}>
-                  {cron.unique_key}
-                </Link>
-              </td>
-              <td><code>{cron.job.func}</code></td>
-              <td><code>{cron.cron}</code></td>
-              <td>
-                <UpdatingTime date={cron.next_run} />
-              </td>
-              <td>
-                <UpdatingTime date={cron.last_run} />
-              </td>
-            </tr>
-          ))}
-          </tbody>
-        </table>
-      </div>
+        )}
+        {crons?.map(cron => (
+          <tr key={cron.unique_key}>
+            <td>
+              <Link to={`/crons/${cron.unique_key}`}>
+                {cron.unique_key}
+              </Link>
+            </td>
+            <td><code className={"text-break"}>{cron.job.func}</code></td>
+            <td className={"text-nowrap"}><code>{cron.cron}</code></td>
+            <td className={"text-nowrap text-center font-monospace"}>
+              <CountdownTimer date={cron.next_run} />
+            </td>
+            <td className={"text-nowrap text-center font-monospace"}>
+              <CountdownTimer date={cron.last_run}/>
+            </td>
+          </tr>
+        ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -72,6 +72,13 @@ class WorkflowApiPlugin(ApiPlugin):
         workflow_id = request.path_params["id"]
         workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
 
+        if workflow is None:
+            return Response(
+                json_dumps({"error": "Workflow not found"}),
+                media_type="application/json",
+                status_code=404,
+            )
+
         return Response(
             json_dumps(asdict(workflow)),
             media_type="application/json",
