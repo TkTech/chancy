@@ -175,6 +175,7 @@ Here are some of the most popular ones:
 
    howto/index
    chancy
+   faq
 
 
 Indices and tables
