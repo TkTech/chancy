@@ -12,7 +12,7 @@ from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
 from chancy.migrate import Migrator
 from chancy.queue import Queue
-from chancy.job import Reference, Job, QueuedJob
+from chancy.job import Reference, Job, QueuedJob, IsAJob
 from chancy.plugin import Plugin
 from chancy.utils import chancy_uuid, chunked, json_dumps
 
@@ -345,7 +345,7 @@ class Chancy:
         )
 
     @_ensure_pool_is_open
-    async def push(self, job: Job) -> Reference:
+    async def push(self, job: Job | IsAJob[..., Any]) -> Reference:
         """
         Push a job onto the queue.
 
@@ -427,7 +427,7 @@ class Chancy:
 
     @_ensure_sync_pool_is_open
     def sync_push_many(
-        self, jobs: list[Job], *, batch_size: int = 1000
+        self, jobs: list[Job | IsAJob[..., Any]], *, batch_size: int = 1000
     ) -> Iterator[list[Reference]]:
         """
         Synchronously push multiple jobs onto the queue.
@@ -454,7 +454,7 @@ class Chancy:
                         yield self.sync_push_many_ex(cursor, chunk)
 
     async def push_many_ex(
-        self, cursor: AsyncCursor, jobs: list[Job]
+        self, cursor: AsyncCursor, jobs: list[Job | IsAJob[..., Any]]
     ) -> list[Reference]:
         """
         Push multiple jobs onto the queue using a specific cursor.
@@ -486,7 +486,10 @@ class Chancy:
             references.append(Reference(record[0]))
 
         if self.notifications:
-            for queue in set(job.queue for job in jobs):
+            for queue in set(
+                job.queue if isinstance(job, Job) else job.job.queue
+                for job in jobs
+            ):
                 await self.notify(cursor, "queue.pushed", {"q": queue})
 
         return references
@@ -865,13 +868,16 @@ class Chancy:
         )
 
     @staticmethod
-    def _get_job_params(job: Job) -> dict:
+    def _get_job_params(job: Job | IsAJob[..., Any]) -> dict:
         """
         Get the parameters for a job to be inserted into the database.
 
         :param job: The job to get parameters for.
         :return: A dictionary of parameters for the job.
         """
+        if callable(job):
+            job = job.job
+
         return {
             "id": chancy_uuid(),
             "queue": job.queue,

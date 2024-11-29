@@ -139,7 +139,15 @@ Prevent duplicate job execution by assigning a unique key:
 import dataclasses
 import enum
 from datetime import datetime, timezone
-from typing import Any, Optional, TypedDict
+from typing import (
+    Any,
+    Optional,
+    TypedDict,
+    TypeVar,
+    ParamSpec,
+    Callable,
+    Protocol,
+)
 
 from chancy.utils import importable_name
 
@@ -353,3 +361,47 @@ class QueuedJob(Job):
             limits=[Limit.deserialize(limit) for limit in data["limits"]],
             meta=data["meta"],
         )
+
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+class IsAJob(Protocol[P, R]):
+    __call__: Callable[P, R]
+    job: Job
+
+
+def as_job(
+    **options,
+) -> Callable[[Callable[P, R]], IsAJob[P, R]]:
+    """
+    A decorator that wraps a function and turns it into a job.
+
+    The wrapped function can still be called as normal, but will have an extra
+    ``job`` attribute that contains the job instance.
+
+    .. code-block:: python
+
+        >>> @as_job()
+        ... def hello_world():
+        ...    return "Hello, world!"
+        >>> hello_world.job
+        Job(func=<function my_job at 0x1033041e0>, kwargs={}, ...)
+        >>> hello_world()
+        'Hello, world!'
+
+    Your decorated function can be pushed like any other job, or you can
+    use the `job` property to modify its properties before pushing it.
+
+    .. code-block:: python
+
+        await chancy.push(hello_world)
+        await chancy.push(hello_world.job.with_queue("low_priority"))
+    """
+
+    def decorator(func: Callable[P, R]) -> IsAJob[P, R]:
+        func.job = Job.from_func(func, **options)
+        return func  # type: ignore
+
+    return decorator
