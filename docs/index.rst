@@ -43,7 +43,7 @@ Quick Start
      pip install chancy[cli]
 
 
-2. Setup a worker (worker.py) with all the bells and whistles:
+2. Setup a worker (worker.py), run the migrations, make a queue, and push a job:
 
 .. tab:: Code
 
@@ -51,34 +51,17 @@ Quick Start
     :caption: worker.py
 
      import asyncio
-     from chancy import Chancy, Worker, Queue, Job
-     from chancy.plugins.pruner import Pruner
-     from chancy.plugins.recovery import Recovery
-     from chancy.plugins.leadership import Leadership
-     from chancy.plugins.cron import Cron
-     from chancy.plugins.api import Api
-     from chancy.plugins.workflow import WorkflowPlugin
+     from chancy import Chancy, Worker, Queue, as_job
 
+     @as_job(queue="default")
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
      async def main():
-         async with Chancy(
-             dsn="postgresql://localhost/postgres",
-             plugins=[
-                  Pruner(),
-                  Recovery(),
-                  Leadership(),
-                  Cron(),
-                  Api(),
-                  WorkflowPlugin(),
-             ]
-         ) as chancy:
+         async with Chancy("postgresql://localhost/postgres") as chancy:
              await chancy.migrate()
              await chancy.declare(Queue("default", concurrency=10))
-             await chancy.push(
-                 Job.from_func(hello_world, kwargs={"name": "world"}, queue="default")
-             )
+             await chancy.push(hello_world.job.with_kwargs({"name": "world"}))
              async with Worker(chancy) as worker:
                  await worker.wait_until_complete()
 
@@ -90,28 +73,13 @@ Quick Start
   .. code-block:: python
      :caption: worker.py
 
-     from chancy import Chancy
-     from chancy.plugins.pruner import Pruner
-     from chancy.plugins.recovery import Recovery
-     from chancy.plugins.leadership import Leadership
-     from chancy.plugins.cron import Cron
-     from chancy.plugins.api import Api
-     from chancy.plugins.workflow import WorkflowPlugin
+     from chancy import Chancy, as_job
 
+     @as_job(queue="default")
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
-     chancy = Chancy(
-         dsn="postgresql://localhost/postgres",
-         plugins=[
-             Pruner(),
-             Recovery(),
-             Leadership(),
-             Cron(),
-             Api(),
-             WorkflowPlugin(),
-         ]
-     )
+     chancy = Chancy("postgresql://localhost/postgres")
 
 
 3. Run the worker:
@@ -128,7 +96,7 @@ Quick Start
 
      chancy --app worker.chancy misc migrate
      chancy --app worker.chancy queue declare default --concurrency 10
-     chancy --app worker.chancy queue push worker.hello_world --kwargs '{"name": "world"}' --queue default
+     chancy --app worker.chancy queue push worker.hello_world --kwargs '{"name": "world"}'
      chancy --app worker.chancy worker start
 
 
