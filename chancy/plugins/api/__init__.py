@@ -64,6 +64,22 @@ class Api(Plugin):
         public internet. It is intended for use in a secure environment, such
         as a private network or a VPN where only trusted users have access.
 
+    Screenshots
+    -----------
+
+    .. image:: ../misc/ux_jobs.png
+        :alt: Jobs page
+
+    .. image:: ../misc/ux_job_failed.png
+        :alt: Failed job page
+
+    .. image:: ../misc/ux_queue.png
+        :alt: Queue page
+
+    .. image:: ../misc/ux_workflow.png
+        :alt: Worker page
+
+
     :param port: The port to listen on.
     :param host: The host to listen on.
     :param debug: Whether to run the server in debug mode.
