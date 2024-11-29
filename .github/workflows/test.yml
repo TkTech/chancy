@@ -85,7 +85,7 @@ jobs:
         slug: TkTech/chancy
         
     - name: Installing dependencies (Docs)
-      run: apt-get install graphviz
+      run: sudo apt-get install graphviz
 
     - name: Building docs
       run: |
