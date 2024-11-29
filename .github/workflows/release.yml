@@ -57,6 +57,9 @@ jobs:
       - name: Installing Package
         run: uv sync --all-extras
 
+      - name: Installing dependencies (Docs)
+        run: apt-get install graphviz
+
       - name: Building documentation
         run: |
           cd docs && uv run make clean html

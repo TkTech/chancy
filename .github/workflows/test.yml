@@ -83,6 +83,9 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         verbose: true
         slug: TkTech/chancy
+        
+    - name: Installing dependencies (Docs)
+      run: apt-get install graphviz
 
     - name: Building docs
       run: |
