@@ -15,7 +15,7 @@ Key Features:
 
 - Jobs support priorities, retries, timeouts, scheduling,
   global rate limits, memory limits, global uniqueness, error
-  capture, and more
+  capture, cancellation, and more
 - Minimal dependencies (only psycopg3 required)
 - Plugins for a :class:`dashboard<chancy.plugins.api.Api>`,
   :class:`workflows<chancy.plugins.workflow.WorkflowPlugin>`,
@@ -28,40 +28,37 @@ Key Features:
 Quick Start
 -----------
 
-1. Install Chancy:
-
 .. tab:: Code
+
+  Install Chancy:
 
   .. code-block:: bash
 
      pip install chancy
 
-.. tab:: CLI
-
-  .. code-block:: bash
-
-     pip install chancy[cli]
-
-
-2. Setup a worker (worker.py), run the migrations, make a queue, and push a job:
-
-.. tab:: Code
+  Create a new file called ``worker.py``:
 
   .. code-block:: python
     :caption: worker.py
 
      import asyncio
-     from chancy import Chancy, Worker, Queue, as_job
+     from chancy import Chancy, Worker, Queue, job
 
-     @as_job(queue="default")
+     @job(queue="default")
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
+     chancy = Chancy("postgresql://localhost/postgres")
+
      async def main():
-         async with Chancy("postgresql://localhost/postgres") as chancy:
+         async with chancy:
+             # Run the database migrations
              await chancy.migrate()
+             # Declare a queue
              await chancy.declare(Queue("default", concurrency=10))
-             await chancy.push(hello_world.job.with_kwargs({"name": "world"}))
+             # Push a job
+             await chancy.push(hello_world.job.with_kwargs(name="World"))
+             # Start the worker (ctrl+c to exit)
              async with Worker(chancy) as worker:
                  await worker.wait_until_complete()
 
@@ -70,37 +67,53 @@ Quick Start
 
 .. tab:: CLI
 
+  Install Chancy & its CLI:
+
+  .. code-block:: bash
+
+     pip install chancy[cli]
+
+  Create a new file called ``worker.py``:
+
   .. code-block:: python
      :caption: worker.py
 
-     from chancy import Chancy, as_job
+     from chancy import Chancy, job
 
-     @as_job(queue="default")
+     @job(queue="default")
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
      chancy = Chancy("postgresql://localhost/postgres")
 
-
-3. Run the worker:
-
-.. tab:: Code
-
-  .. code-block:: bash
-
-     python worker.py
-
-.. tab:: CLI
+  Then run the database migrations:
 
   .. code-block:: bash
 
      chancy --app worker.chancy misc migrate
+
+  Declare a queue:
+
+  .. code-block:: bash
+
      chancy --app worker.chancy queue declare default --concurrency 10
+
+  Push a job:
+
+  .. code-block:: bash
+
      chancy --app worker.chancy queue push worker.hello_world --kwargs '{"name": "world"}'
+
+  Start the worker:
+
+  .. code-block:: bash
+
      chancy --app worker.chancy worker start
 
 
-Congratulations! You've just run your first Chancy job.
+
+Congratulations! You've just run your first Chancy job. Next, explore the
+:doc:`How To <howto/index>` or :doc:`plugins <chancy.plugins>`.
 
 
 Similar Projects

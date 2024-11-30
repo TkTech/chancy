@@ -8,19 +8,15 @@ from psycopg.rows import dict_row
 from chancy.plugin import Plugin, PluginScope
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.job import Job, QueuedJob
+from chancy.job import Job, QueuedJob, IsAJob
 from chancy.utils import json_dumps, chancy_uuid
 from chancy.rule import Rule
 
 
 @dataclass
 class WorkflowStep:
-    """
-    A single step in a workflow.
-    """
-
     #: The job to execute when this step is ready.
-    job: Job
+    job: Job | IsAJob
     #: The unique ID of the step.
     step_id: str
     #: A list of step IDs that this step depends on.
@@ -33,10 +29,6 @@ class WorkflowStep:
 
 @dataclass
 class Workflow:
-    """
-    A simple dependency-based workflow.
-    """
-
     class State(enum.Enum):
         PENDING = "pending"
         RUNNING = "running"
@@ -58,7 +50,7 @@ class Workflow:
     updated_at: datetime | None = None
 
     def add_step(
-        self, step_id: str, job: Job, dependencies: List[str] = None
+        self, step_id: str, job: Job | IsAJob, dependencies: List[str] = None
     ) -> "Workflow":
         """
         Add a step to the workflow.
@@ -68,7 +60,9 @@ class Workflow:
         :param dependencies: A list of step IDs that this step depends on.
         """
         self.steps[step_id] = WorkflowStep(
-            job=job, dependencies=dependencies or [], step_id=step_id
+            job=job if isinstance(job, Job) else job.job,
+            dependencies=dependencies or [],
+            step_id=step_id,
         )
         return self
 
@@ -101,31 +95,24 @@ class Workflow:
 
 class WorkflowPlugin(Plugin):
     """
-    Support for simple dependency-based workflows.
+    Support for dependency-based workflows.
 
     Workflows are defined by a series of steps, each of which can depend on
     one or more other steps. When all dependencies are met, the step is
     executed. This forms a directed acyclic graph (DAG) of steps that can be
     visualized as a workflow.
 
-    If notifications are enabled (the default) workflows will run almost
-    immediately after creation.
-
-    You can use the :func:`generate_dot` method to generate a DOT file
-    representation of a workflow, which can be visualized using Graphviz or
-    similar tools. This can be a helpful debugging and validation tool for
-    complex workflows.
-
     Enable the plugin by adding it to the list of plugins in the Chancy
     constructor:
 
     .. code-block:: python
 
+        from chancy.plugins.leadership import Leadership
         from chancy.plugins.workflow import WorkflowPlugin
 
         async with Chancy(
-            dsn="postgresql://localhost/postgres",
-            plugins=[WorkflowPlugin()]
+            "postgresql://localhost/postgres",
+            plugins=[Leadership(), WorkflowPlugin()]
         ) as chancy:
             ...
 
@@ -136,49 +123,40 @@ class WorkflowPlugin(Plugin):
        :caption: example_workflow.py
 
         import asyncio
-        from chancy import Job, Chancy
-        from chancy.plugins.workflow import (
-            Workflow,
-            WorkflowStep,
-            WorkflowPlugin
-        )
+        from chancy import Chancy, job
+        from chancy.plugins.leadership import Leadership
+        from chancy.plugins.workflow import Workflow, WorkflowPlugin
 
+        @job()
         async def top():
             print(f"Top")
 
+        @job()
         async def left():
             print(f"Left")
 
+        @job()
         async def right():
             print(f"Right")
 
+        @job()
         async def bottom():
             print(f"Bottom")
 
         async def main():
-            async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+            async with Chancy(
+                "postgresql://localhost/postgres",
+                plugins=[Leadership(), WorkflowPlugin()]
+            ) as chancy:
                 workflow = Workflow("example")
-
-                workflow += WorkflowStep(
-                    job=Job.from_func(top),
-                    step_id="top",
+                workflow.add_step(top, "top")
+                workflow.add_step(left, "left", dependencies=["top"])
+                workflow.add_step(right, "right", dependencies=["top"])
+                workflow.add_step(
+                    bottom,
+                    "bottom",
+                    dependencies=["left", "right"]
                 )
-                workflow += WorkflowStep(
-                    job=Job.from_func(left),
-                    step_id="left",
-                    dependencies=["top"],
-                )
-                workflow += WorkflowStep(
-                    job=Job.from_func(right),
-                    step_id="right",
-                    dependencies=["top"],
-                )
-                workflow += WorkflowStep(
-                    job=Job.from_func(bottom),
-                    step_id="bottom",
-                    dependencies=["left", "right"],
-                )
-
                 await WorkflowPlugin.push(chancy, workflow)
 
         if __name__ == "__main__":
@@ -542,7 +520,7 @@ class WorkflowPlugin(Plugin):
 
 class Sequence:
     """
-    A simple sequential workflow.
+    A sequential workflow.
 
     Sequences are a special case of workflows, where each step depends on the
     previous step. This forms a linear chain of jobs that are executed in
@@ -558,36 +536,35 @@ class Sequence:
        :caption: example_sequence.py
 
         import asyncio
-        from chancy import Job, Chancy
+        from chancy import Chancy, job
         from chancy.plugins.workflow import Sequence
 
+        @job()
         async def first():
             print("First")
 
+        @job()
         async def second():
             print("Second")
 
+        @job()
         async def third():
             print("Third")
 
         async def main():
-            async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-                sequence = Sequence("example", [
-                    Job.from_func(first),
-                    Job.from_func(second),
-                    Job.from_func(third),
-                ])
+            async with Chancy("postgresql://localhost/postgres") as chancy:
+                sequence = Sequence("example_workflow", [first, second, third])
                 await sequence.push(chancy)
 
         if __name__ == "__main__":
             asyncio.run(main())
     """
 
-    def __init__(self, name: str, jobs: List[Job] = None):
+    def __init__(self, name: str, jobs: List[Job | IsAJob] = None):
         self.name = name
         self.jobs = jobs or []
 
-    def add(self, job: Job) -> Self:
+    def add(self, job: Job | IsAJob) -> Self:
         """
         Add a job to the sequence.
 

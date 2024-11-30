@@ -4,7 +4,7 @@ import asyncio
 import pytest
 
 from chancy import Chancy, Worker, Queue, Job, QueuedJob, Reference
-from chancy.job import as_job
+from chancy.job import job
 
 
 def slow_job_to_run():
@@ -35,12 +35,12 @@ def sync_very_long_job():
     time.sleep(60)
 
 
-@as_job(queue="low")
+@job(queue="low")
 async def decorated_job_to_run():
     pass
 
 
-@as_job(queue="low")
+@job(queue="low")
 def sync_decorated_job_to_run():
     pass
 
@@ -158,7 +158,7 @@ async def test_job_decorator(
     chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
 ):
     """
-    Test that jobs can be decorated with the @as_job decorator.
+    Test that jobs can be decorated with the @job decorator.
     """
     await chancy.declare(Queue("low", executor=sync_executor))
     ref = await chancy.push(sync_decorated_job_to_run)
@@ -171,7 +171,7 @@ async def test_job_decorator_async(
     chancy: Chancy, worker: tuple[Worker, asyncio.Task], async_executor: str
 ):
     """
-    Test that async jobs can be decorated with the @as_job decorator.
+    Test that async jobs can be decorated with the @job decorator.
     """
     await chancy.declare(Queue("low", executor=async_executor))
     ref = await chancy.push(decorated_job_to_run)

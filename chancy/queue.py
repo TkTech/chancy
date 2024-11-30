@@ -6,8 +6,6 @@ from dataclasses import KW_ONLY
 @dataclasses.dataclass(frozen=True)
 class Queue:
     """
-    Represents a queue in a Chancy cluster.
-
     Queues are used to group jobs together and determine how they should be
     processed. Each queue has a name, concurrency level, and a set of tags that
     determine which workers can process jobs from the queue.
@@ -17,8 +15,8 @@ class Queue:
 
     .. code-block:: python
 
-        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-            chancy.declare(Queue(name="default", concurrency=4))
+        async with Chancy("postgresql://localhost/postgres") as chancy:
+            await chancy.declare(Queue(name="default", concurrency=4))
 
     By default, this queue will shortly be picked up by all running workers and
     begin processing jobs. If you want to instead apply it to specific workers,
@@ -26,14 +24,14 @@ class Queue:
 
     .. code-block:: python
 
-        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-            chancy.declare(Queue(name="default", concurrency=4, tags={"reporting"}))
+        async with Chancy("postgresql://localhost/postgres") as chancy:
+            await chancy.declare(Queue(name="default", concurrency=4, tags={"reporting"}))
 
     This will only be picked up by workers that have the "reporting" tag:
 
     .. code-block:: python
 
-        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+        async with Chancy("postgresql://localhost/postgres") as chancy:
             await Worker(chancy, tags={"reporting"}).start()
 
     Queues can have a global rate limit applied to them, which will be enforced
@@ -41,8 +39,8 @@ class Queue:
 
     .. code-block:: python
 
-        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-            chancy.declare(
+        async with Chancy("postgresql://localhost/postgres") as chancy:
+            await chancy.declare(
                 Queue(name="default", rate_limit=10, rate_limit_window=60)
             )
 

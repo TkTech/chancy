@@ -33,3 +33,13 @@ way you can import:
 
 ... and progressively migrate your codebase to Chancy without having to
 rewrite all of your tasks or alias the imports.
+
+-----
+
+**Q.** Why can't I just do ``job.delay()``?
+
+**A.** Supporting ``job.delay()`` like Celery does would require global
+state to keep track of the currently active Chancy application. Chancy
+has **absolutely no global state** as a hard rule, which helps minimize
+the risk of bugs when dealing with many different types of concurrency
+models in a single application.

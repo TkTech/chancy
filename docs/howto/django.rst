@@ -28,7 +28,7 @@ This file will contain the code that defines your chancy app:
   from chancy.plugins.recovery import Recovery
 
   chancy_app = Chancy(
-      dsn=str(settings.my_database_dsn),
+      settings.my_database_dsn,
       plugins=[
           Pruner(Pruner.Rules.Age() > 60 * 60 * 48),
           Recovery(),

@@ -8,14 +8,16 @@ significant customization.
 
 Chancy comes with several built-in plugins:
 
-- :class:`chancy.plugins.pruner.Pruner`: This plugin is responsible for pruning
-    old jobs from the database.
-- :class:`chancy.plugins.recovery.Recovery`: This plugin is responsible for
-    recovering jobs that were interrupted during execution.
 - :class:`chancy.plugins.leadership.Leadership`: This plugin is responsible for
-    managing leadership elections between multiple workers.
+    managing leadership elections between multiple workers. Most other plugins
+    require this plugin to be enabled.
+- :class:`chancy.plugins.pruner.Pruner`: This plugin is responsible for pruning
+    old jobs from the database when they are no longer needed.
+- :class:`chancy.plugins.recovery.Recovery`: This plugin is responsible for
+    recovering jobs that were interrupted during execution, such as when a
+    worker crashes or is restarted.
 - :class:`chancy.plugins.cron.Cron`: This plugin is responsible for scheduling
-    jobs to run at specific times.
+    jobs to run at recurring schedules.
 - :class:`chancy.plugins.api.Api`: This plugin provides an API and dashboard
     for viewing the state of the Chancy cluster.
 - :class:`chancy.plugins.workflow.WorkflowPlugin`: This plugin provides a

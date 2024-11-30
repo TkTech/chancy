@@ -283,7 +283,7 @@ class Chancy:
 
         This will create a new queue in the database with the provided
         configuration. If the queue already exists, no changes will be
-        made unless the `upsert` parameter is also set to `True`.
+        made unless the ``upsert`` parameter is also set to ``True``.
 
         .. code-block:: python
 

@@ -12,12 +12,9 @@ application by using FastAPI's lifespan events:
   from typing import AsyncIterator
 
   from fastapi import FastAPI
-  from chancy import Chancy, Worker, Queue, Job
+  from chancy import Chancy, Worker, Queue, job
 
-  chancy = Chancy(
-      dsn="postgresql://postgres:localtest@localhost:8190/postgres",
-      plugins=[],
-  )
+  chancy = Chancy("postgresql://localhost/postgres")
 
   @contextlib.asynccontextmanager
   async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -25,9 +22,10 @@ application by using FastAPI's lifespan events:
       FastAPI lifespan handler that starts and stops the Chancy worker.
       This ensures the worker starts when FastAPI starts and shuts down properly.
       """
+      # Run the database migrations (don't do this in production)
       await chancy.migrate()
 
-      # Declare any queues we need
+      # Declare any queues we need (do this just once in production)
       await chancy.declare(Queue("default"))
 
       async with Worker(chancy) as worker:
@@ -37,11 +35,12 @@ application by using FastAPI's lifespan events:
   app = FastAPI(lifespan=lifespan)
 
 
+  @job(queue="default")
   async def send_an_email():
       print("Sending an email")
 
 
   @app.get("/")
   async def read_root():
-      await chancy.push(Job.from_func(send_an_email))
+      await chancy.push(send_an_email)
       return {"Hello": "World"}

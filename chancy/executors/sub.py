@@ -46,7 +46,7 @@ class SubInterpreterExecutor(ConcurrentExecutor):
 
     .. code-block:: python
 
-        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+        async with Chancy("postgresql://localhost/postgres") as chancy:
             await chancy.declare(
                 Queue(
                     name="default",

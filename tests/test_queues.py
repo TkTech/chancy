@@ -2,17 +2,19 @@ import asyncio
 
 import pytest
 
-from chancy import Worker, Chancy, Job, Queue, QueuedJob
+from chancy import Worker, Chancy, Queue, QueuedJob, job
 
 
 low = Queue("low", concurrency=1)
 high = Queue("high", concurrency=1)
 
 
+@job()
 def job_to_run():
     return
 
 
+@job()
 def job_that_fails():
     raise ValueError("This job should fail.")
 
@@ -27,8 +29,8 @@ async def test_multiple_queues(
     await chancy.declare(low)
     await chancy.declare(high)
 
-    ref_low = await chancy.push(Job.from_func(job_to_run, queue="low"))
-    ref_high = await chancy.push(Job.from_func(job_to_run, queue="high"))
+    ref_low = await chancy.push(job_to_run.job.with_queue("low"))
+    ref_high = await chancy.push(job_to_run.job.with_queue("high"))
 
     job_low = await chancy.wait_for_job(ref_low)
     job_high = await chancy.wait_for_job(ref_high)

@@ -19,27 +19,29 @@ class RetryPlugin(Plugin):
 
     .. code-block:: python
 
+        from chancy import job
+        from chancy.plugins.retry import RetryPlugin
+
+        @job()
         def job_that_fails():
             raise ValueError("This job should fail.")
 
-        async with Chancy(..., plugins=[
-            RetryPlugin()
-        ]) as chancy:
+        async with Chancy(..., plugins=[RetryPlugin()]) as chancy:
             await chancy.declare(Queue("default"))
             await chancy.push(
-                Job.from_func(
-                    job_that_fails,
-                    max_attempts=3
-                ).with_meta({
+                job_that_fails.job.with_max_attempts(3).with_meta({
                     "retry_settings": {
                         "backoff": 2,
                         "backoff_factor": 3,
-                        "backoff_limit": 10,
-                        "backoff_jitter": [0, 1],
+                        "backoff_limit": 300,
+                        "backoff_jitter": [1, 5],
                     }
                 })
             )
 
+    The above example will retry the job 3 times, with a starting backoff of 2
+    seconds, a backoff factor of 3, a backoff limit of 300 seconds, and a
+    random jitter of between 1 and 5 seconds.
     """
 
     @classmethod

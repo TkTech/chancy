@@ -31,7 +31,7 @@ async def chancy(request, postgresql):
     i = postgresql.info
 
     async with Chancy(
-        dsn=f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
+        f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
         **getattr(request, "param", {}),
     ) as chancy:
         await chancy.migrate()
@@ -47,7 +47,7 @@ def chancy_just_app(postgresql):
     """
     i = postgresql.info
     return Chancy(
-        dsn=f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
+        f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
     )
 
 
