@@ -1,3 +1,4 @@
+import asyncio
 import enum
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -49,11 +50,16 @@ class Workflow:
     #: The time the workflow was last updated.
     updated_at: datetime | None = None
 
-    def add_step(
+    def add(
         self, step_id: str, job: Job | IsAJob, dependencies: List[str] = None
     ) -> "Workflow":
         """
         Add a step to the workflow.
+
+        .. code-block:: python
+
+            workflow.add("step_1", job)
+            workflow.add("step_2", job, ["step_1"])
 
         :param step_id: The ID of the step.
         :param job: The job to execute.
@@ -64,6 +70,34 @@ class Workflow:
             dependencies=dependencies or [],
             step_id=step_id,
         )
+        return self
+
+    def add_group(
+        self,
+        jobs: List[tuple[str, Job | IsAJob]],
+        dependencies: List[str] = None,
+    ) -> "Workflow":
+        """
+        Add a group of steps to the workflow.
+
+        This is a convenience method for adding multiple steps to the workflow
+        at once that are all dependent on the same set of dependencies.
+
+        .. code-block:: python
+
+            workflow = Workflow("my_workflow")
+            workflow.add("setup", setup_job)
+            workflow.add_group([
+                ("step_1", job_1),
+                ("step_2", job_2),
+                ("step_3", job_3),
+            ], ["setup"])
+
+        :param jobs: A list of tuples of (step_id, job).
+        :param dependencies: A list of step IDs that this step depends on.
+        """
+        for step_id, job in jobs:
+            self.add(step_id, job, dependencies)
         return self
 
     def __repr__(self):
@@ -84,6 +118,14 @@ class Workflow:
 
     def __delitem__(self, key: str):
         del self.steps[key]
+
+    @property
+    def is_complete(self) -> bool:
+        return self.state in (self.State.COMPLETED, self.State.FAILED)
+
+    @property
+    def is_running(self) -> bool:
+        return self.state == self.State.RUNNING
 
     @property
     def steps_by_state(self) -> Dict[QueuedJob.State, List[WorkflowStep]]:
@@ -149,14 +191,12 @@ class WorkflowPlugin(Plugin):
                 plugins=[Leadership(), WorkflowPlugin()]
             ) as chancy:
                 workflow = Workflow("example")
-                workflow.add_step(top, "top")
-                workflow.add_step(left, "left", dependencies=["top"])
-                workflow.add_step(right, "right", dependencies=["top"])
-                workflow.add_step(
-                    bottom,
-                    "bottom",
-                    dependencies=["left", "right"]
-                )
+                workflow.add(top, "top")
+                workflow.add_group([
+                    ("left", left),
+                    ("right", right),
+                ], ["top"])
+                workflow.add(bottom, "bottom", ["left", "right"])
                 await WorkflowPlugin.push(chancy, workflow)
 
         if __name__ == "__main__":
@@ -508,6 +548,60 @@ class WorkflowPlugin(Plugin):
                 )
                 return cursor.rowcount
 
+    @classmethod
+    async def wait_for_workflow(
+        cls,
+        chancy: Chancy,
+        workflow_id: str,
+        *,
+        interval: int = 1,
+        timeout: float | int | None = None,
+    ) -> Workflow:
+        """
+        Wait for a workflow to complete.
+
+        This method will loop until the workflow referenced by the provided ID
+        has completed. The interval parameter controls how often the workflow
+        status is checked. This will not block the event loop, so other tasks
+        can run while waiting for the workflow to complete.
+
+        Example
+        -------
+
+        .. code-block:: python
+
+            workflow = Workflow("example")
+            workflow.add("step1", job1)
+            workflow.add("step2", job2, ["step1"])
+
+            workflow_id = await WorkflowPlugin.push(chancy, workflow)
+            completed_workflow = await WorkflowPlugin.wait_for_workflow(
+                chancy,
+                workflow_id,
+                timeout=300  # 5 minute timeout
+            )
+
+        :param chancy: The Chancy application.
+        :param workflow_id: The ID of the workflow to wait for.
+        :param interval: The number of seconds to wait between checks.
+        :param timeout: The maximum number of seconds to wait for the workflow to
+            complete. If not provided, the method will wait indefinitely.
+        :raises asyncio.TimeoutError: If the timeout is reached before the workflow
+            completes.
+        :raises KeyError: If the workflow does not exist.
+        :return: The completed Workflow object.
+        """
+        async with asyncio.timeout(timeout):
+            while True:
+                workflow = await cls.fetch_workflow(chancy, workflow_id)
+                if workflow is None:
+                    raise KeyError(f"Workflow {workflow_id} not found")
+
+                if workflow.is_complete:
+                    return workflow
+
+                await asyncio.sleep(interval)
+
     def migrate_package(self) -> str:
         return "chancy.plugins.workflow.migrations"
 
@@ -568,6 +662,13 @@ class Sequence:
         """
         Add a job to the sequence.
 
+        workflow = (
+            Sequence("example_sequence")
+            .add(first)
+            .add(second)
+            .add(third)
+        )
+
         :param job: The job to add.
         """
         self.jobs.append(job)
@@ -575,7 +676,7 @@ class Sequence:
 
     async def push(self, chancy: Chancy) -> str:
         """
-        Push a new sequence to the database.
+        Push a sequence to the database.
 
         :param chancy: The Chancy application.
         :return: The UUID of the newly created chain.
@@ -584,6 +685,6 @@ class Sequence:
         for i, job in enumerate(self.jobs):
             step_id = f"step_{i}"
             dependencies = [f"step_{i - 1}"] if i > 0 else []
-            workflow.add_step(step_id, job, dependencies)
+            workflow.add(step_id, job, dependencies)
 
         return await WorkflowPlugin.push(chancy, workflow)
