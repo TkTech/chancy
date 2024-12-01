@@ -9,6 +9,12 @@ A postgres-backed task queue for Python.
 .. image:: https://img.shields.io/pypi/pyversions/chancy
    :alt: Supported Versions
 
+.. image:: https://img.shields.io/codecov/c/github/TkTech/chancy
+   :alt: Codecov
+
+.. image:: https://img.shields.io/pypi/v/chancy
+   :alt: PyPI Version
+
 
 Key Features:
 -------------
