@@ -52,7 +52,7 @@ def chancy_just_app(postgresql):
 
 
 @pytest_asyncio.fixture()
-async def worker(request, chancy) -> AsyncIterator[tuple[Worker, asyncio.Task]]:
+async def worker(request, chancy) -> AsyncIterator[Worker]:
     """
     Starts and returns a Worker and the task associated with it.
 

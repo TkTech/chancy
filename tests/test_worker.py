@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 from chancy import Worker, Chancy, Job, Queue, QueuedJob
@@ -14,7 +12,7 @@ def job_that_fails():
 
 
 @pytest.mark.asyncio
-async def test_basic_job(chancy: Chancy, worker: tuple[Worker, asyncio.Task]):
+async def test_basic_job(chancy: Chancy, worker: Worker):
     """
     Simply test that we can push a job, and it runs successfully.
     """
@@ -31,7 +29,7 @@ async def test_basic_job(chancy: Chancy, worker: tuple[Worker, asyncio.Task]):
 
 
 @pytest.mark.asyncio
-async def test_failing_job(chancy: Chancy, worker: tuple[Worker, asyncio.Task]):
+async def test_failing_job(chancy: Chancy, worker: Worker):
     """
     Test that a job that fails will be marked as failed.
     """

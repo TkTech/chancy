@@ -1,4 +1,3 @@
-import asyncio
 import pytest
 
 from chancy import Job, Queue, QueuedJob, Worker
@@ -17,9 +16,7 @@ def successful_job():
     "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
 )
 @pytest.mark.asyncio
-async def test_retry_with_default_settings(
-    chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_retry_with_default_settings(chancy, worker: Worker):
     """Test that jobs retry with default settings when no retry_settings in meta"""
     await chancy.declare(Queue("default"))
 
@@ -40,9 +37,7 @@ async def test_retry_with_default_settings(
     "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
 )
 @pytest.mark.asyncio
-async def test_retry_with_custom_settings(
-    chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_retry_with_custom_settings(chancy, worker: Worker):
     """Test that jobs retry with custom settings from meta"""
     await chancy.declare(Queue("default"))
 
@@ -79,7 +74,7 @@ async def test_retry_with_custom_settings(
     "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
 )
 @pytest.mark.asyncio
-async def test_no_retry_on_success(chancy, worker: tuple[Worker, asyncio.Task]):
+async def test_no_retry_on_success(chancy, worker: Worker):
     """Test that successful jobs don't trigger retry logic"""
     await chancy.declare(Queue("default"))
 
@@ -101,9 +96,7 @@ async def test_no_retry_on_success(chancy, worker: tuple[Worker, asyncio.Task]):
     "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
 )
 @pytest.mark.asyncio
-async def test_respect_max_attempts(
-    chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_respect_max_attempts(chancy, worker: Worker):
     """Test that jobs don't retry beyond max_attempts"""
     await chancy.declare(Queue("default"))
 

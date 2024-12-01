@@ -30,9 +30,7 @@ def simple_job():
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_basic_reprioritization(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_basic_reprioritization(chancy: Chancy, worker: Worker):
     """
     Tests that basic reprioritization works as expected.
     """

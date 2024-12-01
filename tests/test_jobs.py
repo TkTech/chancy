@@ -53,7 +53,7 @@ def sync_decorated_job_to_run():
 
 @pytest.mark.asyncio
 async def test_basic_job_sync(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
+    chancy: Chancy, worker: Worker, sync_executor: str
 ):
     """
     Ensures that a basic job can be run on all built-in executors.
@@ -68,7 +68,7 @@ async def test_basic_job_sync(
 
 @pytest.mark.asyncio
 async def test_basic_job_async(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], async_executor: str
+    chancy: Chancy, worker: Worker, async_executor: str
 ):
     """
     Ensures that a basic job can be run on all built-in executors.
@@ -83,7 +83,7 @@ async def test_basic_job_async(
 
 @pytest.mark.asyncio
 async def test_wait_for_job_timeout(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
+    chancy: Chancy, worker: Worker, sync_executor: str
 ):
     """
     Ensures that waiting for a job times out as expected.
@@ -102,7 +102,7 @@ async def test_wait_for_job_timeout(
 
 @pytest.mark.asyncio
 async def test_job_instance_kwarg(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
+    chancy: Chancy, worker: Worker, sync_executor: str
 ):
     """
     Test that jobs requesting a QueuedJob kwarg receive the correct instance.
@@ -118,7 +118,7 @@ async def test_job_instance_kwarg(
 
 @pytest.mark.asyncio
 async def test_async_job_instance_kwarg(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], async_executor: str
+    chancy: Chancy, worker: Worker, async_executor: str
 ):
     """
     Test that async jobs requesting a QueuedJob kwarg receive the correct
@@ -134,9 +134,7 @@ async def test_async_job_instance_kwarg(
 
 
 @pytest.mark.asyncio
-async def test_job_cancellation(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_job_cancellation(chancy: Chancy, worker: Worker):
     """
     Test that jobs can be cancelled on supporting executors.
     """

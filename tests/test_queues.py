@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 from chancy import Worker, Chancy, Queue, QueuedJob, job
@@ -20,9 +18,7 @@ def job_that_fails():
 
 
 @pytest.mark.asyncio
-async def test_multiple_queues(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task]
-):
+async def test_multiple_queues(chancy: Chancy, worker: Worker):
     """
     Ensure that jobs can be pushed & retrieved from multiple enabled queues.
     """
