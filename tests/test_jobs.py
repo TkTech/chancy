@@ -3,34 +3,40 @@ import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, Job, QueuedJob, Reference
-from chancy.job import job
+from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job
 
 
+@job()
 def slow_job_to_run():
     time.sleep(5)
 
 
+@job()
 def job_to_run():
     pass
 
 
+@job()
 async def async_job_to_run():
     pass
 
 
-def job_with_instance(*, job: QueuedJob):
-    job.meta["received_instance"] = True
+@job()
+def job_with_instance(*, context: QueuedJob):
+    context.meta["received_instance"] = True
 
 
-async def async_job_with_instance(*, job: QueuedJob):
-    job.meta["received_instance"] = True
+@job()
+async def async_job_with_instance(*, context: QueuedJob):
+    context.meta["received_instance"] = True
 
 
+@job()
 async def very_long_job():
     await asyncio.sleep(60 * 60)
 
 
+@job()
 def sync_very_long_job():
     time.sleep(60)
 
@@ -54,10 +60,10 @@ async def test_basic_job_sync(
     """
     await chancy.declare(Queue("low", executor=sync_executor))
 
-    ref = await chancy.push(Job.from_func(job_to_run, queue="low"))
-    job = await chancy.wait_for_job(ref, timeout=30)
+    ref = await chancy.push(job_to_run.job.with_queue("low"))
+    j = await chancy.wait_for_job(ref, timeout=30)
 
-    assert job.state == job.State.SUCCEEDED
+    assert j.state == j.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -69,10 +75,10 @@ async def test_basic_job_async(
     """
     await chancy.declare(Queue("low", executor=async_executor))
 
-    ref = await chancy.push(Job.from_func(async_job_to_run, queue="low"))
-    job = await chancy.wait_for_job(ref, timeout=30)
+    ref = await chancy.push(async_job_to_run.job.with_queue("low"))
+    j = await chancy.wait_for_job(ref, timeout=30)
 
-    assert job.state == job.State.SUCCEEDED
+    assert j.state == j.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -84,12 +90,12 @@ async def test_wait_for_job_timeout(
     """
     await chancy.declare(Queue("low", executor=sync_executor))
 
-    ref = await chancy.push(Job.from_func(job_to_run, queue="low"))
-    job = await chancy.wait_for_job(ref, timeout=10)
+    ref = await chancy.push(job_to_run.job.with_queue("low"))
+    j = await chancy.wait_for_job(ref, timeout=10)
 
-    assert job.state == job.State.SUCCEEDED
+    assert j.state == j.State.SUCCEEDED
 
-    ref = await chancy.push(Job.from_func(slow_job_to_run, queue="low"))
+    ref = await chancy.push(slow_job_to_run.job.with_queue("low"))
     with pytest.raises(asyncio.TimeoutError):
         await chancy.wait_for_job(ref, timeout=0.1)
 
@@ -103,11 +109,11 @@ async def test_job_instance_kwarg(
     """
     await chancy.declare(Queue("low", executor=sync_executor))
 
-    ref = await chancy.push(Job.from_func(job_with_instance, queue="low"))
-    job = await chancy.wait_for_job(ref, timeout=30)
+    ref = await chancy.push(job_with_instance.job.with_queue("low"))
+    j = await chancy.wait_for_job(ref, timeout=30)
 
-    assert job.state == job.State.SUCCEEDED
-    assert job.meta.get("received_instance") is True
+    assert j.state == j.State.SUCCEEDED
+    assert j.meta.get("received_instance") is True
 
 
 @pytest.mark.asyncio
@@ -120,11 +126,11 @@ async def test_async_job_instance_kwarg(
     """
     await chancy.declare(Queue("low", executor=async_executor))
 
-    ref = await chancy.push(Job.from_func(async_job_with_instance, queue="low"))
-    job = await chancy.wait_for_job(ref, timeout=30)
+    ref = await chancy.push(async_job_with_instance.job.with_queue("low"))
+    j = await chancy.wait_for_job(ref, timeout=30)
 
-    assert job.state == job.State.SUCCEEDED
-    assert job.meta.get("received_instance") is True
+    assert j.state == j.State.SUCCEEDED
+    assert j.meta.get("received_instance") is True
 
 
 @pytest.mark.asyncio
@@ -142,38 +148,12 @@ async def test_job_cancellation(
     await chancy.declare(Queue("async", executor=Chancy.Executor.Async))
     await chancy.declare(Queue("sync", executor=Chancy.Executor.Process))
 
-    ref = await chancy.push(Job.from_func(very_long_job, queue="async"))
+    ref = await chancy.push(very_long_job.job.with_queue("async"))
     asyncio.create_task(cancel_in_a_bit(ref))
-    job = await chancy.wait_for_job(ref, timeout=30)
-    assert job.state == job.State.FAILED
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == j.State.FAILED
 
-    ref = await chancy.push(Job.from_func(sync_very_long_job, queue="sync"))
+    ref = await chancy.push(sync_very_long_job.job.with_queue("sync"))
     asyncio.create_task(cancel_in_a_bit(ref))
-    job = await chancy.wait_for_job(ref, timeout=30)
-    assert job.state == job.State.FAILED
-
-
-@pytest.mark.asyncio
-async def test_job_decorator(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
-):
-    """
-    Test that jobs can be decorated with the @job decorator.
-    """
-    await chancy.declare(Queue("low", executor=sync_executor))
-    ref = await chancy.push(sync_decorated_job_to_run)
-    job = await chancy.wait_for_job(ref, timeout=30)
-    assert job.state == job.State.SUCCEEDED
-
-
-@pytest.mark.asyncio
-async def test_job_decorator_async(
-    chancy: Chancy, worker: tuple[Worker, asyncio.Task], async_executor: str
-):
-    """
-    Test that async jobs can be decorated with the @job decorator.
-    """
-    await chancy.declare(Queue("low", executor=async_executor))
-    ref = await chancy.push(decorated_job_to_run)
-    job = await chancy.wait_for_job(ref, timeout=30)
-    assert job.state == job.State.SUCCEEDED
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == j.State.FAILED
