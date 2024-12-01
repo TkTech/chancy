@@ -4,6 +4,7 @@ import asyncio
 import pytest
 
 from chancy import Chancy, Worker, Queue, Job, QueuedJob, Reference
+from chancy.job import job
 
 
 def slow_job_to_run():
@@ -32,6 +33,16 @@ async def very_long_job():
 
 def sync_very_long_job():
     time.sleep(60)
+
+
+@job(queue="low")
+async def decorated_job_to_run():
+    pass
+
+
+@job(queue="low")
+def sync_decorated_job_to_run():
+    pass
 
 
 @pytest.mark.asyncio
@@ -140,3 +151,29 @@ async def test_job_cancellation(
     asyncio.create_task(cancel_in_a_bit(ref))
     job = await chancy.wait_for_job(ref, timeout=30)
     assert job.state == job.State.FAILED
+
+
+@pytest.mark.asyncio
+async def test_job_decorator(
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], sync_executor: str
+):
+    """
+    Test that jobs can be decorated with the @job decorator.
+    """
+    await chancy.declare(Queue("low", executor=sync_executor))
+    ref = await chancy.push(sync_decorated_job_to_run)
+    job = await chancy.wait_for_job(ref, timeout=30)
+    assert job.state == job.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_job_decorator_async(
+    chancy: Chancy, worker: tuple[Worker, asyncio.Task], async_executor: str
+):
+    """
+    Test that async jobs can be decorated with the @job decorator.
+    """
+    await chancy.declare(Queue("low", executor=async_executor))
+    ref = await chancy.push(decorated_job_to_run)
+    job = await chancy.wait_for_job(ref, timeout=30)
+    assert job.state == job.State.SUCCEEDED

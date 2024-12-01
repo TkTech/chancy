@@ -12,14 +12,30 @@ class Pruner(Plugin):
     """
     A plugin that prunes stale data from the database.
 
-    Jobs
-    ----
+    .. code-block:: python
 
-    The pruner will never prune jobs that haven't been run yet ("pending"),
-    or are currently being run ("running").
+        from chancy.plugins.leadership import Leadership
+        from chancy.plugins.pruner import Pruner
 
-    You can use simple rules, or combine them using the `|` and `&` operators
-    to create complex rules.
+        async with Chancy(..., plugins=[
+            Leadership(),
+            Pruner(
+                Pruner.Rules.Queue() == "default" & (Pruner.Rules.Age() > 60)
+            )
+        ]) as chancy:
+            ...
+
+    The pruner will never prune jobs that haven't been run yet or are currently
+    running. When the pruner runs, it will also call the
+    :py:meth:`chancy.plugin.Plugin.cleanup` method on any plugins that
+    implement it, allowing them to clean up any data that is no longer
+    needed such as completed workflows.
+
+    Rules
+    -----
+
+    You can use simple rules, or combine them using the ``|`` and ``&``
+    operators to create complex rules.
 
     For example, to prune jobs that are older than 60 seconds:
 
@@ -48,7 +64,7 @@ class Pruner(Plugin):
     10,000 jobs in a single run that have been completed for more than 60
     seconds.
 
-    .. note::
+    .. tip::
 
         By default, only an Age rule will be covered by an index. If you use
         multiple rules, you may need to create additional indexes to improve

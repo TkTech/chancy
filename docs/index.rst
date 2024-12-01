@@ -9,13 +9,19 @@ A postgres-backed task queue for Python.
 .. image:: https://img.shields.io/pypi/pyversions/chancy
    :alt: Supported Versions
 
+.. image:: https://img.shields.io/codecov/c/github/TkTech/chancy
+   :alt: Codecov
+
+.. image:: https://img.shields.io/pypi/v/chancy
+   :alt: PyPI Version
+
 
 Key Features:
 -------------
 
 - Jobs support priorities, retries, timeouts, scheduling,
   global rate limits, memory limits, global uniqueness, error
-  capture, and more
+  capture, cancellation, and more
 - Minimal dependencies (only psycopg3 required)
 - Plugins for a :class:`dashboard<chancy.plugins.api.Api>`,
   :class:`workflows<chancy.plugins.workflow.WorkflowPlugin>`,
@@ -28,57 +34,37 @@ Key Features:
 Quick Start
 -----------
 
-1. Install Chancy:
-
 .. tab:: Code
+
+  Install Chancy:
 
   .. code-block:: bash
 
      pip install chancy
 
-.. tab:: CLI
-
-  .. code-block:: bash
-
-     pip install chancy[cli]
-
-
-2. Setup a worker (worker.py) with all the bells and whistles:
-
-.. tab:: Code
+  Create a new file called ``worker.py``:
 
   .. code-block:: python
     :caption: worker.py
 
      import asyncio
-     from chancy import Chancy, Worker, Queue, Job
-     from chancy.plugins.pruner import Pruner
-     from chancy.plugins.recovery import Recovery
-     from chancy.plugins.leadership import Leadership
-     from chancy.plugins.cron import Cron
-     from chancy.plugins.api import Api
-     from chancy.plugins.workflow import WorkflowPlugin
+     from chancy import Chancy, Worker, Queue, job
 
+     @job(queue="default")
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
+     chancy = Chancy("postgresql://localhost/postgres")
+
      async def main():
-         async with Chancy(
-             dsn="postgresql://localhost/postgres",
-             plugins=[
-                  Pruner(),
-                  Recovery(),
-                  Leadership(),
-                  Cron(),
-                  Api(),
-                  WorkflowPlugin(),
-             ]
-         ) as chancy:
+         async with chancy:
+             # Run the database migrations
              await chancy.migrate()
+             # Declare a queue
              await chancy.declare(Queue("default", concurrency=10))
-             await chancy.push(
-                 Job.from_func(hello_world, kwargs={"name": "world"}, queue="default")
-             )
+             # Push a job
+             await chancy.push(hello_world.job.with_kwargs(name="World"))
+             # Start the worker (ctrl+c to exit)
              async with Worker(chancy) as worker:
                  await worker.wait_until_complete()
 
@@ -87,52 +73,53 @@ Quick Start
 
 .. tab:: CLI
 
-  .. code-block:: python
-     :caption: worker.py
-
-     from chancy import Chancy
-     from chancy.plugins.pruner import Pruner
-     from chancy.plugins.recovery import Recovery
-     from chancy.plugins.leadership import Leadership
-     from chancy.plugins.cron import Cron
-     from chancy.plugins.api import Api
-     from chancy.plugins.workflow import WorkflowPlugin
-
-     def hello_world(*, name: str):
-         print(f"Hello, {name}!")
-
-     chancy = Chancy(
-         dsn="postgresql://localhost/postgres",
-         plugins=[
-             Pruner(),
-             Recovery(),
-             Leadership(),
-             Cron(),
-             Api(),
-             WorkflowPlugin(),
-         ]
-     )
-
-
-3. Run the worker:
-
-.. tab:: Code
+  Install Chancy & its CLI:
 
   .. code-block:: bash
 
-     python worker.py
+     pip install chancy[cli]
 
-.. tab:: CLI
+  Create a new file called ``worker.py``:
+
+  .. code-block:: python
+     :caption: worker.py
+
+     from chancy import Chancy, job
+
+     @job(queue="default")
+     def hello_world(*, name: str):
+         print(f"Hello, {name}!")
+
+     chancy = Chancy("postgresql://localhost/postgres")
+
+  Then run the database migrations:
 
   .. code-block:: bash
 
      chancy --app worker.chancy misc migrate
+
+  Declare a queue:
+
+  .. code-block:: bash
+
      chancy --app worker.chancy queue declare default --concurrency 10
-     chancy --app worker.chancy queue push worker.hello_world --kwargs '{"name": "world"}' --queue default
+
+  Push a job:
+
+  .. code-block:: bash
+
+     chancy --app worker.chancy queue push worker.hello_world --kwargs '{"name": "world"}'
+
+  Start the worker:
+
+  .. code-block:: bash
+
      chancy --app worker.chancy worker start
 
 
-Congratulations! You've just run your first Chancy job.
+
+Congratulations! You've just run your first Chancy job. Next, explore the
+:doc:`How To <howto/index>` or :doc:`plugins <chancy.plugins>`.
 
 
 Similar Projects
@@ -175,6 +162,7 @@ Here are some of the most popular ones:
 
    howto/index
    chancy
+   faq
 
 
 Indices and tables

@@ -6,7 +6,8 @@ A postgres-backed task queue for Python.
 
 ![MIT License](https://img.shields.io/github/license/tktech/chancy)
 ![Supported Version](https://img.shields.io/pypi/pyversions/chancy)
-
+![Codecov](https://img.shields.io/codecov/c/github/TkTech/chancy)
+![PyPI Version](https://img.shields.io/pypi/v/chancy)
 
 ## Key Features
 
@@ -34,14 +35,3 @@ look into the status of your queues:
 ![Queue Details](misc/ux_queue.png)
 ![Jobs](misc/ux_jobs.png)
 ![Job](misc/ux_job_failed.png)
-
-## Similar Work
-
-Many similar projects exist. Some of them are:
-
-- https://worker.graphile.org/ (Node.js)
-- https://riverqueue.com/ (Go)
-- https://github.com/acaloiaro/neoq (Go)
-- https://github.com/contribsys/faktory (Go)
-- https://github.com/sorentwo/oban (Elixir)
-- https://github.com/procrastinate-org/procrastinate (Python)

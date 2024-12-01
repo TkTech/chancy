@@ -40,6 +40,7 @@ def queue_group():
     "-m",
     help="The maximum number of attempts to make.",
     type=int,
+    default=1,
 )
 @click.option(
     "--kwargs",

@@ -30,7 +30,7 @@ class Worker:
     .. code-block:: python
 
         async with Chancy(
-            dsn="postgresql://localhost/postgres",
+            "postgresql://localhost/postgres",
         ) as chancy:
             await chancy.migrate()
             async with Worker(chancy) as worker:

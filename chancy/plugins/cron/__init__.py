@@ -7,7 +7,7 @@ from croniter import croniter
 from chancy.plugin import Plugin, PluginScope
 from chancy.worker import Worker
 from chancy.app import Chancy
-from chancy import Job
+from chancy.job import Job, IsAJob
 
 
 class Cron(Plugin):
@@ -32,8 +32,8 @@ class Cron(Plugin):
     Installation
     ------------
 
-    This plugin requires extra dependencies to parse the cron syntax. You can
-    install them using:
+    This plugin requires an extra dependency to parse the cron syntax. You can
+    install it using:
 
     .. code-block:: bash
 
@@ -49,35 +49,28 @@ class Cron(Plugin):
     then set up the schedule for the jobs you want to run:
 
     .. code-block:: python
-        :caption: worker.py
 
         import asyncio
-        from chancy import Chancy, Worker, Queue
+        from chancy import Chancy, Worker, Queue, job
         from chancy.plugins.pruner import Cron
         from chancy.plugins.leadership import Leadership
 
+        @job(queue="default")
         def hello_world():
             print("hello_world")
 
         async with Chancy(
-            dsn="postgresql://localhost/postgres",
+            "postgresql://localhost/postgres",
             plugins=[
-                Queue(name="default", concurrency=10),
                 Leadership(),
                 Cron(),
             ],
         ) as chancy:
-            await chancy.migrate()
             await Cron.schedule(
                 chancy,
                 "*/2 * * * *",
-                Job(
-                    func="worker.hello_world",
-                    unique_key="hello_world_cron",
-                    queue="default",
-                )
+                hello_world.job.with_unique_key("hello_world_cron")
             )
-            await Worker(chancy).start()
 
     :param poll_interval: The number of seconds between cron poll intervals.
     """
@@ -184,26 +177,15 @@ class Cron(Plugin):
                     )
 
     @classmethod
-    async def schedule(cls, chancy: Chancy, cron: str, *jobs: Job):
+    async def schedule(cls, chancy: Chancy, cron: str, *jobs: Job | IsAJob):
         """
-        Schedule one or more jobs to run at specific times and intervals.
+        Schedule one or more jobs to run periodically based on a cron schedule.
 
         All jobs that are scheduled with this feature *must* be using a
         :attr:`~chancy.job.Job.unique_key` to ensure that only one
         copy of the job is scheduled at a time. Scheduling a job with the same
         unique key as an existing job will update the existing job with the new
         schedule & job.
-
-        For example, to run a function once every 2 minutes, we'd use:
-
-        .. code-block:: python
-
-            await Cron.schedule(
-                chancy,
-                "default",
-                "*/2 * * * *",
-                Job(func="worker.hello_world", unique_key="hello_world_cron")
-            )
 
         :param chancy: The Chancy application.
         :param cron: A cron-like syntax string that describes when to run the

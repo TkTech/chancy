@@ -1,145 +1,15 @@
-"""
-Jobs
-====
-
-In Chancy, a Job represents a unit of work to be executed asynchronously.
-Understanding how to create, configure, and manage jobs is crucial for
-effectively using Chancy.
-
-Creating a Job
---------------
-
-There are two main ways to create a job:
-
-1. From a Python function:
-
-   .. code-block:: python
-
-      from chancy import Job
-
-      def greet(name: str):
-          print(f"Hello, {name}!")
-
-      job = Job.from_func(greet, kwargs={"name": "Alice"})
-
-2. From a string import path:
-
-   .. code-block:: python
-
-      job = Job(func="mymodule.greet", kwargs={"name": "Bob"})
-
-
-Jobs are immutable once created - use the `with_` methods on a Job to create
-a new job with modified properties.
-
-
-Priority
-^^^^^^^^
-
-Priority determines the order of execution. The higher the priority, the
-sooner the job will be executed:
-
-.. code-block:: python
-
-   high_priority_job = job.with_priority(10)
-   low_priority_job = job.with_priority(-10)
-
-Retry Attempts
-^^^^^^^^^^^^^^
-
-Specify how many times a job should be retried if it fails:
-
-.. code-block:: python
-
-   Job.from_func(greet, kwargs={"name": "Charlie"}, max_attempts=3)
-
-Scheduled Execution
-^^^^^^^^^^^^^^^^^^^
-
-Schedule a job to run some time in the future:
-
-.. code-block:: python
-
-   from datetime import datetime, timedelta, timezone
-
-   future_job = Job.from_func(greet, kwargs={"name": "David"})
-   future_job = future_job.with_scheduled_at(
-       datetime.now(timezone.utc) + timedelta(hours=1)
-   )
-
-.. note::
-
-    Scheduled jobs are guaranteed to run *at* or *after* the scheduled time,
-    but not *exactly* at that time.
-
-If you need recurring jobs, take a look at the
-:class:`~chancy.plugins.cron.Cron` plugin.
-
-Resource Limits
-^^^^^^^^^^^^^^^
-
-Set memory and time limits for job execution:
-
-.. code-block:: python
-
-   from chancy import Limit
-
-   limited_job = Job.from_func(
-       greet,
-       kwargs={"name": "Eve"},
-       limits=[
-           Limit(Limit.Type.MEMORY, 1024 * 1024 * 1024),  # 1GB
-           Limit(Limit.Type.TIME, 60),  # 60 seconds
-       ]
-   )
-
-Queueing a Job
---------------
-
-Once you've created a job, queue it for execution:
-
-.. code-block:: python
-
-   async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
-       await chancy.push(job)
-
-Queue multiple jobs at once:
-
-.. code-block:: python
-
-   await chancy.push_many([job1, job2, job3])
-
-If you want to queue jobs within a transaction, use the
-:meth:`~chancy.app.Chancy.push_many_ex` method.
-
-Push returns a :class:`~chancy.job.Reference` object that can be used to
-retrieve the job instance later, or wait for it to complete.
-
-Unique Jobs
------------
-
-Prevent duplicate job execution by assigning a unique key:
-
-.. code-block:: python
-
-   user_id = 1234
-   unique_job = Job(
-      func="generate_report",
-      kwargs={"user_id": user_id},
-      unique_key=f"report_{user_id}"
-   )
-
-.. note::
-
-  Unique jobs ensure only one job with the same ``unique_key`` is
-  queued or running at a time, but any number can be completed or
-  failed.
-"""
-
 import dataclasses
 import enum
 from datetime import datetime, timezone
-from typing import Any, Optional, TypedDict
+from typing import (
+    Any,
+    Optional,
+    TypedDict,
+    TypeVar,
+    ParamSpec,
+    Callable,
+    Protocol,
+)
 
 from chancy.utils import importable_name
 
@@ -164,7 +34,7 @@ class Reference:
 
     .. code-block:: python
 
-         async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+         async with Chancy("postgresql://localhost/postgres") as chancy:
             ref = await chancy.push(Job.from_func(my_function))
             job = await chancy.wait_for_job(ref)
             print(job.state)  # "succeeded"
@@ -173,7 +43,7 @@ class Reference:
 
     .. code-block:: python
 
-        async with Chancy(dsn="postgresql://localhost/postgres") as chancy:
+        async with Chancy("postgresql://localhost/postgres") as chancy:
             ref = await chancy.push(Job.from_func(my_function))
             job = await chancy.get_job(ref)
             print(job.state)  # "pending"
@@ -245,6 +115,17 @@ class Job:
 
     @classmethod
     def from_func(cls, func, **kwargs):
+        """
+        Create a job from a function, attempting to determine the function's
+        importable name automatically.
+
+        .. code-block:: python
+
+            def hello_world():
+                pass
+
+            job = Job.from_func(hello_world)
+        """
         return cls(func=importable_name(func), **kwargs)
 
     def with_priority(self, priority: int) -> "Job":
@@ -259,7 +140,7 @@ class Job:
     def with_limits(self, limits: list[Limit]) -> "Job":
         return dataclasses.replace(self, limits=limits)
 
-    def with_kwargs(self, kwargs: dict[str, Any]) -> "Job":
+    def with_kwargs(self, **kwargs) -> "Job":
         return dataclasses.replace(self, kwargs=kwargs)
 
     def with_unique_key(self, unique_key: str) -> "Job":
@@ -353,3 +234,47 @@ class QueuedJob(Job):
             limits=[Limit.deserialize(limit) for limit in data["limits"]],
             meta=data["meta"],
         )
+
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+class IsAJob(Protocol[P, R]):
+    __call__: Callable[P, R]
+    job: Job
+
+
+def job(
+    **options,
+) -> Callable[[Callable[P, R]], IsAJob[P, R]]:
+    """
+    A decorator that wraps a function and turns it into a job.
+
+    The wrapped function can still be called as normal, but will have an extra
+    ``job`` attribute that contains the job instance.
+
+    .. code-block:: python
+
+        >>> @job()
+        ... def hello_world():
+        ...    return "Hello, world!"
+        >>> hello_world.job
+        Job(func=<function my_job at 0x1033041e0>, kwargs={}, ...)
+        >>> hello_world()
+        'Hello, world!'
+
+    Your decorated function can be pushed like any other job, or you can
+    use the `job` property to modify its properties before pushing it.
+
+    .. code-block:: python
+
+        await chancy.push(hello_world)
+        await chancy.push(hello_world.job.with_queue("low_priority"))
+    """
+
+    def decorator(func: Callable[P, R]) -> IsAJob[P, R]:
+        func.job = Job.from_func(func, **options)
+        return func
+
+    return decorator

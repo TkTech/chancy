@@ -10,16 +10,19 @@ from chancy.worker import Worker
 
 class Leadership(Plugin):
     """
-    A plugin that manages cluster leadership.
-
     Leadership is used to ensure some plugins are run by only one worker at a
     time. For example, we wouldn't want every worker running database pruning
-    every 60 seconds, as that would be immensely wasteful.
+    every 60 seconds, as that would be immensely wasteful. Most other plugins
+    require a Leadership plugin to be enabled.
 
-    This plugin is responsible for ensuring that only one worker is the leader
-    at any given time. This plugin uses the {prefix}_leader table to store
-    leadership information, which will only ever contain at most 1 row, the
-    current leader.
+    .. code-block:: python
+
+        from chancy.plugins.leadership import Leadership
+
+        async with Chancy(..., plugins=[
+            Leadership()
+        ]) as chancy:
+            ...
 
     :param poll_interval: The number of seconds between leadership poll
                           intervals.
