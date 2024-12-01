@@ -190,13 +190,15 @@ class WorkflowPlugin(Plugin):
                 "postgresql://localhost/postgres",
                 plugins=[Leadership(), WorkflowPlugin()]
             ) as chancy:
-                workflow = Workflow("example")
-                workflow.add(top, "top")
-                workflow.add_group([
-                    ("left", left),
-                    ("right", right),
-                ], ["top"])
-                workflow.add(bottom, "bottom", ["left", "right"])
+                workflow = (
+                    Workflow("example")
+                    .add(top, "top")
+                    .add_group([
+                        ("left", left),
+                        ("right", right),
+                    ], ["top"])
+                    .add(bottom, "bottom", ["left", "right"])
+                )
                 await WorkflowPlugin.push(chancy, workflow)
 
         if __name__ == "__main__":
@@ -662,12 +664,14 @@ class Sequence:
         """
         Add a job to the sequence.
 
-        workflow = (
-            Sequence("example_sequence")
-            .add(first)
-            .add(second)
-            .add(third)
-        )
+        .. code-block:: python
+
+            workflow = (
+                Sequence("example_sequence")
+                .add(first)
+                .add(second)
+                .add(third)
+            )
 
         :param job: The job to add.
         """
