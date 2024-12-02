@@ -2,7 +2,6 @@ import click
 
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
-from chancy.plugins.api import Api
 
 
 @click.group(name="worker")
@@ -63,6 +62,8 @@ async def web_command(
     """
     Start the Chancy dashboard.
     """
+    from chancy.plugins.api import Api
+
     chancy: Chancy = ctx.obj["app"]
 
     async with chancy:

@@ -79,6 +79,20 @@ class Api(Plugin):
         :alt: Worker page
 
 
+    CLI
+    ---
+
+    Since it's very common to only want the dashboard temporarily, you can
+    start it with the CLI:
+
+    .. code-block:: bash
+
+        pip install chancy[cli,web]
+        chancy --app worker.chancy worker web
+
+    This will run the API and dashboard on port 8000 by default (you can change
+    this with the ``--port`` and ``--host`` flags).
+
     :param port: The port to listen on.
     :param host: The host to listen on.
     :param debug: Whether to run the server in debug mode.
