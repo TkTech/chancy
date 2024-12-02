@@ -8,7 +8,7 @@ import resource
 import signal
 from asyncio import Future, CancelledError
 from concurrent.futures import ProcessPoolExecutor
-from typing import Callable
+from typing import Callable, Any
 
 from chancy import Reference
 from chancy.executors.base import ConcurrentExecutor
@@ -130,7 +130,7 @@ class ProcessExecutor(ConcurrentExecutor):
             pass
 
     @classmethod
-    def job_wrapper(cls, job: QueuedJob, pids_for_job):
+    def job_wrapper(cls, job: QueuedJob, pids_for_job) -> tuple[QueuedJob, Any]:
         """
         This is the function that is actually started by the process pool
         executor. It's responsible for setting up necessary signals and limits,
@@ -171,13 +171,13 @@ class ProcessExecutor(ConcurrentExecutor):
                             )
                         )
 
-            func(**kwargs)
+            result = func(**kwargs)
         finally:
             pids_for_job.pop(job.id)
             for clean in cleanup:
                 clean()
 
-        return job
+        return job, result
 
     @staticmethod
     def job_signal_handler(signum: int, frame):
@@ -207,12 +207,13 @@ class ProcessExecutor(ConcurrentExecutor):
         if timeout_task is not None:
             timeout_task.cancel()
 
+        result = None
         exc = future.exception()
         if exc is None:
-            job = future.result()
+            job, result = future.result()
 
         f = asyncio.run_coroutine_threadsafe(
-            self.job_completed(job, exc),
+            self.on_job_completed(job=job, exc=exc, result=result),
             loop,
         )
         f.result()

@@ -2,6 +2,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 import asyncio
 import functools
+from typing import Any
 
 from chancy.executors.base import Executor, ConcurrentExecutor
 from chancy.job import QueuedJob, Limit
@@ -51,7 +52,7 @@ class ThreadedExecutor(ConcurrentExecutor):
         )
         return future
 
-    def job_wrapper(self, job: QueuedJob):
+    def job_wrapper(self, job: QueuedJob) -> tuple[QueuedJob, Any]:
         """
         This is the function that is actually started by the thread pool
         executor. It's responsible for setting up necessary limits,
@@ -78,13 +79,13 @@ class ThreadedExecutor(ConcurrentExecutor):
             timer = threading.Timer(time_limit, self._timeout_handler)
             timer.start()
             try:
-                func(**kwargs)
+                result = func(**kwargs)
             finally:
                 timer.cancel()
         else:
-            func(**kwargs)
+            result = func(**kwargs)
 
-        return job
+        return job, result
 
     @staticmethod
     def _timeout_handler():
@@ -95,12 +96,13 @@ class ThreadedExecutor(ConcurrentExecutor):
     ):
         job = self.jobs.pop(future)
 
+        result = None
         exc = future.exception()
         if exc is None:
-            job = future.result()
+            job, result = future.result()
 
         asyncio.run_coroutine_threadsafe(
-            self.job_completed(job, exc),
+            self.on_job_completed(job=job, exc=exc, result=result),
             loop,
         )
 

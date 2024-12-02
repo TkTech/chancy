@@ -6,7 +6,7 @@ import dataclasses
 from abc import ABC
 from asyncio import Future
 from datetime import datetime, timezone
-from typing import get_type_hints, Callable
+from typing import get_type_hints, Callable, Any
 
 from chancy.job import QueuedJob, Reference
 from chancy.queue import Queue
@@ -37,7 +37,13 @@ class Executor(abc.ABC):
         Push a job onto the job pool.
         """
 
-    async def job_completed(self, job: QueuedJob, exc: Exception | None = None):
+    async def on_job_completed(
+        self,
+        *,
+        job: QueuedJob,
+        exc: Exception | None = None,
+        result: Any = None,
+    ):
         """
         Called when a job has completed.
 
@@ -47,6 +53,7 @@ class Executor(abc.ABC):
 
         :param job: The job that has completed.
         :param exc: The exception that was raised during execution, if any.
+        :param result: The result of the job, if any.
         """
         if exc is None:
             now = datetime.now(tz=timezone.utc)
@@ -90,7 +97,10 @@ class Executor(abc.ABC):
         for plugin in self.worker.chancy.plugins:
             try:
                 new_instance = await plugin.on_job_completed(
-                    new_instance, worker=self.worker, exc=exc
+                    job=new_instance,
+                    worker=self.worker,
+                    exc=exc,
+                    result=result,
                 )
             except NotImplementedError:
                 continue

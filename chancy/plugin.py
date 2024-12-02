@@ -2,6 +2,7 @@ import abc
 import enum
 import asyncio
 import typing
+from typing import Any
 
 from chancy import utils
 from chancy.job import QueuedJob
@@ -128,10 +129,11 @@ class Plugin(abc.ABC):
 
     async def on_job_completed(
         self,
-        job: QueuedJob,
-        worker: "Worker",
         *,
+        worker: "Worker",
+        job: QueuedJob,
         exc: Exception | None = None,
+        result: Any | None = None,
     ) -> QueuedJob:
         """
         Called after a job is completed (successfully or otherwise) and before
@@ -142,6 +144,12 @@ class Plugin(abc.ABC):
 
         The passed job is immutable - to modify it, return a new QueuedJob
         object with the desired changes.
+
+        :param worker: The worker that is running the job.
+        :param job: The job that was completed.
+        :param exc: The exception that was raised, if any.
+        :param result: The result of the job, if any.
+        :return: The job to update in the database.
         """
         raise NotImplementedError()
 

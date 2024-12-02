@@ -1,6 +1,7 @@
 import dataclasses
 from datetime import datetime, timedelta, timezone
 import random
+from typing import Any
 
 from chancy.plugin import Plugin, PluginScope
 from chancy.job import QueuedJob
@@ -62,7 +63,12 @@ class RetryPlugin(Plugin):
         return datetime.now(timezone.utc) + timedelta(seconds=delay)
 
     async def on_job_completed(
-        self, job: QueuedJob, worker: Worker, *, exc: Exception | None = None
+        self,
+        *,
+        job: QueuedJob,
+        worker: Worker,
+        exc: Exception | None = None,
+        result: Any = None,
     ) -> QueuedJob:
         if exc is None or job.state not in {
             job.State.FAILED,

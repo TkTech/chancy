@@ -63,10 +63,10 @@ class AsyncExecutor(Executor):
             )
 
             async with asyncio.timeout(timeout):
-                await func(**kwargs)
-            await self.job_completed(job)
+                result = await func(**kwargs)
+            await self.on_job_completed(job=job, result=result)
         except (Exception, CancelledError) as exc:
-            await self.job_completed(job, exc)
+            await self.on_job_completed(job=job, exc=exc, result=None)
 
     async def cancel(self, ref: Reference):
         for task, job in self.jobs.items():

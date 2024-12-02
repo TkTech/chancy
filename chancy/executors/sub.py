@@ -4,6 +4,7 @@ import functools
 from concurrent.futures import Future
 
 import sys
+from typing import Any
 
 from chancy.worker import Worker
 from chancy.queue import Queue
@@ -95,40 +96,41 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         )
         return future
 
-    @staticmethod
-    def job_wrapper(job: QueuedJob):
+    @classmethod
+    def job_wrapper(cls, job: QueuedJob) -> tuple[QueuedJob, Any]:
         """
         This is the function that is actually started by the sub-interpreter
         executor. It's responsible for setting up necessary limits,
         running the job, and returning the result.
         """
-        try:
-            time_limit = next(
-                (
-                    limit.value
-                    for limit in job.limits
-                    if limit.type_ == Limit.Type.TIME
-                ),
-                None,
+        func, kwargs = Executor.get_function_and_kwargs(job)
+        if asyncio.iscoroutinefunction(func):
+            raise ValueError(
+                f"Function {job.func!r} is an async function, which is not"
+                f" supported by the {cls.__name__!r} executor. Use"
+                f" the AsyncExecutor instead."
             )
 
-            func, kwargs = Executor.get_function_and_kwargs(job)
+        time_limit = next(
+            (
+                limit.value
+                for limit in job.limits
+                if limit.type_ == Limit.Type.TIME
+            ),
+            None,
+        )
 
-            if time_limit:
-                timer = threading.Timer(
-                    time_limit, SubInterpreterExecutor._timeout_handler
-                )
-                timer.start()
-                try:
-                    func(**kwargs)
-                finally:
-                    timer.cancel()
-            else:
-                func(**kwargs)
+        if time_limit:
+            timer = threading.Timer(time_limit, cls._timeout_handler)
+            timer.start()
+            try:
+                result = func(**kwargs)
+            finally:
+                timer.cancel()
+        else:
+            result = func(**kwargs)
 
-        except Exception as exc:
-            return exc
-        return job
+        return job, result
 
     @staticmethod
     def _timeout_handler():
@@ -138,15 +140,17 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         self, future: Future, loop: asyncio.AbstractEventLoop
     ):
         job = self.jobs.pop(future)
+
+        result = None
         exc = future.exception()
         if exc is None:
-            job = future.result()
+            job, result = future.result()
 
-        f = asyncio.run_coroutine_threadsafe(
-            self.job_completed(job, exc),
+        asyncio.run_coroutine_threadsafe(
+            self.on_job_completed(job=job, exc=exc, result=result),
             loop,
         )
-        f.result()
 
     async def stop(self):
         self.pool.shutdown(cancel_futures=True)
+        await super().stop()
