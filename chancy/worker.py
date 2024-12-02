@@ -34,7 +34,7 @@ class Worker:
         ) as chancy:
             await chancy.migrate()
             async with Worker(chancy) as worker:
-                await worker.wait_until_complete()
+                await worker.wait_for_shutdown()
 
     Worker Tags
     -----------
@@ -51,7 +51,7 @@ class Worker:
     .. code-block:: python
 
         async with Worker(chancy, tags={"has=gpu", "has=large-disk"}) as worker:
-            await worker.wait_until_complete()
+            await worker.wait_for_shutdown()
 
     You could then assign a queue to only run on workers with the ``has=gpu`` tag:
 
@@ -182,11 +182,11 @@ class Worker:
                     lambda: asyncio.create_task(self.on_signal(sig)),
                 )
 
-    async def wait_until_complete(self):
+    async def wait_for_shutdown(self):
         """
         Wait until the worker is stopped.
         """
-        await self.manager.wait_until_complete()
+        await self.manager.wait_for_shutdown()
 
     async def _maintain_queues(self):
         """

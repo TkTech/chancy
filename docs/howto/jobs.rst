@@ -144,7 +144,8 @@ Prevent duplicate job execution by assigning a unique key:
 
     from chancy import job
 
-    @job()    def greet(*, name: str):
+    @job()
+    def greet(*, name: str):
         print(f"Hello, {name}!")
 
     async with Chancy("postgresql://localhost/postgres") as chancy:

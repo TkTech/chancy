@@ -167,7 +167,7 @@ class TaskManager:
     def __init__(self):
         self._tasks: set[asyncio.Task] = set()
         # An event triggered whenever add() is called to ensure that
-        # wait_until_complete() will pick up new tasks.
+        # wait_for_shutdown() will pick up new tasks.
         self._added_event = asyncio.Event()
 
     def add(self, task: Coroutine, *, name: str | None = None) -> asyncio.Task:
@@ -185,7 +185,7 @@ class TaskManager:
 
         return task
 
-    async def wait_until_complete(self):
+    async def wait_for_shutdown(self):
         """
         Wait until all tasks are complete, including any that are added
         after this method is called.

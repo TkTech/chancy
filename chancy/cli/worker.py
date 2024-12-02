@@ -34,7 +34,7 @@ async def worker_command(
         async with Worker(
             chancy, worker_id=worker_id, tags=set(tags) if tags else None
         ) as worker:
-            await worker.wait_until_complete()
+            await worker.wait_for_shutdown()
 
 
 @worker_group.command("web")

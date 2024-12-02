@@ -112,7 +112,7 @@ Quick Start
              await chancy.push(hello_world.job.with_kwargs(name="World"))
              # Start the worker (ctrl+c to exit)
              async with Worker(chancy) as worker:
-                 await worker.wait_until_complete()
+                 await worker.wait_for_shutdown()
 
      if __name__ == "__main__":
          asyncio.run(main())
@@ -186,6 +186,7 @@ needs:
 
    howto/index
    chancy
+   design
    faq
 
 
