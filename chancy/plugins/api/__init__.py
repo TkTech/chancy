@@ -47,7 +47,6 @@ class Api(Plugin):
         from chancy.plugins.api import Api
 
         async with Chancy(..., plugins=[
-            WorkflowPlugin(),
             Api(),
         ]) as chancy:
             ...

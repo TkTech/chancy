@@ -34,43 +34,6 @@ Key Features:
 Quick Start
 -----------
 
-.. tab:: Code
-
-  Install Chancy:
-
-  .. code-block:: bash
-
-     pip install chancy
-
-  Create a new file called ``worker.py``:
-
-  .. code-block:: python
-    :caption: worker.py
-
-     import asyncio
-     from chancy import Chancy, Worker, Queue, job
-
-     @job(queue="default")
-     def hello_world(*, name: str):
-         print(f"Hello, {name}!")
-
-     chancy = Chancy("postgresql://localhost/postgres")
-
-     async def main():
-         async with chancy:
-             # Run the database migrations
-             await chancy.migrate()
-             # Declare a queue
-             await chancy.declare(Queue("default", concurrency=10))
-             # Push a job
-             await chancy.push(hello_world.job.with_kwargs(name="World"))
-             # Start the worker (ctrl+c to exit)
-             async with Worker(chancy) as worker:
-                 await worker.wait_until_complete()
-
-     if __name__ == "__main__":
-         asyncio.run(main())
-
 .. tab:: CLI
 
   Install Chancy & its CLI:
@@ -110,11 +73,50 @@ Quick Start
 
      chancy --app worker.chancy queue push worker.hello_world --kwargs '{"name": "world"}'
 
-  Start the worker:
+  Start a worker:
 
   .. code-block:: bash
 
      chancy --app worker.chancy worker start
+
+
+.. tab:: Code
+
+  Install Chancy:
+
+  .. code-block:: bash
+
+     pip install chancy
+
+  Create a new file called ``worker.py``:
+
+  .. code-block:: python
+    :caption: worker.py
+
+     import asyncio
+     from chancy import Chancy, Worker, Queue, job
+
+     @job(queue="default")
+     def hello_world(*, name: str):
+         print(f"Hello, {name}!")
+
+     chancy = Chancy("postgresql://localhost/postgres")
+
+     async def main():
+         async with chancy:
+             # Run the database migrations
+             await chancy.migrate()
+             # Declare a queue
+             await chancy.declare(Queue("default", concurrency=10))
+             # Push a job
+             await chancy.push(hello_world.job.with_kwargs(name="World"))
+             # Start the worker (ctrl+c to exit)
+             async with Worker(chancy) as worker:
+                 await worker.wait_until_complete()
+
+     if __name__ == "__main__":
+         asyncio.run(main())
+
 
 
 
@@ -129,22 +131,43 @@ With the addition of modern Postgres features like ``LISTEN/NOTIFY`` and
 ``SELECT FOR UPDATE...SKIP LOCKED``, postgres-backed task queues have
 become a viable alternative to other task queues built on RabbitMQ or
 redis like celery_. As such the space is exploding with new projects.
-Here are some of the most popular ones:
+Here are some of the most popular ones if Chancy doesn't fit your
+needs:
 
-- celery_ is the most popular task queue for Python, but is also heavyweight
-  and suffers from some design quirks that can make it difficult to use, like
-  future scheduled tasks using up all worker memory.
-- procastinate_ is a postgres-backed task queue for Python that has been around
-  for a long time and offers strong django integration.
-- oban_ is a postgres-backed task queue for Elixir that inspired quite a few
-  design decisions in Chancy. The oban section of the Elixir forum is a
-  fantastic resource for finding the common pitfalls and uses of a
-  postgres-backed task queue.
-- river_ is a postgres-backed task queue for Go.
-- graphile_ is a postgres-backed task queue for Node.js
-- neoq_ is a task queue for Go which supports postgres
-- faktory_ is a postgres-backed task queue for Go
-- pg-boss_ is a postgres-backed task queue for Node.js
+.. list-table::
+  :header-rows: 1
+  :widths: 20 20 60
+
+  * - Project
+    - Language
+    - Note
+  * - celery_
+    - Python
+    - The defacto Python task queues
+  * - procastinate_
+    - Python
+    -
+  * - oban_
+    - Elixir
+    - Inspired many of the features in Chancy
+  * - river_
+    - Go
+    -
+  * - neoq_
+    - Go
+    -
+  * - faktory_
+    - Go
+    -
+  * - pg-boss_
+    - Node.js
+    -
+  * - graphile_
+    - Node.js
+    -
+  * - Minion_
+    - Perl
+    -
 
 .. _celery: https://docs.celeryproject.org/en/stable/
 .. _oban: https://hexdocs.pm/oban/Oban.html
@@ -154,6 +177,7 @@ Here are some of the most popular ones:
 .. _neoq: https://github.com/acaloiaro/neoq
 .. _faktory: https://github.com/contribsys/faktory
 .. _pg-boss: https://github.com/timgit/pg-boss
+.. _Minion: https://github.com/mojolicious/minion
 
 .. toctree::
    :maxdepth: 4

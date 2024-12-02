@@ -139,10 +139,15 @@ class WorkflowPlugin(Plugin):
     """
     Support for dependency-based workflows.
 
-    Workflows are defined by a series of steps, each of which can depend on
-    one or more other steps. When all dependencies are met, the step is
-    executed. This forms a directed acyclic graph (DAG) of steps that can be
-    visualized as a workflow.
+    Workflows allow you to easily model complex processes that involve
+    multiple jobs, each of which may depend on the completion of one or more
+    other jobs. Workflows are modeled as a directed acyclic graph (DAG)
+    where each node represents a job and each edge represents a dependency
+    between two jobs.
+
+    Workflows are implemented on top of the existing Chancy job system, meaning
+    you can use all the existing job features, such as job retries, timeouts,
+    scheduling, and so on.
 
     Enable the plugin by adding it to the list of plugins in the Chancy
     constructor:
@@ -160,6 +165,9 @@ class WorkflowPlugin(Plugin):
 
     Example
     -------
+
+    We'll create a simple workflow runs the "top" job first, then the "left"
+    and "right" jobs in parallel, and finally the "bottom" job:
 
     .. code-block:: python
        :caption: example_workflow.py
@@ -193,10 +201,8 @@ class WorkflowPlugin(Plugin):
                 workflow = (
                     Workflow("example")
                     .add(top, "top")
-                    .add_group([
-                        ("left", left),
-                        ("right", right),
-                    ], ["top"])
+                    .add(left, "left", ["top"])
+                    .add(right, "right", ["top"])
                     .add(bottom, "bottom", ["left", "right"])
                 )
                 await WorkflowPlugin.push(chancy, workflow)
@@ -208,6 +214,10 @@ class WorkflowPlugin(Plugin):
     get:
 
     .. graphviz:: _static/workflow.dot
+
+    The full Workflow API is a little verbose if you just want to run a series
+    of jobs in a specific order. In that case, you can use the
+    :class:`Sequence` class to create a workflow from a list of jobs.
 
     :param polling_interval: The interval at which to poll for new workflows.
     :param max_workflows_per_run: The maximum number of workflows to process
