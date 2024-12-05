@@ -59,7 +59,12 @@ async def push(
     kwargs: str | None = None,
 ):
     """
-    Push a job to the default queue.
+    Push a job.
+
+    Note that this method of pushing a job ignores any defaults that might be
+    defined on the job using the @job() decorator, such as the queue name.
+    While this can be an inconvenience, it allows pushing jobs without having
+    to import any project-specific code.
     """
     chancy: Chancy = ctx.obj["app"]
 
