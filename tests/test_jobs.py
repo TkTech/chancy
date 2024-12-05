@@ -51,6 +51,11 @@ def sync_decorated_job_to_run():
     pass
 
 
+@job()
+def job_with_kwarg_generic(*, hello: list[str]):
+    pass
+
+
 @pytest.mark.asyncio
 async def test_basic_job_sync(
     chancy: Chancy, worker: Worker, sync_executor: str
@@ -155,3 +160,18 @@ async def test_job_cancellation(chancy: Chancy, worker: Worker):
     asyncio.create_task(cancel_in_a_bit(ref))
     j = await chancy.wait_for_job(ref, timeout=30)
     assert j.state == j.State.FAILED
+
+
+@pytest.mark.asyncio
+async def test_job_signature_with_kwarg_marker(chancy, worker):
+    """
+    Ensures that a job with a kwarg-only marker and a generic can have its type
+    signature checked.
+    """
+    await chancy.declare(Queue("low"))
+
+    ref = await chancy.push(
+        job_with_kwarg_generic.job.with_queue("low").with_kwargs(hello="world")
+    )
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == j.State.SUCCEEDED

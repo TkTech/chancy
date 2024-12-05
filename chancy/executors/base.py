@@ -6,7 +6,7 @@ import dataclasses
 from abc import ABC
 from asyncio import Future
 from datetime import datetime, timezone
-from typing import get_type_hints, Callable, Any
+from typing import Callable, Any
 
 from chancy.job import QueuedJob, Reference
 from chancy.queue import Queue
@@ -128,19 +128,20 @@ class Executor(abc.ABC):
         # We take a look at the type signature for the function to see if the
         # user has specified that the job instance should be passed as a
         # keyword argument.
-        type_hints = get_type_hints(func)
         sig = inspect.signature(func)
         kwargs = job.kwargs or {}
         for param_name, param in sig.parameters.items():
             if not param.kind == param.KEYWORD_ONLY:
                 continue
 
-            type_hint = type_hints.get(param_name)
-            if type_hint is None:
+            if not param.annotation:
                 continue
 
-            if issubclass(type_hint, QueuedJob):
-                kwargs[param_name] = job
+            try:
+                if issubclass(param.annotation, QueuedJob):
+                    kwargs[param_name] = job
+            except TypeError:
+                continue
 
         return func, kwargs
 
