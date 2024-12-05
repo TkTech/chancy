@@ -408,7 +408,12 @@ class Chancy:
         memory usage.
 
         Returns an iterator of lists of references to the jobs in the queue,
-        one list per batch.
+        one list per batch:
+
+        .. code-block:: python
+
+            async for references in chancy.push_many(jobs):
+                print(references)
 
         .. seealso::
 
