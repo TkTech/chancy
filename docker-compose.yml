@@ -13,7 +13,19 @@ services:
       - "8190:5432"
     volumes:
       - data:/var/lib/postgresql/data
-
+    command: >-
+      postgres 
+      -c shared_preload_libraries=auto_explain
+      -c auto_explain.log_min_duration=0
+      -c auto_explain.log_analyze=true
+      -c auto_explain.log_buffers=true
+      -c auto_explain.log_timing=true
+      -c auto_explain.log_triggers=true
+      -c auto_explain.log_verbose=true
+      -c auto_explain.log_nested_statements=true
+      -c client_min_messages=notice
+      -c log_statement=all
+      -c log_min_duration_statement=0
 
 volumes:
     data:
