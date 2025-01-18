@@ -138,14 +138,15 @@ class Pruner(Plugin):
         job_query = sql.SQL(
             """
             WITH jobs_to_prune AS (
-                SELECT ctid
+                SELECT queue, id  
                 FROM {table}
                 WHERE state NOT IN ('pending', 'running')
                 AND ({rule})
                 LIMIT {maximum_to_prune}
             )
-            DELETE FROM {table}
-            WHERE ctid IN (SELECT ctid FROM jobs_to_prune)
+            DELETE FROM {table} t
+            USING jobs_to_prune p 
+            WHERE t.queue = p.queue AND t.id = p.id
             """
         ).format(
             table=sql.Identifier(f"{chancy.prefix}jobs"),
