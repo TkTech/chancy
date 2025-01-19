@@ -33,11 +33,14 @@ class Plugin(abc.ABC):
         self.wakeup_signal = asyncio.Event()
 
     @classmethod
-    @abc.abstractmethod
     def get_scope(cls) -> PluginScope:
         """
-        Get the scope of this plugin.
+        Get the scope of this plugin. Scopes control when and where the plugin
+        will be run.
+
+        By default, plugins are scoped to the worker.
         """
+        return PluginScope.WORKER
 
     async def run(self, worker: "Worker", chancy: "Chancy"):
         """
