@@ -130,6 +130,26 @@ class Plugin(abc.ABC):
         string for the plugin.
         """
 
+    async def on_worker_started(self, worker: "Worker"):
+        """
+        Called when the worker has started.
+        """
+
+    async def on_job_starting(
+        self,
+        *,
+        job: QueuedJob,
+        worker: "Worker",
+    ) -> QueuedJob:
+        """
+        Called when a job has been retrieved from the queue and is about to
+        start.
+
+        The passed job is immutable - to modify it, return a new QueuedJob
+        with the desired changes.
+        """
+        raise NotImplementedError()
+
     async def on_job_completed(
         self,
         *,

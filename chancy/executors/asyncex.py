@@ -36,6 +36,7 @@ class AsyncExecutor(Executor):
         self.jobs: dict[asyncio.Task, QueuedJob] = {}
 
     async def push(self, job: QueuedJob):
+        job = await self.on_job_starting(job)
         task = asyncio.create_task(self._job_wrapper(job))
         self.jobs[task] = job
         task.add_done_callback(self.jobs.pop)

@@ -37,6 +37,19 @@ class Executor(abc.ABC):
         Push a job onto the job pool.
         """
 
+    async def on_job_starting(self, job: QueuedJob) -> QueuedJob:
+        """
+        Called when a job has been retrieved from the queue and is about to
+        start.
+        """
+        for plugin in self.worker.chancy.plugins:
+            try:
+                job = await plugin.on_job_starting(job=job, worker=self.worker)
+            except NotImplementedError:
+                continue
+
+        return job
+
     async def on_job_completed(
         self,
         *,

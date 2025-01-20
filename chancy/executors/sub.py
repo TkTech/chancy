@@ -87,6 +87,7 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         sys.path = parent_sys_path
 
     async def push(self, job: QueuedJob) -> Future:
+        job = await self.on_job_starting(job)
         future: Future = self.pool.submit(self.job_wrapper, job)
         self.jobs[future] = job
         future.add_done_callback(
