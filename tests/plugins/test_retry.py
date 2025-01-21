@@ -1,3 +1,5 @@
+import datetime
+
 import pytest
 
 from chancy import Job, Queue, QueuedJob, Worker
@@ -41,17 +43,20 @@ async def test_retry_with_custom_settings(chancy, worker: Worker):
     """Test that jobs retry with custom settings from meta"""
     await chancy.declare(Queue("default"))
 
+    retry_settings = {
+        "backoff": 2,
+        "backoff_factor": 3,
+        "backoff_limit": 10,
+        "backoff_jitter": [0, 1],
+    }
+
+    starting_time = datetime.datetime.now(tz=datetime.timezone.utc)
     ref = await chancy.push(
         Job.from_func(
             job_that_fails,
             max_attempts=3,
             meta={
-                "retry_settings": {
-                    "backoff": 2,
-                    "backoff_factor": 3,
-                    "backoff_limit": 10,
-                    "backoff_jitter": [0, 1],
-                }
+                "retry_settings": retry_settings
             },
         )
     )
@@ -60,14 +65,10 @@ async def test_retry_with_custom_settings(chancy, worker: Worker):
     assert job.state == QueuedJob.State.FAILED
     assert job.attempts == 3
     assert len(job.errors) == 3
+    assert job.meta["retry_settings"] == retry_settings
 
-    # Verify the retry settings remained unchanged
-    assert job.meta["retry_settings"] == {
-        "backoff": 2,
-        "backoff_factor": 3,
-        "backoff_limit": 10,
-        "backoff_jitter": [0, 1],
-    }
+    delta: datetime.timedelta = job.scheduled_at - starting_time
+    assert 2 * 3 <= int(delta.total_seconds()) <= 10
 
 
 @pytest.mark.parametrize(
