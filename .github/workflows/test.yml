@@ -111,7 +111,12 @@ jobs:
           slug: TkTech/chancy
 
       - name: Installing dependencies (Docs)
+        if: runner.os == 'ubuntu-latest'
         run: sudo apt-get install graphviz
+
+      - name: Installing dependencies (Docs)
+        if: runner.os == 'macos-latest'
+        run: brew install graphviz
 
       - name: Building docs
         run: |
