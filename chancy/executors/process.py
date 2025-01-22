@@ -2,6 +2,7 @@ import asyncio
 import functools
 import multiprocessing
 import os
+import sys
 from multiprocessing.context import BaseContext
 
 try:
@@ -97,8 +98,9 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        signal.signal(signal.SIGALRM, cls.job_signal_handler)
-        signal.signal(signal.SIGUSR1, cls.job_signal_handler)
+        if sys.platform != "win32":
+            signal.signal(signal.SIGALRM, cls.job_signal_handler)
+            signal.signal(signal.SIGUSR1, cls.job_signal_handler)
 
     async def push(self, job: QueuedJob) -> Future:
         job = await self.on_job_starting(job)
