@@ -4,7 +4,12 @@ import multiprocessing
 import os
 from multiprocessing.context import BaseContext
 
-import resource
+try:
+    import resource
+except ImportError:
+    # Only available on Unix-y systems (AKA not Windows)
+    resource = None
+
 import signal
 from asyncio import Future, CancelledError
 from concurrent.futures import ProcessPoolExecutor
@@ -161,6 +166,13 @@ class ProcessExecutor(ConcurrentExecutor):
             for limit in job.limits:
                 match limit.type_:
                     case Limit.Type.MEMORY:
+                        if resource is None:
+                            raise ValueError(
+                                "Memory limits are not supported on this"
+                                " platform due to the resource module not being"
+                                " available."
+                            )
+
                         previous_soft, _ = resource.getrlimit(
                             resource.RLIMIT_AS
                         )
