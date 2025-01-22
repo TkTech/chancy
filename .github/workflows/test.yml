@@ -10,7 +10,7 @@ on:
 jobs:
   build_ui:
     name: Building UI
-    runs-on: ubuntu-latest
+    runs-on: "ubuntu-24.04"
 
     steps:
       - uses: actions/checkout@v4.1.6
@@ -34,10 +34,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        os: [ubuntu-latest, macos-latest]
+        os: ["ubuntu-24.04", "macos-14"]
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python-version }}
