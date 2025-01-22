@@ -43,7 +43,6 @@ chancy = "chancy.cli.cli:main"
 
 [tool.uv]
 dev-dependencies = [
-    "pytest-postgresql>=6.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest>=8.2.0",
     "sphinx>=7.3.7",

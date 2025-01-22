@@ -1,37 +1,20 @@
-import asyncio
-import secrets
 from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
 import sys
-from pytest_postgresql import factories
 
 from chancy import Chancy, Worker
 
 
-external_postgres = factories.postgresql_noproc(
-    host="localhost",
-    password="localtest",
-    user="postgres",
-    port=8190,
-    dbname=f"chancy_test_{secrets.token_hex(8)}",
-)
-postgresql = factories.postgresql(
-    "external_postgres",
-)
-
-
 @pytest_asyncio.fixture()
-async def chancy(request, postgresql):
+async def chancy(request):
     """
     Provides a Chancy application instance with an open connection pool
     to the test database.
     """
-    i = postgresql.info
-
     async with Chancy(
-        f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
+        f"postgresql://postgres:localtest@localhost:8190/postgres",
         **getattr(request, "param", {}),
     ) as chancy:
         await chancy.migrate()
@@ -47,7 +30,7 @@ def chancy_just_app(postgresql):
     """
     i = postgresql.info
     return Chancy(
-        f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
+        f"postgresql://postgres:localtest@localhost:8190/postgres",
     )
 
 
