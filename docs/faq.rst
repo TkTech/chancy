@@ -43,3 +43,15 @@ state to keep track of the currently active Chancy application. Chancy
 has **absolutely no global state** as a hard rule, which helps minimize
 the risk of bugs when dealing with many different types of concurrency
 models in a single application.
+
+
+-----
+
+**Q.** Why not use advisory locks to make implementation of some features
+easier?
+
+**A.** Advisory locks don't support any form of namespacing - they're just
+a numeric ID. This makes them unsuitable for use in a multi-tenant system
+where you might have multiple different applications using the same database.
+Advisory locks also have several issues when used with pgbouncer that might
+stop us from officially supporting pgbouncer in the future.

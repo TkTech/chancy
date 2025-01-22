@@ -64,6 +64,16 @@ The default leadership process is handled by the
 :class:`~chancy.plugins.leadership.Leadership` plugin, and can easily be
 replaced with a custom implementation.
 
+Multi-mode concurrency
+----------------------
+
+Each queue can use its own concurrency model, and multiple queues can mix and
+match models in the same worker. By default, queues use the
+:class:`~chancy.executors.process.ProcessExecutor` which is similar to the
+default in most other task queues. This means you can mix asyncio-based
+jobs which are crawling external APIs with a CPU-bound task aggregating
+the results and it'll just work.
+
 
 Extendable
 ----------
@@ -73,6 +83,9 @@ implemented as a plugin. This allows us to easily add new features without
 breaking backwards compatibility, and to make it easy to swap out the
 underlying implementation as your needs change. Workflows, cron jobs,
 job recovery, job pruning, and more are all implemented as swappable plugins.
+
+This is especially useful for busy applications where you might need to tweak
+queries or behaviors to optimize for your specific use case.
 
 
 Reliable By Default
