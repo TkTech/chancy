@@ -23,12 +23,11 @@ async def chancy(request):
 
 
 @pytest.fixture
-def chancy_just_app(postgresql):
+def chancy_just_app():
     """
     Provides just a configured chancy instance with no open connection pool
     or migrations.
     """
-    i = postgresql.info
     return Chancy(
         f"postgresql://postgres:localtest@localhost:8190/postgres",
     )
