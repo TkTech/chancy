@@ -18,9 +18,17 @@ from chancy.utils import chancy_uuid, chunked, json_dumps
 
 
 @cache
-def _setup_default_logger():
+def setup_default_logger(level: int = logging.INFO):
+    """
+    Set up the default logger for the application.
+
+    This method will configure the logger for the application, setting the
+    log level and adding a stream handler to log to the console.
+
+    :param level: The log level to set on the logger. Defaults to DEBUG.
+    """
     logger = logging.getLogger("chancy")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(level)
 
     handler = logging.StreamHandler()
     handler.setFormatter(
@@ -85,7 +93,8 @@ class Chancy:
         attempting to reconnect to the database if a connection is lost.
     :param notifications: Enables or disables emitting notifications using
         postgres's NOTIFY/LISTEN feature.
-    :param log: The logger to use for all application logging.
+    :param log: The logger to use for all application logging. If not provided,
+        a default logger will be set up.
     """
 
     class Executor(enum.StrEnum):
@@ -185,7 +194,7 @@ class Chancy:
         #: NOTIFY/LISTEN feature.
         self.notifications = notifications
         #: The logger to use for all application logging.
-        self.log = log or _setup_default_logger()
+        self.log = log or setup_default_logger()
 
     async def __aenter__(self):
         await self.pool.open()
@@ -201,6 +210,7 @@ class Chancy:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.sync_pool.close()
         return False
+
 
     @cached_property
     def pool(self) -> AsyncConnectionPool:

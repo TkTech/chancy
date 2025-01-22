@@ -105,6 +105,12 @@ class Executor(abc.ABC):
                 ],
             )
 
+            self.worker.chancy.log.debug(
+                f"Job {job.id} ({job.func}({job.kwargs!r}) failed with an"
+                f" exception",
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
+
         # Each plugin has a chance to modify the job instance after it's
         # completed.
         for plugin in self.worker.chancy.plugins:
