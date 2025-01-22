@@ -59,7 +59,9 @@ async def worker(request, chancy) -> AsyncIterator[Worker]:
     If the worker is not stopped by the time the test completes, it will be
     cancelled.
     """
-    async with Worker(chancy, **getattr(request, "param", {})) as worker:
+    async with Worker(
+        chancy, shutdown_timeout=60, **getattr(request, "param", {})
+    ) as worker:
         yield worker
 
 

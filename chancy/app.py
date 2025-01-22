@@ -214,7 +214,6 @@ class Chancy:
         self.sync_pool.close()
         return False
 
-
     @cached_property
     def pool(self) -> AsyncConnectionPool:
         """

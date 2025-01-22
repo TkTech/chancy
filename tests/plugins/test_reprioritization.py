@@ -50,5 +50,5 @@ async def test_basic_reprioritization(chancy: Chancy, worker: Worker):
 
     updated_job = await chancy.get_job(ref)
 
-    # Priority should have decreased (making it more important)
+    # Priority should have increased (making it more important)
     assert updated_job.priority > initial_priority
