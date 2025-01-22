@@ -30,6 +30,9 @@ def setup_default_logger(level: int = logging.INFO):
     logger = logging.getLogger("chancy")
     logger.setLevel(level)
 
+    if logger.handlers:
+        return logger
+
     handler = logging.StreamHandler()
     handler.setFormatter(
         logging.Formatter(
@@ -38,7 +41,7 @@ def setup_default_logger(level: int = logging.INFO):
         )
     )
 
-    logger.addHandler(handler)
+    logger.handlers[:] = [handler]
     return logger
 
 
