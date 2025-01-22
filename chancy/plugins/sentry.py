@@ -34,6 +34,7 @@ class SentryPlugin(Plugin):
         async with Chancy(..., plugins=[SentryPlugin()]) as chancy:
             pass
     """
+
     async def on_job_completed(
         self,
         *,
@@ -44,11 +45,13 @@ class SentryPlugin(Plugin):
     ) -> QueuedJob:
         if exc:
             with sentry_sdk.new_scope() as scope:
-                scope.set_tags({
-                    "chancy.func": job.func,
-                    "chancy.worker": worker.worker_id,
-                    "chancy.queue": job.queue
-                })
+                scope.set_tags(
+                    {
+                        "chancy.func": job.func,
+                        "chancy.worker": worker.worker_id,
+                        "chancy.queue": job.queue,
+                    }
+                )
                 scope.set_extra("chancy.job_id", job.id)
                 scope.capture_exception(exc)
         return job

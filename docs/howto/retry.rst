@@ -1,5 +1,5 @@
-Advanced Retries
-================
+Use Advanced Retries
+====================
 
 When you create a Job, you can specify a ``max_attempts`` argument to control how
 many times the job will be retried when an exception occurs:

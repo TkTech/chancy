@@ -11,8 +11,9 @@ Install chancy:
     $ pip install chancy[cli]
 
 
-Next to your Django settings module, create a new file called ``worker.py``.
-This file will contain the code that defines your chancy app:
+Next to your Django ``settings.py`` module, create a new file called
+``worker.py``. This file will contain the code that defines your chancy
+app:
 
 .. code-block:: python
 

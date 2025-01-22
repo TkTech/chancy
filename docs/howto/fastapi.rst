@@ -25,9 +25,10 @@ application by using FastAPI's lifespan events:
       # Run the database migrations (don't do this in production)
       await chancy.migrate()
 
-      # Declare any queues we need (do this just once in production)
+      # Declare any queues we need.
       await chancy.declare(Queue("default"))
 
+      # Start the worker in the background and return control to FastAPI
       async with Worker(chancy) as worker:
         yield
 
@@ -44,3 +45,8 @@ application by using FastAPI's lifespan events:
   async def read_root():
       await chancy.push(send_an_email)
       return {"Hello": "World"}
+
+This can be useful for small applications and simple deployments
+(like containers meant for UnRAID) where you don't want to manage multiple
+processes or containers. However, for larger applications, it's recommended
+to keep your worker separate from your FastAPI application.

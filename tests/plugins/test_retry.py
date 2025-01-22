@@ -55,9 +55,7 @@ async def test_retry_with_custom_settings(chancy, worker: Worker):
         Job.from_func(
             job_that_fails,
             max_attempts=3,
-            meta={
-                "retry_settings": retry_settings
-            },
+            meta={"retry_settings": retry_settings},
         )
     )
 
@@ -67,8 +65,10 @@ async def test_retry_with_custom_settings(chancy, worker: Worker):
     assert len(job.errors) == 3
     assert job.meta["retry_settings"] == retry_settings
 
+    # Very flaky test, but we can at least check that the backoff is roughly
+    # correct. Depends heavily on polling frequency of the worker.
     delta: datetime.timedelta = job.scheduled_at - starting_time
-    assert 2 * 3 <= int(delta.total_seconds()) <= 10
+    assert 2 * 3 <= int(delta.total_seconds()) <= 15  # 10 + default poll freq
 
 
 @pytest.mark.parametrize(

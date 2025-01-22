@@ -671,16 +671,28 @@ class Worker:
             self.shutdown_event.set()
             await self.manager.cancel_all()
 
-    async def stop(self):
+    async def stop(self) -> bool:
         """
         Stop the worker.
 
         Attempts to stop the worker gracefully, sending a CancelledError to all
         running tasks and waiting up to `shutdown_timeout` seconds for them to
         complete before returning.
+
+        Returns True if the worker was stopped cleanly, or False if the worker
+        returned due to the timeout expiring.
         """
-        async with asyncio.timeout(self.shutdown_timeout):
-            await self.manager.cancel_all()
+        try:
+            async with asyncio.timeout(self.shutdown_timeout) as cm:
+                await self.manager.cancel_all()
+        except TimeoutError:
+            # We check this instead of depending on the exception in case the
+            # exception wasn't really raised by us but a nested timeout.
+            if cm.expired():
+                return False
+            raise
+
+        return True
 
     async def _handle_cancellation(self, event: Event):
         self.chancy.log.info(
