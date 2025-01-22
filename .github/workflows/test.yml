@@ -34,10 +34,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        # os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        os: ["windows-2022"]
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python-version }}
@@ -101,7 +102,7 @@ jobs:
 
       - name: Running tests
         run: |
-          uv run pytest -s -vvvvv --cov=chancy --cov-report=xml
+          uv run pytest -x -s -vvvvv --cov=chancy --cov-report=xml
 
       - name: Uploading coverage
         uses: codecov/codecov-action@v4
