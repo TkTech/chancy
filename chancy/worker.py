@@ -175,7 +175,8 @@ class Worker:
             )
             await self._notifications_ready_event.wait()
 
-        # Signal handlers don't work in general on Windows.
+        # Signal handlers don't work in general on Windows. See CPython issue
+        # 23057.
         if self.register_signal_handlers and sys.platform != "win32":
             loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
             for sig in {signal.SIGTERM, signal.SIGINT}:
