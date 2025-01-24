@@ -40,13 +40,12 @@ async def migrate(ctx: click.Context, to_version: int | None):
         await chancy.migrate(to_version=to_version)
 
 
-
 async def _check_migrations(migrator: Migrator, cursor: AsyncCursor):
     """
     Check the migrations for a migrator.
     """
-    good = '✓'
-    bad = '✗'
+    good = "✓"
+    bad = "✗"
 
     all_migrations = migrator.discover_all_migrations()
     current_version = await migrator.get_current_version(cursor)
@@ -56,6 +55,7 @@ async def _check_migrations(migrator: Migrator, cursor: AsyncCursor):
         click.echo(
             f"| |- [{good if is_applied else bad}] {migration.__class__.__name__} "
         )
+
 
 @misc_group.command()
 @click.pass_context

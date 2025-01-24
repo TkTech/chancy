@@ -12,7 +12,6 @@ def worker_group():
     pass
 
 
-
 @worker_group.command("start")
 @click.option("--worker-id", "-w", help="The worker ID to use.")
 @click.option(

@@ -14,7 +14,7 @@ async def chancy(request):
     to the test database.
     """
     async with Chancy(
-        f"postgresql://postgres:localtest@localhost:8190/postgres",
+        "postgresql://postgres:localtest@localhost:8190/postgres",
         **getattr(request, "param", {}),
     ) as chancy:
         await chancy.migrate()
@@ -29,7 +29,7 @@ def chancy_just_app():
     or migrations.
     """
     return Chancy(
-        f"postgresql://postgres:localtest@localhost:8190/postgres",
+        "postgresql://postgres:localtest@localhost:8190/postgres",
     )
 
 
