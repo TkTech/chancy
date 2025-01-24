@@ -33,11 +33,14 @@ class Plugin(abc.ABC):
         self.wakeup_signal = asyncio.Event()
 
     @classmethod
-    @abc.abstractmethod
     def get_scope(cls) -> PluginScope:
         """
-        Get the scope of this plugin.
+        Get the scope of this plugin. Scopes control when and where the plugin
+        will be run.
+
+        By default, plugins are scoped to the worker.
         """
+        return PluginScope.WORKER
 
     async def run(self, worker: "Worker", chancy: "Chancy"):
         """
@@ -126,6 +129,26 @@ class Plugin(abc.ABC):
         If this plugin has an associated API component, returns the import
         string for the plugin.
         """
+
+    async def on_worker_started(self, worker: "Worker"):
+        """
+        Called when the worker has started.
+        """
+
+    async def on_job_starting(
+        self,
+        *,
+        job: QueuedJob,
+        worker: "Worker",
+    ) -> QueuedJob:
+        """
+        Called when a job has been retrieved from the queue and is about to
+        start.
+
+        The passed job is immutable - to modify it, return a new QueuedJob
+        with the desired changes.
+        """
+        raise NotImplementedError()
 
     async def on_job_completed(
         self,

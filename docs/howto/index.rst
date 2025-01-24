@@ -10,3 +10,4 @@ How To...
    fastapi.rst
    retry.rst
    context.rst
+   log.rst

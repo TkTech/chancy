@@ -18,9 +18,20 @@ from chancy.utils import chancy_uuid, chunked, json_dumps
 
 
 @cache
-def _setup_default_logger():
+def setup_default_logger(level: int = logging.INFO):
+    """
+    Set up the default logger for the application.
+
+    This method will configure the logger for the application, setting the
+    log level and adding a stream handler to log to the console.
+
+    :param level: The log level to set on the logger. Defaults to DEBUG.
+    """
     logger = logging.getLogger("chancy")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(level)
+
+    if logger.handlers:
+        return logger
 
     handler = logging.StreamHandler()
     handler.setFormatter(
@@ -30,7 +41,7 @@ def _setup_default_logger():
         )
     )
 
-    logger.addHandler(handler)
+    logger.handlers[:] = [handler]
     return logger
 
 
@@ -85,7 +96,8 @@ class Chancy:
         attempting to reconnect to the database if a connection is lost.
     :param notifications: Enables or disables emitting notifications using
         postgres's NOTIFY/LISTEN feature.
-    :param log: The logger to use for all application logging.
+    :param log: The logger to use for all application logging. If not provided,
+        a default logger will be set up.
     """
 
     class Executor(enum.StrEnum):
@@ -185,7 +197,7 @@ class Chancy:
         #: NOTIFY/LISTEN feature.
         self.notifications = notifications
         #: The logger to use for all application logging.
-        self.log = log or _setup_default_logger()
+        self.log = log or setup_default_logger()
 
     async def __aenter__(self):
         await self.pool.open()
@@ -265,6 +277,29 @@ class Chancy:
 
         for plugin in self.plugins:
             await plugin.migrate(self, to_version=to_version)
+
+    @_ensure_pool_is_open
+    async def is_up_to_date(self) -> bool:
+        """
+        Check if the database is up to date.
+
+        This will check if the database schema is up to date with the latest
+        available migrations. If the database is up to date, returns `True`.
+        """
+        migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                if await migrator.is_migration_required(cursor):
+                    return False
+
+                for plugin in self.plugins:
+                    migrator = plugin.migrator(self)
+                    if migrator is None:
+                        continue
+                    if await migrator.is_migration_required(cursor):
+                        return False
+
+        return True
 
     @_ensure_pool_is_open
     async def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:

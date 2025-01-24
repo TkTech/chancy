@@ -37,6 +37,19 @@ class Executor(abc.ABC):
         Push a job onto the job pool.
         """
 
+    async def on_job_starting(self, job: QueuedJob) -> QueuedJob:
+        """
+        Called when a job has been retrieved from the queue and is about to
+        start.
+        """
+        for plugin in self.worker.chancy.plugins:
+            try:
+                job = await plugin.on_job_starting(job=job, worker=self.worker)
+            except NotImplementedError:
+                continue
+
+        return job
+
     async def on_job_completed(
         self,
         *,
@@ -90,6 +103,12 @@ class Executor(abc.ABC):
                         "attempt": job.attempts,
                     },
                 ],
+            )
+
+            self.worker.chancy.log.debug(
+                f"Job {job.id} ({job.func}({job.kwargs!r}) failed with an"
+                f" exception",
+                exc_info=(type(exc), exc, exc.__traceback__),
             )
 
         # Each plugin has a chance to modify the job instance after it's

@@ -34,6 +34,13 @@ html_static_path = ["_static"]
 html_logo = "../misc/logo.png"
 html_title = "Chancy"
 
+html_js_files = [
+    (
+        "https://plausible.io/js/script.js",
+        {"data-domain": "tkte.ch", "defer": "defer"},
+    ),
+]
+
 # -- Options for todo extension ----------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
 

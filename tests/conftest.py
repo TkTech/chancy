@@ -1,37 +1,20 @@
-import asyncio
-import secrets
 from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
 import sys
-from pytest_postgresql import factories
 
 from chancy import Chancy, Worker
 
 
-external_postgres = factories.postgresql_noproc(
-    host="localhost",
-    password="localtest",
-    user="postgres",
-    port=8190,
-    dbname=f"chancy_test_{secrets.token_hex(8)}",
-)
-postgresql = factories.postgresql(
-    "external_postgres",
-)
-
-
 @pytest_asyncio.fixture()
-async def chancy(request, postgresql):
+async def chancy(request):
     """
     Provides a Chancy application instance with an open connection pool
     to the test database.
     """
-    i = postgresql.info
-
     async with Chancy(
-        f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
+        "postgresql://postgres:localtest@localhost:8190/postgres",
         **getattr(request, "param", {}),
     ) as chancy:
         await chancy.migrate()
@@ -40,14 +23,13 @@ async def chancy(request, postgresql):
 
 
 @pytest.fixture
-def chancy_just_app(postgresql):
+def chancy_just_app():
     """
     Provides just a configured chancy instance with no open connection pool
     or migrations.
     """
-    i = postgresql.info
     return Chancy(
-        f"postgresql://{i.user}:{i.password}@{i.host}:{i.port}/{i.dbname}",
+        "postgresql://postgres:localtest@localhost:8190/postgres",
     )
 
 
@@ -59,7 +41,9 @@ async def worker(request, chancy) -> AsyncIterator[Worker]:
     If the worker is not stopped by the time the test completes, it will be
     cancelled.
     """
-    async with Worker(chancy, **getattr(request, "param", {})) as worker:
+    async with Worker(
+        chancy, shutdown_timeout=60, **getattr(request, "param", {})
+    ) as worker:
         yield worker
 
 

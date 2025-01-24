@@ -96,6 +96,8 @@ class ProcessExecutor(ConcurrentExecutor):
         signal.signal(signal.SIGUSR1, cls.job_signal_handler)
 
     async def push(self, job: QueuedJob) -> Future:
+        job = await self.on_job_starting(job)
+
         future: Future = self.pool.submit(
             self.job_wrapper, job, self.pids_for_job
         )

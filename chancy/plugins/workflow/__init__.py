@@ -250,7 +250,7 @@ class WorkflowPlugin(Plugin):
 
     async def run(self, worker: Worker, chancy: Chancy):
         worker.hub.on(
-            "workflow.created",
+            "workflow.upserted",
             lambda *args, **kwargs: self.wake_up(),
         )
 

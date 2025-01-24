@@ -20,3 +20,4 @@ Submodules
    chancy.plugins.workflow
    chancy.plugins.retry
    chancy.plugins.reprioritize
+   chancy.plugins.sentry

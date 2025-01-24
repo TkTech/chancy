@@ -2,9 +2,11 @@ import asyncio
 import code
 
 import click
+from psycopg import AsyncCursor
 
 from chancy import Chancy, Worker, Job, QueuedJob, Limit, Reference, Queue
 from chancy.cli import run_async_command
+from chancy.migrate import Migrator
 
 
 @click.group(name="misc")
@@ -36,6 +38,48 @@ async def migrate(ctx: click.Context, to_version: int | None):
 
     async with chancy:
         await chancy.migrate(to_version=to_version)
+
+
+async def _check_migrations(migrator: Migrator, cursor: AsyncCursor):
+    """
+    Check the migrations for a migrator.
+    """
+    good = "✓"
+    bad = "✗"
+
+    all_migrations = migrator.discover_all_migrations()
+    current_version = await migrator.get_current_version(cursor)
+
+    for i, migration in enumerate(all_migrations, 1):
+        is_applied = i <= current_version
+        click.echo(
+            f"| |- [{good if is_applied else bad}] {migration.__class__.__name__} "
+        )
+
+
+@misc_group.command()
+@click.pass_context
+@run_async_command
+async def check_migrations(ctx: click.Context):
+    """
+    Check the current migration status of the database.
+    """
+    chancy: Chancy = ctx.obj["app"]
+
+    async with chancy:
+        migrator = Migrator("chancy", "chancy.migrations", prefix=chancy.prefix)
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                click.echo("Chancy Core")
+                await _check_migrations(migrator, cursor)
+
+                for plugin in chancy.plugins:
+                    migrator = plugin.migrator(chancy)
+                    if migrator is None:
+                        continue
+
+                    click.echo(f"|-{plugin.__class__.__name__} Plugin")
+                    await _check_migrations(migrator, cursor)
 
 
 @misc_group.command()
