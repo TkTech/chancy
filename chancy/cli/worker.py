@@ -12,6 +12,7 @@ def worker_group():
     pass
 
 
+
 @worker_group.command("start")
 @click.option("--worker-id", "-w", help="The worker ID to use.")
 @click.option(
@@ -31,6 +32,15 @@ async def worker_command(
     chancy: Chancy = ctx.obj["app"]
 
     async with chancy:
+        if not await chancy.is_up_to_date():
+            click.echo(
+                "The database is not up to date and is missing migrations.\n"
+                "Please run `chancy misc migrate` to update the database.\n"
+                "You can check the current migration status with"
+                " `chancy misc check-migrations`."
+            )
+            return 1
+
         async with Worker(
             chancy, worker_id=worker_id, tags=set(tags) if tags else None
         ) as worker:

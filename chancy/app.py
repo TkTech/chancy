@@ -279,6 +279,29 @@ class Chancy:
             await plugin.migrate(self, to_version=to_version)
 
     @_ensure_pool_is_open
+    async def is_up_to_date(self) -> bool:
+        """
+        Check if the database is up to date.
+
+        This will check if the database schema is up to date with the latest
+        available migrations. If the database is up to date, returns `True`.
+        """
+        migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                if await migrator.is_migration_required(cursor):
+                    return False
+
+                for plugin in self.plugins:
+                    migrator = plugin.migrator(self)
+                    if migrator is None:
+                        continue
+                    if await migrator.is_migration_required(cursor):
+                        return False
+
+        return True
+
+    @_ensure_pool_is_open
     async def declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
         """
         Declare a queue in the database.
