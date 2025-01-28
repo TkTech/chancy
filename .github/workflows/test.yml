@@ -28,8 +28,28 @@ jobs:
         working-directory: chancy/plugins/api/ui
         run: npm run build
 
+  docs:
+    name: Building Docs
+    runs-on: "ubuntu-24.04"
+
+    steps:
+      - uses: actions/checkout@v4.1.6
+
+      - name: Installing dependencies
+        run: sudo apt-get install graphviz
+
+      - name: Installing uv
+        run: pip install uv
+
+      - name: Installing dependencies (Python)
+        run: uv sync --all-extras
+
+      - name: Building docs
+        run: |
+            cd docs && uv run make clean html
+
   build:
-    name: Running tests.
+    name: "${{ matrix.os }} - Py${{ matrix.python-version }} - PG${{ matrix.pg }}"
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -38,7 +58,7 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
         os: ["ubuntu-24.04", "macos-14"]
-        pg: ["16", "17"]
+        pg: ["14", "15", "16", "17"]
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python-version }}
@@ -79,15 +99,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           slug: TkTech/chancy
-
-      - name: Installing dependencies (Docs)
-        if: runner.os == 'ubuntu-latest'
-        run: sudo apt-get install graphviz
-
-      - name: Installing dependencies (Docs)
-        if: runner.os == 'macos-latest'
-        run: brew install graphviz
-
-      - name: Building docs
-        run: |
-            cd docs && uv run make clean html
