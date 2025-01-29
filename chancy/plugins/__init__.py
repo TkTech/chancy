@@ -26,4 +26,6 @@ Chancy comes with several built-in plugins:
     more advanced job retry system with jitter, backoff, and other features.
 - :class:`chancy.plugins.reprioritize.Reprioritize`: This plugin increases
     the priority of jobs based on how long they've been in the queue.
+- :class:`chancy.plugins.sentry.SentryPlugin`: This plugin sends job exceptions
+    to Sentry, along with metadata about the job and worker.
 """
