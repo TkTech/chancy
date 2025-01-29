@@ -28,8 +28,28 @@ jobs:
         working-directory: chancy/plugins/api/ui
         run: npm run build
 
+  docs:
+    name: Building Docs
+    runs-on: "ubuntu-24.04"
+
+    steps:
+      - uses: actions/checkout@v4.1.6
+
+      - name: Installing dependencies
+        run: sudo apt-get install graphviz
+
+      - name: Installing uv
+        run: pip install uv
+
+      - name: Installing dependencies (Python)
+        run: uv sync --all-extras
+
+      - name: Building docs
+        run: |
+            cd docs && uv run make clean html
+
   build:
-    name: Running tests.
+    name: "${{ matrix.os }} - Py${{ matrix.python-version }} - PG${{ matrix.pg }}"
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -38,52 +58,22 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
         os: ["ubuntu-24.04", "macos-14"]
+        pg: ["14", "15", "16", "17"]
     env:
       OS: ${{ matrix.os }}
       PYTHON: ${{ matrix.python-version }}
-      PGHOST: "localhost"
-      PGDATABASE: "postgres"
-      PGUSERNAME: "postgres"
-      PGPASSWORD: "localtest"
 
     steps:
-      - name: Install PostgreSQL on macOS
-        if: runner.os == 'macOS'
-        run: |
-          brew install postgresql@16
-          # --overwrite: Overwrite pre-installed GitHub Actions PostgreSQL binaries
-          brew link --overwrite postgresql@16
-      - name: Add PostgreSQL binaries to PATH
-        shell: bash
-        run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            echo "$PGBIN" >> $GITHUB_PATH
-          elif [ "$RUNNER_OS" == "Linux" ]; then
-            echo "$(pg_config --bindir)" >> $GITHUB_PATH
-          fi
-      - name: Start preinstalled PostgreSQL
-        shell: bash
-        run: |
-          echo "Initializing database cluster..."
-          
-          # Convert backslashes to forward slashes in RUNNER_TEMP for Windows Git Bash
-          export PGHOST="${RUNNER_TEMP//\\//}/postgres"
-          export PGDATA="$PGHOST/pgdata"
-          mkdir -p "$PGDATA"
-          
-          # initdb requires file for password in non-interactive mode
-          export PWFILE="$RUNNER_TEMP/pwfile"
-          echo "postgres" > "$PWFILE"
-          initdb --pgdata="$PGDATA" --username="postgres" --pwfile="$PWFILE"
-          
-          echo "Starting PostgreSQL..."
-          echo "unix_socket_directories = '$PGHOST'" >> "$PGDATA/postgresql.conf"
-          pg_ctl -o "-p 8190" start
-          
-          echo "Creating user..."
-          psql --port 8190 --host "$PGHOST" --username="postgres" --dbname="postgres" --command="CREATE USER $PGUSERNAME PASSWORD '$PGPASSWORD'" --command="\du"
-
       - uses: actions/checkout@v4.1.6
+
+      - uses: ikalnytskyi/action-setup-postgres@v7
+        with:
+          username: postgres
+          password: localtest
+          database: postgres
+          port: 8190
+          postgres-version: ${{ matrix.pg }}
+        id: postgres
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5.1.0
@@ -109,15 +99,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           slug: TkTech/chancy
-
-      - name: Installing dependencies (Docs)
-        if: runner.os == 'ubuntu-latest'
-        run: sudo apt-get install graphviz
-
-      - name: Installing dependencies (Docs)
-        if: runner.os == 'macos-latest'
-        run: brew install graphviz
-
-      - name: Building docs
-        run: |
-            cd docs && uv run make clean html

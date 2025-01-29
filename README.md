@@ -5,9 +5,11 @@
 A postgres-backed task queue for Python.
 
 ![MIT License](https://img.shields.io/github/license/tktech/chancy)
-![Supported Version](https://img.shields.io/pypi/pyversions/chancy)
 ![Codecov](https://img.shields.io/codecov/c/github/TkTech/chancy)
 ![PyPI Version](https://img.shields.io/pypi/v/chancy)
+![Python Version](https://img.shields.io/pypi/pyversions/chancy)
+![OS Platforms](https://img.shields.io/badge/OS-Linux%20|%20macOS-blue)
+![PostgreSQL Versions](https://img.shields.io/badge/PostgreSQL-%2014%20|%2015%20|%2016%20|%2017-blue)
 
 ## Key Features
 

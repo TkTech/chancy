@@ -6,14 +6,20 @@ A postgres-backed task queue for Python.
 .. image:: https://img.shields.io/github/license/tktech/chancy
    :alt: MIT License
 
-.. image:: https://img.shields.io/pypi/pyversions/chancy
-   :alt: Supported Versions
-
 .. image:: https://img.shields.io/codecov/c/github/TkTech/chancy
    :alt: Codecov
 
 .. image:: https://img.shields.io/pypi/v/chancy
    :alt: PyPI Version
+
+.. image:: https://img.shields.io/pypi/pyversions/chancy
+   :alt: Supported Versions
+
+.. image:: https://img.shields.io/badge/os-Linux%20|%20macOS-blue
+   :alt: OS Platforms
+
+.. image:: https://img.shields.io/badge/postgres-%2014%20|%2015%20|%2016%20|%2017-blue
+   :alt: PostgreSQL Versions
 
 
 Key Features:
@@ -123,6 +129,24 @@ Quick Start
 Congratulations! You've just run your first Chancy job. Next, explore the
 :doc:`How To <howto/index>` or :doc:`plugins <chancy.plugins>`.
 
+Dashboard
+---------
+
+Chancy comes with a built-in :class:`dashboard <chancy.plugins.api.Api>` -
+no need to run a separate service like Flower.
+
+.. image:: ../misc/ux_jobs.png
+    :alt: Jobs page
+
+.. image:: ../misc/ux_job_failed.png
+    :alt: Failed job page
+
+.. image:: ../misc/ux_queue.png
+    :alt: Queue page
+
+.. image:: ../misc/ux_workflow.png
+    :alt: Worker page
+
 
 Similar Projects
 ----------------
@@ -143,7 +167,7 @@ needs:
     - Note
   * - celery_
     - Python
-    - The defacto Python task queues
+    - The defacto Python task queue
   * - procastinate_
     - Python
     -

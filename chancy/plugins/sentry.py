@@ -15,7 +15,7 @@ class SentryPlugin(Plugin):
     along with extended metadata about the job such as the executing worker,
     the queue, and the job ID.
 
-    This plugin assume you've already configured sentry-sdk using
+    This plugin assumes you've already configured sentry-sdk using
     ``sentry_sdk.init()`` at some point, to prevent conflicts with other Sentry
     integrations.
 
