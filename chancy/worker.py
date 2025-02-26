@@ -277,6 +277,10 @@ class Worker:
         async with cls(self, queue, **queue.executor_options) as executor:
             self._executors[queue.name] = executor
 
+            concurrency = queue.concurrency
+            if queue.concurrency is None:
+                concurrency = executor.get_default_concurrency()
+
             while True:
                 try:
                     queue = self._queues[queue.name]
@@ -288,7 +292,7 @@ class Worker:
                     self._executors.pop(queue.name)
                     return
 
-                maximum_jobs_to_poll = queue.concurrency - len(executor)
+                maximum_jobs_to_poll = concurrency - len(executor)
                 if maximum_jobs_to_poll <= 0:
                     await asyncio.sleep(queue.polling_interval)
                     continue

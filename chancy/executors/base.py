@@ -187,6 +187,16 @@ class Executor(abc.ABC):
         """
 
     @abc.abstractmethod
+    def get_default_concurrency(self) -> int:
+        """
+        Get the default concurrency level for this executor.
+
+        This method is called when the queue's concurrency level is set to
+        None. It should return the number of jobs that can be processed
+        concurrently by this executor.
+        """
+
+    @abc.abstractmethod
     def __len__(self):
         """
         Get the number of jobs currently within the executor.

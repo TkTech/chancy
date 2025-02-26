@@ -242,3 +242,18 @@ class ProcessExecutor(ConcurrentExecutor):
         pid = self.pids_for_job.get(ref.identifier)
         if pid is not None:
             os.kill(pid, signal.SIGUSR1)
+
+    def get_default_concurrency(self) -> int:
+        """
+        Get the default concurrency level for this executor.
+
+        This method is called when the queue's concurrency level is set to
+        None. It should return the number of jobs that can be processed
+        concurrently by this executor.
+
+        Default is the number of CPUs on the system.
+        """
+        # Only available in 3.13+
+        if hasattr(os, "process_cpu_count"):
+            return os.process_cpu_count() or 1
+        return os.cpu_count() or 1

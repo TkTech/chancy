@@ -1,3 +1,4 @@
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 import asyncio
@@ -110,3 +111,21 @@ class ThreadedExecutor(ConcurrentExecutor):
     async def stop(self):
         self.pool.shutdown(cancel_futures=True)
         await super().stop()
+
+    def get_default_concurrency(self) -> int:
+        """
+        Get the default concurrency level for this executor.
+
+        This method is called when the queue's concurrency level is set to
+        None. It should return the number of jobs that can be processed
+        concurrently by this executor.
+
+        On Python 3.13+, defaults to the number of logical CPUs on the system
+        plus 4. On older versions of Python, defaults to the number of CPUs on
+        the system plus 4. This mimics the behavior of Python's built-in
+        ThreadPoolExecutor.
+        """
+        # Only available in 3.13+
+        if hasattr(os, "process_cpu_count"):
+            return min(32, (os.process_cpu_count() or 1) + 4)
+        return min(32, (os.cpu_count() or 1) + 4)

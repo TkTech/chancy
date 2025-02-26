@@ -83,3 +83,15 @@ class AsyncExecutor(Executor):
         for task in self.jobs:
             task.cancel()
         await asyncio.gather(*self.jobs)
+
+    def get_default_concurrency(self):
+        """
+        Get the default concurrency level for this executor.
+
+        This method is called when the queue's concurrency level is set to
+        None. It should return the number of jobs that can be processed
+        concurrently by this executor.
+
+        By default, returns 100.
+        """
+        return 100
