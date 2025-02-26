@@ -151,12 +151,6 @@ class ProcessExecutor(ConcurrentExecutor):
         try:
             pids_for_job[job.id] = os.getpid()
             func, kwargs = cls.get_function_and_kwargs(job)
-            if asyncio.iscoroutinefunction(func):
-                raise ValueError(
-                    f"Function {job.func!r} is an async function, which is not"
-                    f" supported by the {cls.__name__!r} executor. Use the "
-                    "AsyncExecutor instead."
-                )
 
             for limit in job.limits:
                 match limit.type_:
@@ -173,7 +167,15 @@ class ProcessExecutor(ConcurrentExecutor):
                             )
                         )
 
-            result = func(**kwargs)
+            if asyncio.iscoroutinefunction(func):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(func(**kwargs))
+                finally:
+                    loop.close()
+            else:
+                result = func(**kwargs)
         finally:
             pids_for_job.pop(job.id)
             for clean in cleanup:

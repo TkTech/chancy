@@ -87,6 +87,21 @@ async def test_basic_job_async(
 
 
 @pytest.mark.asyncio
+async def test_async_job_on_sync_executor(
+    chancy: Chancy, worker: Worker, sync_executor: str
+):
+    """
+    Ensures that async jobs can run on sync executors.
+    """
+    await chancy.declare(Queue("low", executor=sync_executor))
+
+    ref = await chancy.push(async_job_to_run.job.with_queue("low"))
+    j = await chancy.wait_for_job(ref, timeout=30)
+
+    assert j.state == j.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
 async def test_wait_for_job_timeout(
     chancy: Chancy, worker: Worker, sync_executor: str
 ):
@@ -130,6 +145,23 @@ async def test_async_job_instance_kwarg(
     instance.
     """
     await chancy.declare(Queue("low", executor=async_executor))
+
+    ref = await chancy.push(async_job_with_instance.job.with_queue("low"))
+    j = await chancy.wait_for_job(ref, timeout=30)
+
+    assert j.state == j.State.SUCCEEDED
+    assert j.meta.get("received_instance") is True
+
+
+@pytest.mark.asyncio
+async def test_async_job_instance_kwarg_on_sync_executor(
+    chancy: Chancy, worker: Worker, sync_executor: str
+):
+    """
+    Test that async jobs requesting a QueuedJob kwarg receive the correct
+    instance when run on a sync executor.
+    """
+    await chancy.declare(Queue("low", executor=sync_executor))
 
     ref = await chancy.push(async_job_with_instance.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)

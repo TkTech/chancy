@@ -61,12 +61,6 @@ class ThreadedExecutor(ConcurrentExecutor):
         running the job, and returning the result.
         """
         func, kwargs = Executor.get_function_and_kwargs(job)
-        if asyncio.iscoroutinefunction(func):
-            raise ValueError(
-                f"Function {job.func!r} is an async function, which is not"
-                f" supported by the {self.__class__.__name__!r} executor. Use"
-                f" the AsyncExecutor instead."
-            )
 
         time_limit = next(
             (
@@ -77,15 +71,24 @@ class ThreadedExecutor(ConcurrentExecutor):
             None,
         )
 
+        timer = None
         if time_limit:
             timer = threading.Timer(time_limit, self._timeout_handler)
             timer.start()
-            try:
+
+        try:
+            if asyncio.iscoroutinefunction(func):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(func(**kwargs))
+                finally:
+                    loop.close()
+            else:
                 result = func(**kwargs)
-            finally:
+        finally:
+            if timer:
                 timer.cancel()
-        else:
-            result = func(**kwargs)
 
         return job, result
 
