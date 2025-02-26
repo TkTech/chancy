@@ -151,12 +151,6 @@ class ProcessExecutor(ConcurrentExecutor):
         try:
             pids_for_job[job.id] = os.getpid()
             func, kwargs = cls.get_function_and_kwargs(job)
-            if asyncio.iscoroutinefunction(func):
-                raise ValueError(
-                    f"Function {job.func!r} is an async function, which is not"
-                    f" supported by the {cls.__name__!r} executor. Use the "
-                    "AsyncExecutor instead."
-                )
 
             for limit in job.limits:
                 match limit.type_:
@@ -173,7 +167,15 @@ class ProcessExecutor(ConcurrentExecutor):
                             )
                         )
 
-            result = func(**kwargs)
+            if asyncio.iscoroutinefunction(func):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(func(**kwargs))
+                finally:
+                    loop.close()
+            else:
+                result = func(**kwargs)
         finally:
             pids_for_job.pop(job.id)
             for clean in cleanup:
@@ -242,3 +244,18 @@ class ProcessExecutor(ConcurrentExecutor):
         pid = self.pids_for_job.get(ref.identifier)
         if pid is not None:
             os.kill(pid, signal.SIGUSR1)
+
+    def get_default_concurrency(self) -> int:
+        """
+        Get the default concurrency level for this executor.
+
+        This method is called when the queue's concurrency level is set to
+        None. It should return the number of jobs that can be processed
+        concurrently by this executor.
+
+        Default is the number of CPUs on the system.
+        """
+        # Only available in 3.13+
+        if hasattr(os, "process_cpu_count"):
+            return os.process_cpu_count() or 1
+        return os.cpu_count() or 1

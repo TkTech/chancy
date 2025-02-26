@@ -55,7 +55,7 @@ Quick Start
 
      from chancy import Chancy, job
 
-     @job(queue="default")
+     @job()
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
@@ -66,12 +66,6 @@ Quick Start
   .. code-block:: bash
 
      chancy --app worker.chancy misc migrate
-
-  Declare a queue:
-
-  .. code-block:: bash
-
-     chancy --app worker.chancy queue declare default --concurrency 10
 
   Push a job:
 
@@ -102,7 +96,7 @@ Quick Start
      import asyncio
      from chancy import Chancy, Worker, Queue, job
 
-     @job(queue="default")
+     @job()
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
@@ -112,8 +106,6 @@ Quick Start
          async with chancy:
              # Run the database migrations
              await chancy.migrate()
-             # Declare a queue
-             await chancy.declare(Queue("default", concurrency=10))
              # Push a job
              await chancy.push(hello_world.job.with_kwargs(name="World"))
              # Start the worker (ctrl+c to exit)
