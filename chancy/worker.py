@@ -182,6 +182,8 @@ class Worker:
                     lambda: asyncio.create_task(self.on_signal(sig)),
                 )
 
+        await self.chancy.declare(Queue(name="default"))
+
     async def wait_for_shutdown(self):
         """
         Wait until the worker is stopped.
