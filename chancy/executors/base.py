@@ -6,6 +6,7 @@ import dataclasses
 from abc import ABC
 from asyncio import Future
 from datetime import datetime, timezone
+from functools import cached_property
 from typing import Callable, Any
 
 from chancy.job import QueuedJob, Reference
@@ -195,6 +196,16 @@ class Executor(abc.ABC):
         None. It should return the number of jobs that can be processed
         concurrently by this executor.
         """
+
+    @cached_property
+    def concurrency(self) -> int:
+        if self.queue.concurrency is None:
+            return self.get_default_concurrency()
+        return self.queue.concurrency
+
+    @property
+    def free_slots(self) -> int:
+        return self.concurrency - len(self)
 
     @abc.abstractmethod
     def __len__(self):
