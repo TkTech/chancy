@@ -580,7 +580,7 @@ class Chancy:
                 await cursor.execute(self._get_job_sql(), [ref.identifier])
                 record = await cursor.fetchone()
                 if record is None:
-                    raise KeyError(f"Job {ref.identifier} not found.")
+                    return None
                 return QueuedJob.unpack(record)
 
     async def wait_for_job(
