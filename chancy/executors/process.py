@@ -173,6 +173,7 @@ class ProcessExecutor(ConcurrentExecutor):
                 try:
                     result = loop.run_until_complete(func(**kwargs))
                 finally:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
                     loop.close()
             else:
                 result = func(**kwargs)
@@ -216,11 +217,10 @@ class ProcessExecutor(ConcurrentExecutor):
         if exc is None:
             job, result = future.result()
 
-        f = asyncio.run_coroutine_threadsafe(
+        asyncio.run_coroutine_threadsafe(
             self.on_job_completed(job=job, exc=exc, result=result),
             loop,
         )
-        f.result()
 
     async def stop(self):
         for task in self.timeouts.values():
