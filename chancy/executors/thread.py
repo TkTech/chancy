@@ -83,6 +83,7 @@ class ThreadedExecutor(ConcurrentExecutor):
                 try:
                     result = loop.run_until_complete(func(**kwargs))
                 finally:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
                     loop.close()
             else:
                 result = func(**kwargs)
