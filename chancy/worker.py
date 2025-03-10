@@ -68,7 +68,32 @@ class Worker:
 
         Queue(name="default", tags={r"python=3\\.11\\.[0-9]+"}, concurrency=10)
 
-    :param chancy: The Chancy application that the worker is associated with.
+    Events
+    ------
+
+    The worker emits events that can be listened to by plugins. The following
+    events are emitted:
+
+    .. list-table::
+        :header-rows: 1
+
+        * - Event
+          - Kwargs
+          - Description
+        * - worker.started
+          - worker
+          - Emitted when the worker is started.
+        * - worker.queue.started
+          - queue, executor, worker
+          - Emitted when a queue is started.
+        * - worker.queue.removed
+          - queue, executor, worker
+          - Emitted when a queue is removed.
+        * - worker.queue.updated
+          - queue, executor, worker
+          - Emitted when a queue is updated.
+
+    :param chancy: The Chancy application.
     :param worker_id: The ID of the worker, which must be globally unique. If
                       not provided, a random UUID will be generated.
     :param heartbeat_poll_interval: The number of seconds between heartbeat
@@ -148,8 +173,22 @@ class Worker:
         """
         Start the worker and begin processing jobs.
 
-        Unlike `run`, this method does not wait for the worker to complete and
-        returns immediately.
+        This method will return immediately - to wait until the worker is
+        stopped, use the `wait_for_shutdown` method:
+
+        .. code-block:: python
+
+            worker = Worker(chancy)
+            await worker.start()
+            await worker.wait_for_shutdown()
+
+        If possible, it's better to use the worker as an async context manager
+        to ensure that it's properly cleaned up:
+
+        .. code-block:: python
+
+            async with Worker(chancy) as worker:
+                await worker.wait_for_shutdown()
         """
         self.hub.on("job.cancelled", self._handle_cancellation)
 
@@ -183,6 +222,12 @@ class Worker:
                 )
 
         await self.chancy.declare(Queue(name="default"))
+        await self.hub.emit(
+            "worker.started",
+            {
+                "worker": self,
+            },
+        )
 
     async def wait_for_shutdown(self):
         """
@@ -274,50 +319,83 @@ class Worker:
 
         :param queue: The queue to maintain.
         """
-        cls = import_string(queue.executor)
+        while queue := self._queues.get(queue.name):
+            cls = import_string(queue.executor)
 
-        async with cls(self, queue, **queue.executor_options) as executor:
-            self._executors[queue.name] = executor
-
-            concurrency = queue.concurrency
-            if queue.concurrency is None:
-                concurrency = executor.get_default_concurrency()
-
-            while True:
+            async with cls(self, queue, **queue.executor_options) as executor:
                 try:
-                    queue = self._queues[queue.name]
-                except KeyError:
-                    self.chancy.log.info(
-                        f"Queue {queue.name!r} no longer exists, stopping its"
-                        f" maintenance loop."
-                    )
-                    self._executors.pop(queue.name)
-                    return
+                    self._executors[queue.name] = executor
 
-                maximum_jobs_to_poll = concurrency - len(executor)
-                if maximum_jobs_to_poll <= 0:
-                    await asyncio.sleep(queue.polling_interval)
-                    continue
+                    concurrency = queue.concurrency
+                    if queue.concurrency is None:
+                        concurrency = executor.get_default_concurrency()
 
-                if queue.state == Queue.State.PAUSED:
-                    self.chancy.log.debug(
-                        f"Queue {queue.name!r} is paused, skipping polling."
-                    )
-                    await asyncio.sleep(queue.polling_interval)
-                    continue
-
-                async with self.chancy.pool.connection() as conn:
-                    jobs = await self.fetch_jobs(
-                        queue, conn, up_to=maximum_jobs_to_poll
+                    await self.hub.emit(
+                        "worker.queue.started",
+                        {
+                            "queue": queue,
+                            "executor": executor,
+                            "worker": self,
+                        },
                     )
 
-                for job in jobs:
-                    self.chancy.log.info(
-                        f"Pulled {job.id!r} ({job.func!r}) for queue {job.queue!r}"
-                    )
-                    await executor.push(job)
+                    while True:
+                        new_queue = self._queues.get(queue.name)
 
-                await asyncio.sleep(queue.polling_interval)
+                        if new_queue != queue:
+                            # Drain the queue if it's being removed / updated
+                            while len(executor) > 0:
+                                await asyncio.sleep(queue.polling_interval)
+
+                            # The queue was completely removed.
+                            if new_queue is None:
+                                await self.hub.emit(
+                                    "worker.queue.removed",
+                                    {
+                                        "queue": queue,
+                                        "executor": executor,
+                                        "worker": self,
+                                    },
+                                )
+                                return
+
+                            # Otherwise it's just a configuration change, so
+                            # break out to the outer loop to reconfigure the
+                            # executor.
+                            await self.hub.emit(
+                                "worker.queue.updated",
+                                {
+                                    "queue": queue,
+                                    "executor": executor,
+                                    "worker": self,
+                                },
+                            )
+                            break
+
+                        if queue.state == Queue.State.PAUSED:
+                            await asyncio.sleep(queue.polling_interval)
+                            continue
+
+                        maximum_jobs_to_poll = concurrency - len(executor)
+                        if maximum_jobs_to_poll <= 0:
+                            await asyncio.sleep(queue.polling_interval)
+                            continue
+
+                        async with self.chancy.pool.connection() as conn:
+                            jobs = await self.fetch_jobs(
+                                queue, conn, up_to=maximum_jobs_to_poll
+                            )
+
+                        for job in jobs:
+                            self.chancy.log.info(
+                                f"Pulled {job.id!r} ({job.func!r}) for queue"
+                                f"{job.queue!r}"
+                            )
+                            await executor.push(job)
+
+                        await asyncio.sleep(queue.polling_interval)
+                finally:
+                    self._executors.pop(queue.name, None)
 
     async def _maintain_heartbeat(self):
         """
@@ -706,6 +784,15 @@ class Worker:
         )
         for executor in self._executors.values():
             await executor.cancel(Reference(event.body["j"]))
+
+    @property
+    def executors(self) -> dict[str, Executor]:
+        """
+        Get the executors that the worker is currently using to service queues.
+
+        :return: A dictionary of executors keyed by queue name.
+        """
+        return self._executors
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"

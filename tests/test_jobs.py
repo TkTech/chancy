@@ -3,7 +3,8 @@ import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job
+from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job, Job
+from test_worker import job_that_fails
 
 
 @job()
@@ -207,3 +208,20 @@ async def test_job_signature_with_kwarg_marker(chancy, worker):
     )
     j = await chancy.wait_for_job(ref, timeout=30)
     assert j.state == j.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_failing_job(chancy: Chancy, worker: Worker):
+    """
+    Test that a job that fails will be marked as failed.
+    """
+    await chancy.declare(
+        Queue(
+            "default",
+            concurrency=1,
+        ),
+        upsert=True,
+    )
+    ref = await chancy.push(Job.from_func(job_that_fails))
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == QueuedJob.State.FAILED
