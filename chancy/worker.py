@@ -83,6 +83,13 @@ class Worker:
         * - worker.started
           - worker
           - Emitted when the worker is started.
+        * - worker.stopped
+          - worker
+          - Emitted when the worker is stopped.
+        * - worker.shutdown_timeout
+          - worker
+          - Emitted when the worker encounters a timeout while trying to
+            shut down.
         * - worker.queue.started
           - queue, executor, worker
           - Emitted when a queue is started.
@@ -194,23 +201,21 @@ class Worker:
 
         for plugin in self.chancy.plugins:
             self.manager.add(
+                plugin.__class__.__name__,
                 plugin.run(self, self.chancy),
-                name=plugin.__class__.__name__,
             )
             self.chancy.log.info(
                 f"Started plugin {plugin.__class__.__name__!r}"
             )
 
-        self.manager.add(self._maintain_queues(), name="queues")
-        self.manager.add(self._maintain_updates(), name="updates")
-        self.manager.add(self._maintain_heartbeat(), name="heartbeat")
+        self.manager.add("queues", self._maintain_queues())
+        self.manager.add("updates", self._maintain_updates())
+        self.manager.add("heartbeat", self._maintain_heartbeat())
 
         # pgbouncer and other connection pools may not support LISTEN/NOTIFY
         # properly, so this needs to remain an optional (but default) feature.
         if self.chancy.notifications:
-            self.manager.add(
-                self._maintain_notifications(), name="notifications"
-            )
+            self.manager.add("notifications", self._maintain_notifications())
             await self._notifications_ready_event.wait()
 
         if self.register_signal_handlers:
@@ -287,8 +292,7 @@ class Worker:
                 if queue_name not in self._queues:
                     self._queues[queue_name] = queue
                     self.manager.add(
-                        self._maintain_queue(queue),
-                        name=f"queue_{queue_name}",
+                        f"queue_{queue_name}", self._maintain_queue(queue)
                     )
                     self.chancy.log.info(
                         f"Adding queue {queue_name!r} to worker using executor"
@@ -768,14 +772,34 @@ class Worker:
         """
         try:
             async with asyncio.timeout(self.shutdown_timeout) as cm:
+                # Stop accepting new queues and queue changes.
+                await self.manager.cancel("queues")
+                # Delete all the queues we know about so the executors can
+                # clean up.
+                self._queues.clear()
+                while self._executors:
+                    await asyncio.sleep(0.1)
+                # And finally axe everything else started by this worker.
                 await self.manager.cancel_all()
         except TimeoutError:
             # We check this instead of depending on the exception in case the
             # exception wasn't really raised by us but a nested timeout.
             if cm.expired():
+                await self.hub.emit(
+                    "worker.shutdown_timeout",
+                    {
+                        "worker": self,
+                    },
+                )
                 return False
             raise
 
+        await self.hub.emit(
+            "worker.stopped",
+            {
+                "worker": self,
+            },
+        )
         return True
 
     async def _handle_cancellation(self, event: Event):
