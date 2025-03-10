@@ -228,11 +228,16 @@ class TaskManager:
 
     async def cancel(self, name: str):
         """
-        Cancel a task by name.
+        Cancel a task by name and wait for it to complete.
+
+        If the task is not found, a KeyError is raised.
         """
         for task in self._tasks:
             if task.get_name() == name:
-                task.cancel()
+                if not task.cancel("Cancelled by TaskManager"):
+                    return
+
+                await asyncio.wait({task})
                 return
 
         raise KeyError(f"No task with name {name!r}")
