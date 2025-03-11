@@ -1,8 +1,6 @@
 Chancy
 ======
 
-A postgres-backed task queue for Python.
-
 .. image:: https://img.shields.io/github/license/tktech/chancy
    :alt: MIT License
 
@@ -21,24 +19,75 @@ A postgres-backed task queue for Python.
 .. image:: https://img.shields.io/badge/postgres-%2014%20|%2015%20|%2016%20|%2017-blue
    :alt: PostgreSQL Versions
 
+Chancy is a distributed task queue that uses Postgres as its message broker.
+It's designed to be simple to use, easy to deploy, and easily extendable. Chancy
+is a great alternative to Celery, RabbitMQ, or redis-based task queues.
+
 
 Key Features:
 -------------
 
-- Jobs support priorities, retries, timeouts, scheduling,
+- **Robust Jobs** - support for priorities, retries, timeouts, scheduling,
   global rate limits, memory limits, global uniqueness, error
   capture, cancellation, and more
-- Minimal dependencies (only psycopg3 required)
-- Plugins for a :class:`dashboard<chancy.plugins.api.Api>`,
+- **Minimal dependencies** - Core functionality requires only psycopg3 - which
+  can be installed side-by-side with psycopg2.
+- **Minimal infrastructure** - No need to run a separate service like
+  RabbitMQ or redis. Every feature is built on top of Postgres.
+- **Plugins** - Several plugins including a :class:`dashboard<chancy.plugins.api.Api>`,
   :class:`workflows<chancy.plugins.workflow.WorkflowPlugin>`,
   :class:`cron jobs<chancy.plugins.cron.Cron>`, and :doc:`much more <chancy.plugins>`
-- Optional transactional enqueueing for atomic job creation
-- asyncio & sync APIs for easy integration with existing codebases
-- 100% open & free - no enterprise or paid features. Checkout
+- **Flexible & Dynamic** - Queues can be created, deleted, and modified
+  at runtime. A single worker can handle many queues and mix threads,
+  processes, sub-interpreters, and asyncio jobs.
+- **async-first** - Internals designed from the ground up to be async-first,
+  but has minimal sync APIs for easy integration with existing non-async
+  codebases.
+- **Transactional enqueueing** - Atomically enqueue jobs and the data they
+  depend on in a single transaction.
+- **100% open & free** - no enterprise tiers or paid features. Checkout
   the repo on `GitHub <https://github.com/tktech/chancy>`_.
 
 Quick Start
 -----------
+
+.. tab:: Code
+
+  Install Chancy:
+
+  .. code-block:: bash
+
+     pip install chancy
+
+  Create a new file called ``worker.py``:
+
+  .. code-block:: python
+    :caption: worker.py
+
+     import asyncio
+     from chancy import Chancy, Worker, Queue, job
+
+     @job()
+     def hello_world(*, name: str):
+         print(f"Hello, {name}!")
+
+     chancy = Chancy("postgresql://localhost/postgres")
+
+     async def main():
+         async with chancy:
+             # Declare the default queue
+             await chancy.declare(Queue("default"))
+             # Run the database migrations
+             await chancy.migrate()
+             # Push a job
+             await chancy.push(hello_world.job.with_kwargs(name="World"))
+             # Start the worker (ctrl+c to exit)
+             async with Worker(chancy) as worker:
+                 await worker.wait_for_shutdown()
+
+     if __name__ == "__main__":
+         asyncio.run(main())
+
 
 .. tab:: CLI
 
@@ -67,6 +116,12 @@ Quick Start
 
      chancy --app worker.chancy misc migrate
 
+  Declare the default queue:
+
+  .. code-block:: bash
+
+      chancy --app worker.chancy queue declare default
+
   Push a job:
 
   .. code-block:: bash
@@ -79,41 +134,6 @@ Quick Start
 
      chancy --app worker.chancy worker start
 
-
-.. tab:: Code
-
-  Install Chancy:
-
-  .. code-block:: bash
-
-     pip install chancy
-
-  Create a new file called ``worker.py``:
-
-  .. code-block:: python
-    :caption: worker.py
-
-     import asyncio
-     from chancy import Chancy, Worker, Queue, job
-
-     @job()
-     def hello_world(*, name: str):
-         print(f"Hello, {name}!")
-
-     chancy = Chancy("postgresql://localhost/postgres")
-
-     async def main():
-         async with chancy:
-             # Run the database migrations
-             await chancy.migrate()
-             # Push a job
-             await chancy.push(hello_world.job.with_kwargs(name="World"))
-             # Start the worker (ctrl+c to exit)
-             async with Worker(chancy) as worker:
-                 await worker.wait_for_shutdown()
-
-     if __name__ == "__main__":
-         asyncio.run(main())
 
 
 
