@@ -7,6 +7,9 @@ import socket
 import signal
 import platform
 
+import sys
+import warnings
+
 from psycopg import sql
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
@@ -218,7 +221,13 @@ class Worker:
             self.manager.add("notifications", self._maintain_notifications())
             await self._notifications_ready_event.wait()
 
-        if self.register_signal_handlers:
+        if self.register_signal_handlers and sys.platform == "win32":
+            warnings.warn(
+                "Signal handlers are not supported on Windows, "
+                "use CTRL+C to stop the worker.",
+                RuntimeWarning,
+            )
+        elif self.register_signal_handlers:
             loop: asyncio.AbstractEventLoop = asyncio.get_running_loop()
             for sig in {signal.SIGTERM, signal.SIGINT}:
                 loop.add_signal_handler(

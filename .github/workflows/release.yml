@@ -60,7 +60,7 @@ jobs:
       fail-fast: true
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-        os: ["ubuntu-24.04", "macos-14"]
+        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
         pg: ["14", "15", "16", "17"]
     env:
       OS: ${{ matrix.os }}

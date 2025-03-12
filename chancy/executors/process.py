@@ -2,9 +2,15 @@ import asyncio
 import functools
 import multiprocessing
 import os
+import sys
+import warnings
 from multiprocessing.context import BaseContext
 
-import resource
+try:
+    import resource
+except ImportError:
+    # Windows doesn't have the `resource` module
+    resource = None
 import signal
 from asyncio import Future, CancelledError
 from concurrent.futures import ProcessPoolExecutor
@@ -152,20 +158,27 @@ class ProcessExecutor(ConcurrentExecutor):
             pids_for_job[job.id] = os.getpid()
             func, kwargs = cls.get_function_and_kwargs(job)
 
-            for limit in job.limits:
-                match limit.type_:
-                    case Limit.Type.MEMORY:
-                        previous_soft, _ = resource.getrlimit(
-                            resource.RLIMIT_AS
-                        )
-                        resource.setrlimit(
-                            resource.RLIMIT_AS, (limit.value, -1)
-                        )
-                        cleanup.append(
-                            lambda: resource.setrlimit(
-                                resource.RLIMIT_AS, (previous_soft, -1)
+            if job.limits and resource is None:
+                warnings.warn(
+                    f"Resource limits are not supported on this,"
+                    f" platform ignoring limits for job {job.id}.",
+                    RuntimeWarning,
+                )
+            else:
+                for limit in job.limits:
+                    match limit.type_:
+                        case Limit.Type.MEMORY:
+                            previous_soft, _ = resource.getrlimit(
+                                resource.RLIMIT_AS
                             )
-                        )
+                            resource.setrlimit(
+                                resource.RLIMIT_AS, (limit.value, -1)
+                            )
+                            cleanup.append(
+                                lambda: resource.setrlimit(
+                                    resource.RLIMIT_AS, (previous_soft, -1)
+                                )
+                            )
 
             if asyncio.iscoroutinefunction(func):
                 loop = asyncio.new_event_loop()
