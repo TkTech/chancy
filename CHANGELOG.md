@@ -18,3 +18,5 @@ Changelog
 - Queues can be fully reconfigured on the fly - a worker will now stop and
   restart its queues if the configuration changes, including changing the type
   of executor.
+- Limited Windows support - suitable for development, but not recommended for
+  production use.

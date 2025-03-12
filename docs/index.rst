@@ -13,7 +13,7 @@ Chancy
 .. image:: https://img.shields.io/pypi/pyversions/chancy
    :alt: Supported Versions
 
-.. image:: https://img.shields.io/badge/os-Linux%20|%20macOS-blue
+.. image:: https://img.shields.io/badge/os-Linux%20|%20macOS%20|%20Windows-blue
    :alt: OS Platforms
 
 .. image:: https://img.shields.io/badge/postgres-%2014%20|%2015%20|%2016%20|%2017-blue
@@ -48,6 +48,7 @@ Key Features:
   codebases.
 - **Transactional enqueueing** - Atomically enqueue jobs and the data they
   depend on in a single transaction.
+- **Portable** - Supports Linux, OS X, and Windows.
 - **100% open & free** - no enterprise tiers or paid features. Checkout
   the repo on `GitHub <https://github.com/tktech/chancy>`_.
 
@@ -78,10 +79,10 @@ Quick Start
 
      async def main():
          async with chancy:
-             # Declare the default queue
-             await chancy.declare(Queue("default"))
              # Run the database migrations
              await chancy.migrate()
+             # Declare the default queue
+             await chancy.declare(Queue("default"))
              # Push a job
              await chancy.push(hello_world.job.with_kwargs(name="World"))
              # Start the worker (ctrl+c to exit)

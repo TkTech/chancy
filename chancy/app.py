@@ -33,13 +33,18 @@ def setup_default_logger(level: int = logging.INFO):
     if logger.handlers:
         return logger
 
-    handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter(
-            fmt="%(asctime)s • %(levelname)s • %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+    try:
+        from rich.logging import RichHandler
+
+        handler = RichHandler()
+    except ImportError:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                fmt="[%(asctime)s][%(levelname)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
         )
-    )
 
     logger.handlers[:] = [handler]
     return logger
