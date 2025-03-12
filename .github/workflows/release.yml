@@ -144,6 +144,7 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
+          merge-multiple: true
           path: dist
 
       - name: Set up Python
