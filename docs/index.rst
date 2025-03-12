@@ -33,13 +33,16 @@ Key Features:
 - **Minimal dependencies** - Core functionality requires only psycopg3 - which
   can be installed side-by-side with psycopg2.
 - **Minimal infrastructure** - No need to run a separate service like
-  RabbitMQ or redis. Every feature is built on top of Postgres.
+  RabbitMQ or redis. Every feature is built on top of Postgres. No need
+  for separate monitoring services like Flower or schedulers like Celery
+  Beat - everything is built-in to the worker.
 - **Plugins** - Several plugins including a :class:`dashboard<chancy.plugins.api.Api>`,
   :class:`workflows<chancy.plugins.workflow.WorkflowPlugin>`,
   :class:`cron jobs<chancy.plugins.cron.Cron>`, and :doc:`much more <chancy.plugins>`
-- **Flexible & Dynamic** - Queues can be created, deleted, and modified
-  at runtime. A single worker can handle many queues and mix threads,
-  processes, sub-interpreters, and asyncio jobs.
+- **Flexible** - A single worker can handle many queues and mix threads,
+  processes, sub-interpreters, and asyncio jobs, allowing powerful workflows
+  that use the optimal concurrency model for each job. Queues can be created,
+  deleted, modified, and paused at runtime.
 - **async-first** - Internals designed from the ground up to be async-first,
   but has minimal sync APIs for easy integration with existing non-async
   codebases.
