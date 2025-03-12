@@ -5,7 +5,6 @@ import os
 import warnings
 from multiprocessing.context import BaseContext
 
-import sys
 
 try:
     import resource
