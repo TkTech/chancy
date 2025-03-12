@@ -2,9 +2,10 @@ import asyncio
 import functools
 import multiprocessing
 import os
-import sys
 import warnings
 from multiprocessing.context import BaseContext
+
+import sys
 
 try:
     import resource
@@ -98,8 +99,10 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        signal.signal(signal.SIGALRM, cls.job_signal_handler)
-        signal.signal(signal.SIGUSR1, cls.job_signal_handler)
+        if hasattr(signal, "SIGALRM"):
+            signal.signal(signal.SIGALRM, cls.job_signal_handler)
+        if hasattr(signal, "SIGUSR1"):
+            signal.signal(signal.SIGUSR1, cls.job_signal_handler)
 
     async def push(self, job: QueuedJob) -> Future:
         job = await self.on_job_starting(job)
@@ -211,9 +214,9 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        if signum == signal.SIGALRM:
+        if hasattr(signal, "SIGALRM") and signum == signal.SIGALRM:
             raise TimeoutError("Job timed out.")
-        if signum == signal.SIGUSR1:
+        if hasattr(signal, "SIGUSR1") and signum == signal.SIGUSR1:
             raise CancelledError("Job was cancelled.")
 
     def _on_job_completed(
