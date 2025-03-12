@@ -139,7 +139,10 @@ jobs:
     needs: [test, docs]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
-    
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
