@@ -1,15 +1,18 @@
+name: Test and Release
+
 on:
   release:
     types:
       - published
-
-name: Release
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
 
 jobs:
-
-  sdist:
-    name: Creating source release & pure wheel
-
+  build:
+    name: Build Package
     runs-on: ubuntu-latest
 
     steps:
@@ -31,39 +34,126 @@ jobs:
       working-directory: chancy/plugins/api/ui
       run: npm run build
 
-    - name: Publishing
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-      run: |
-        uv build
-        uvx twine upload dist/*
+    - name: Build package
+      run: uv build
 
-  build_documentation:
-      name: Building & uploading documentation.
-      needs: [sdist]
-      runs-on: ubuntu-latest
-      steps:
-      - uses: actions/checkout@v2
+    - name: Upload wheel artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheel-package
+        path: dist/*.whl
+        retention-days: 1
 
-      - name: Setting up Python
-        uses: actions/setup-python@v4
+    - name: Upload source artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: source-package
+        path: dist/*.tar.gz
+        retention-days: 1
+
+  test:
+    name: "${{ matrix.os }} - Py${{ matrix.python-version }} - PG${{ matrix.pg }}"
+    needs: [build]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        pg: ["14", "15", "16", "17"]
+    env:
+      OS: ${{ matrix.os }}
+      PYTHON: ${{ matrix.python-version }}
+
+    steps:
+      - uses: actions/checkout@v4.1.6
+
+      - uses: ikalnytskyi/action-setup-postgres@v7
         with:
-          python-version: "3.13"
+          username: postgres
+          password: localtest
+          database: postgres
+          port: 8190
+          postgres-version: ${{ matrix.pg }}
+        id: postgres
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Installing uv
         run: pip install uv
 
-      - name: Installing Package
+      - name: Installing dependencies (Python)
         run: uv sync --all-extras
 
-      - name: Installing dependencies (Docs)
+      - name: Running tests
+        run: |
+          uv run pytest -s -vvvvv --cov=chancy --cov-report=xml
+
+      - name: Uploading coverage
+        uses: codecov/codecov-action@v4
+        with:
+          env_vars: OS,PYTHON
+          fail_ci_if_error: true
+          flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+          slug: TkTech/chancy
+
+  docs:
+    name: Building Documentation
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4.1.6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Installing dependencies
         run: sudo apt-get install graphviz
 
-      - name: Building documentation
+      - name: Installing uv
+        run: pip install uv
+
+      - name: Installing dependencies (Python)
+        run: uv sync --all-extras
+
+      - name: Building docs
         run: |
           cd docs && uv run make clean html
 
       - name: Publishing documentation
+        if: github.event_name == 'release'
         run: |
           uv run ghp-import -f -n -p docs/_build/html
+
+  release:
+    name: Release to PyPI
+    needs: [test, docs]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Publishing to PyPI
+        run: |
+          uv publish

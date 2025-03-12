@@ -2,9 +2,16 @@ import asyncio
 import functools
 import multiprocessing
 import os
+import warnings
 from multiprocessing.context import BaseContext
 
-import resource
+import sys
+
+try:
+    import resource
+except ImportError:
+    # Windows doesn't have the `resource` module
+    resource = None
 import signal
 from asyncio import Future, CancelledError
 from concurrent.futures import ProcessPoolExecutor
@@ -92,8 +99,10 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        signal.signal(signal.SIGALRM, cls.job_signal_handler)
-        signal.signal(signal.SIGUSR1, cls.job_signal_handler)
+        if hasattr(signal, "SIGALRM"):
+            signal.signal(signal.SIGALRM, cls.job_signal_handler)
+        if hasattr(signal, "SIGUSR1"):
+            signal.signal(signal.SIGUSR1, cls.job_signal_handler)
 
     async def push(self, job: QueuedJob) -> Future:
         job = await self.on_job_starting(job)
@@ -151,29 +160,39 @@ class ProcessExecutor(ConcurrentExecutor):
         try:
             pids_for_job[job.id] = os.getpid()
             func, kwargs = cls.get_function_and_kwargs(job)
-            if asyncio.iscoroutinefunction(func):
-                raise ValueError(
-                    f"Function {job.func!r} is an async function, which is not"
-                    f" supported by the {cls.__name__!r} executor. Use the "
-                    "AsyncExecutor instead."
+
+            if job.limits and resource is None:
+                warnings.warn(
+                    f"Resource limits are not supported on this,"
+                    f" platform ignoring limits for job {job.id}.",
+                    RuntimeWarning,
                 )
-
-            for limit in job.limits:
-                match limit.type_:
-                    case Limit.Type.MEMORY:
-                        previous_soft, _ = resource.getrlimit(
-                            resource.RLIMIT_AS
-                        )
-                        resource.setrlimit(
-                            resource.RLIMIT_AS, (limit.value, -1)
-                        )
-                        cleanup.append(
-                            lambda: resource.setrlimit(
-                                resource.RLIMIT_AS, (previous_soft, -1)
+            else:
+                for limit in job.limits:
+                    match limit.type_:
+                        case Limit.Type.MEMORY:
+                            previous_soft, _ = resource.getrlimit(
+                                resource.RLIMIT_AS
                             )
-                        )
+                            resource.setrlimit(
+                                resource.RLIMIT_AS, (limit.value, -1)
+                            )
+                            cleanup.append(
+                                lambda: resource.setrlimit(
+                                    resource.RLIMIT_AS, (previous_soft, -1)
+                                )
+                            )
 
-            result = func(**kwargs)
+            if asyncio.iscoroutinefunction(func):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(func(**kwargs))
+                finally:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    loop.close()
+            else:
+                result = func(**kwargs)
         finally:
             pids_for_job.pop(job.id)
             for clean in cleanup:
@@ -195,9 +214,9 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        if signum == signal.SIGALRM:
+        if hasattr(signal, "SIGALRM") and signum == signal.SIGALRM:
             raise TimeoutError("Job timed out.")
-        if signum == signal.SIGUSR1:
+        if hasattr(signal, "SIGUSR1") and signum == signal.SIGUSR1:
             raise CancelledError("Job was cancelled.")
 
     def _on_job_completed(
@@ -214,11 +233,10 @@ class ProcessExecutor(ConcurrentExecutor):
         if exc is None:
             job, result = future.result()
 
-        f = asyncio.run_coroutine_threadsafe(
+        asyncio.run_coroutine_threadsafe(
             self.on_job_completed(job=job, exc=exc, result=result),
             loop,
         )
-        f.result()
 
     async def stop(self):
         for task in self.timeouts.values():
@@ -242,3 +260,18 @@ class ProcessExecutor(ConcurrentExecutor):
         pid = self.pids_for_job.get(ref.identifier)
         if pid is not None:
             os.kill(pid, signal.SIGUSR1)
+
+    def get_default_concurrency(self) -> int:
+        """
+        Get the default concurrency level for this executor.
+
+        This method is called when the queue's concurrency level is set to
+        None. It should return the number of jobs that can be processed
+        concurrently by this executor.
+
+        Default is the number of CPUs on the system.
+        """
+        # Only available in 3.13+
+        if hasattr(os, "process_cpu_count"):
+            return os.process_cpu_count() or 1
+        return os.cpu_count() or 1

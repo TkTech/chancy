@@ -33,13 +33,18 @@ def setup_default_logger(level: int = logging.INFO):
     if logger.handlers:
         return logger
 
-    handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter(
-            fmt="%(asctime)s • %(levelname)s • %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+    try:
+        from rich.logging import RichHandler
+
+        handler = RichHandler()
+    except ImportError:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                fmt="[%(asctime)s][%(levelname)s] %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
         )
-    )
 
     logger.handlers[:] = [handler]
     return logger
@@ -391,8 +396,14 @@ class Chancy:
 
         .. code-block:: python
 
+            from chancy import Chancy, Job
+
+            @job()
+            def my_job():
+                print("Hello, world!")
+
             async with Chancy("postgresql://localhost/chancy") as chancy:
-                await chancy.push(Job.from_func(my_job))
+                await chancy.push(my_job)
 
         .. seealso::
 
@@ -415,8 +426,14 @@ class Chancy:
 
         .. code-block:: python
 
+            from chancy import Chancy, Job
+
+            @job()
+            def my_job():
+                print("Hello, world!")
+
             with Chancy("postgresql://localhost/chancy") as chancy:
-                chancy.sync_push(Job.from_func(my_job))
+                chancy.sync_push(my_job)
 
         .. seealso::
 
@@ -580,7 +597,7 @@ class Chancy:
                 await cursor.execute(self._get_job_sql(), [ref.identifier])
                 record = await cursor.fetchone()
                 if record is None:
-                    raise KeyError(f"Job {ref.identifier} not found.")
+                    return None
                 return QueuedJob.unpack(record)
 
     async def wait_for_job(

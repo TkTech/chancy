@@ -1,3 +1,4 @@
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 import asyncio
@@ -60,12 +61,6 @@ class ThreadedExecutor(ConcurrentExecutor):
         running the job, and returning the result.
         """
         func, kwargs = Executor.get_function_and_kwargs(job)
-        if asyncio.iscoroutinefunction(func):
-            raise ValueError(
-                f"Function {job.func!r} is an async function, which is not"
-                f" supported by the {self.__class__.__name__!r} executor. Use"
-                f" the AsyncExecutor instead."
-            )
 
         time_limit = next(
             (
@@ -76,15 +71,25 @@ class ThreadedExecutor(ConcurrentExecutor):
             None,
         )
 
+        timer = None
         if time_limit:
             timer = threading.Timer(time_limit, self._timeout_handler)
             timer.start()
-            try:
+
+        try:
+            if asyncio.iscoroutinefunction(func):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    result = loop.run_until_complete(func(**kwargs))
+                finally:
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    loop.close()
+            else:
                 result = func(**kwargs)
-            finally:
+        finally:
+            if timer:
                 timer.cancel()
-        else:
-            result = func(**kwargs)
 
         return job, result
 
@@ -110,3 +115,21 @@ class ThreadedExecutor(ConcurrentExecutor):
     async def stop(self):
         self.pool.shutdown(cancel_futures=True)
         await super().stop()
+
+    def get_default_concurrency(self) -> int:
+        """
+        Get the default concurrency level for this executor.
+
+        This method is called when the queue's concurrency level is set to
+        None. It should return the number of jobs that can be processed
+        concurrently by this executor.
+
+        On Python 3.13+, defaults to the number of logical CPUs on the system
+        plus 4. On older versions of Python, defaults to the number of CPUs on
+        the system plus 4. This mimics the behavior of Python's built-in
+        ThreadPoolExecutor.
+        """
+        # Only available in 3.13+
+        if hasattr(os, "process_cpu_count"):
+            return min(32, (os.process_cpu_count() or 1) + 4)
+        return min(32, (os.cpu_count() or 1) + 4)

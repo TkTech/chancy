@@ -1,6 +1,7 @@
 import asyncio
 import inspect
 from dataclasses import dataclass
+from itertools import chain
 from typing import Callable, Awaitable
 
 
@@ -19,6 +20,8 @@ class Hub:
     """
 
     def __init__(self):
+        # Called when any event is emitted, useful for debugging.
+        self._wildcard_handlers: list[EventCallbackT] = []
         self._handlers: dict[str, list[EventCallbackT]] = {}
         self._waiters: dict[str, set[asyncio.Future]] = {}
 
@@ -28,12 +31,27 @@ class Hub:
         """
         self._handlers.setdefault(event, []).append(f)
 
+    def on_any(self, f: EventCallbackT):
+        """
+        Register a handler for any event.
+        """
+        self._wildcard_handlers.append(f)
+
     def remove(self, event: str, handler: EventCallbackT):
         """
         Remove a handler from an event.
         """
         try:
             self._handlers.get(event, []).remove(handler)
+        except ValueError:
+            pass
+
+    def remove_on_any(self, handler: EventCallbackT):
+        """
+        Remove a handler from any event.
+        """
+        try:
+            self._wildcard_handlers.remove(handler)
         except ValueError:
             pass
 
@@ -56,7 +74,9 @@ class Hub:
         """
         result = Event(name=event, body=body)
 
-        for handler in self._handlers.get(event, []):
+        for handler in chain(
+            self._handlers.get(event, []), self._wildcard_handlers
+        ):
             if inspect.iscoroutinefunction(handler):
                 await handler(result)
             else:

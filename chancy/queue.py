@@ -67,7 +67,9 @@ class Queue:
 
     _ = KW_ONLY
     #: The number of jobs that can be processed concurrently per worker.
-    concurrency: int = 1
+    #: If None, the concurrency level will be determined by the worker's
+    #: core count, unless overridden by a plugin.
+    concurrency: int | None = None
     #: The tags that determine which workers will process this queue.
     tags: set[str] = dataclasses.field(default_factory=lambda: {r".*"})
     #: The state of the queue.

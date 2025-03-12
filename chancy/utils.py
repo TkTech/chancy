@@ -170,15 +170,13 @@ class TaskManager:
         # wait_for_shutdown() will pick up new tasks.
         self._added_event = asyncio.Event()
 
-    def add(self, task: Coroutine, *, name: str | None = None) -> asyncio.Task:
+    def add(self, name: str, task: Coroutine) -> asyncio.Task:
         """
         Add a task to the manager.
         """
         task = asyncio.create_task(task)
         task.add_done_callback(self._tasks.remove)
-
-        if name:
-            task.set_name(name)
+        task.set_name(name)
 
         self._tasks.add(task)
         self._added_event.set()
@@ -228,6 +226,22 @@ class TaskManager:
             )
             self._tasks = (pending | self._tasks) - done
 
+    async def cancel(self, name: str):
+        """
+        Cancel a task by name and wait for it to complete.
+
+        If the task is not found, a KeyError is raised.
+        """
+        for task in self._tasks:
+            if task.get_name() == name:
+                if not task.cancel("Cancelled by TaskManager"):
+                    return
+
+                await asyncio.wait({task})
+                return
+
+        raise KeyError(f"No task with name {name!r}")
+
     def __len__(self):
         return len(self._tasks)
 
@@ -238,4 +252,4 @@ class TaskManager:
         return task in self._tasks
 
     def __repr__(self):
-        return f"<TaskManager tasks={len(self._tasks)!r}>"
+        return f"<{self.__class__.__name__} tasks={len(self._tasks)!r}>"
