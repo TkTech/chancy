@@ -4,6 +4,7 @@ import {useJob, useJobs} from '../hooks/useJobs.tsx';
 import {Link, useParams, useSearchParams} from 'react-router-dom';
 import {statusToColor} from '../utils.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
+import React from 'react';
 
 export function Job() {
   const { url } = useServerConfiguration();
@@ -161,48 +162,66 @@ export function Job() {
 export function Jobs() {
   const {url} = useServerConfiguration();
   const [searchParams, setSearchParams] = useSearchParams();
-  const state = searchParams.get('state') || 'pending';
+  const location = window.location.pathname;
+  const pathParts = location.split('/');
+  // Extract the state from URL path or default to 'pending'
+  const state = pathParts.length > 2 && ['pending', 'running', 'succeeded', 'failed', 'retrying'].includes(pathParts[2])
+    ? pathParts[2]
+    : 'pending';
+    
+  const func = searchParams.get('func') || undefined;
+  const [funcInput, setFuncInput] = React.useState(func || '');
 
   const { data: jobs, isLoading, dataUpdatedAt } = useJobs({
     url: url,
-    state: state
+    state: state,
+    func: func
   });
-
-  const setState = (state: string) => {
-    setSearchParams({
-      ...searchParams,
-      state: state
-    });
+  
+  const updateFuncFilter = (value: string) => {
+    setFuncInput(value);
+    const newParams = {...Object.fromEntries(searchParams.entries())};
+    if (value) {
+      newParams.func = value;
+    } else {
+      delete newParams.func;
+    }
+    setSearchParams(newParams);
   }
 
   if (isLoading) return <Loading />;
 
-  function stateFilter({ stateName, stateLabel }: { stateName: string, stateLabel: string }) {
-    return (
-      <button
-        key={stateName}
-        className={`btn btn-${statusToColor(stateName)} btn-sm me-2 ${state === stateName ? 'active' : ''}`}
-        onClick={() => setState(stateName)}
-      >
-        {stateLabel}
-      </button>
-    );
-  }
-
   return (
     <div className={"container-fluid"}>
-      <h2 className={"mb-3"}>
-        Jobs - <span className={`text-${statusToColor(state)}`}>{state}</span>
-      </h2>
-      <div className={'mb-1 w-100'}>
-        {stateFilter({stateName: 'pending', stateLabel: 'Pending'})}
-        {stateFilter({stateName: 'running', stateLabel: 'Running'})}
-        {stateFilter({stateName: 'succeeded', stateLabel: 'Succeeded'})}
-        {stateFilter({stateName: 'failed', stateLabel: 'Failed'})}
-        {stateFilter({stateName: 'retrying', stateLabel: 'Retrying'})}
-        <small className={'text-muted'}>
-          Last fetched: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}
-        </small>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h2 className="mb-0">
+          <span className={`text-${statusToColor(state)}`}>
+            {state.charAt(0).toUpperCase() + state.slice(1)} Jobs
+          </span>
+        </h2>
+        <div className="d-flex align-items-center">
+          <small className="text-muted me-2">
+            Last updated: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}
+          </small>
+          <div className="input-group input-group-sm me-2" style={{ width: "250px" }}>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Search by function name"
+              value={funcInput}
+              onChange={(e) => updateFuncFilter(e.target.value)}
+            />
+            {func && (
+              <button 
+                className="btn btn-outline-secondary" 
+                type="button"
+                onClick={() => updateFuncFilter('')}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <table className={'table table-hover mb-0'}>

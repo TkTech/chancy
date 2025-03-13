@@ -61,9 +61,35 @@ function Layout() {
     )
   }
   
-    function navLink(link: {to: string, text: string, needs?: string[]}) {
+    function navLink(link: {to: string, text: string, needs?: string[], subLinks?: {to: string, text: string}[]}) {
     if (link.needs && configuration && !link.needs.every(need => configuration.plugins.includes(need))) {
       return null;
+    }
+
+    if (link.subLinks) {
+      return (
+        <li className="nav-item w-100 mb-2">
+          <NavLink
+            to={link.to}
+            end={!!link.subLinks}
+            className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}
+          >
+            {link.text}
+          </NavLink>
+          <ul className="nav flex-column ms-3 mt-1">
+            {link.subLinks.map(subLink => (
+              <li key={subLink.to} className="nav-item">
+                <NavLink
+                  to={subLink.to}
+                  className={({isActive}) => `nav-link py-1 ${isActive ? 'active' : ''}`}
+                >
+                  {subLink.text}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </li>
+      );
     }
 
     return (
@@ -82,7 +108,17 @@ function Layout() {
     <div className="d-flex">
       <div className="flex-shrink-0 vh-100 border-end" style={{width: "280px"}}>
         <ul className="nav nav-pills flex-column mb-auto p-3">
-          {navLink({to: "/jobs", text: "Jobs"})}
+          {navLink({
+            to: "/jobs",
+            text: "Jobs",
+            subLinks: [
+              { to: "/jobs/pending", text: "Pending" },
+              { to: "/jobs/running", text: "Running" },
+              { to: "/jobs/succeeded", text: "Succeeded" },
+              { to: "/jobs/failed", text: "Failed" },
+              { to: "/jobs/retrying", text: "Retrying" },
+            ]
+          })}
           {navLink({to: "/queues", text: "Queues"})}
           {navLink({to: "/workers", text: "Workers"})}
           {navLink({to: "/crons", text: "Cron", needs: ["Cron"]})}

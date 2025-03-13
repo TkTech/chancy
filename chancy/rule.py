@@ -40,6 +40,12 @@ class Rule(SQLAble):
     def __and__(self, other: "Condition") -> "AndCondition":
         return AndCondition(self, other)
 
+    def contains(self, value: str) -> "Condition":
+        """
+        String contains a lowercase string.
+        """
+        return Condition(self.to_sql(), "ILIKE", f"%{value}%")
+
     def to_sql(self) -> sql.Composable:
         return sql.Identifier(self.field)
 
