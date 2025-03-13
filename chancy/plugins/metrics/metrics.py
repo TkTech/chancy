@@ -371,6 +371,8 @@ class Metrics(Plugin):
         if not self.modified_metrics:
             return
 
+        chancy.log.info("Pushing metrics to the database...")
+
         async with chancy.pool.connection() as conn:
             for metric_key, resolution in self.modified_metrics:
                 if (
@@ -474,6 +476,7 @@ class Metrics(Plugin):
         """
         Load all metrics from the database on startup.
         """
+        chancy.log.info("Loading metrics from the database...")
         async with chancy.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(
