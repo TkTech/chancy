@@ -17,6 +17,7 @@ import {Worker, Workers} from './pages/Workers.tsx';
 import {Job, Jobs} from './pages/Jobs.tsx';
 import {Cron, Crons} from './pages/Crons.tsx';
 import {Workflow, Workflows} from './pages/Workflows.tsx';
+import {Metrics, MetricDetail} from './pages/Metrics.tsx';
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,8 @@ const router = createBrowserRouter([
       { path: "/crons/:cron_id", element: <Cron />},
       { path: "/workflows", element: <Workflows />},
       { path: "/workflows/:workflow_id", element: <Workflow />},
+      { path: "/metrics", element: <Metrics />},
+      { path: "/metrics/:metricKey", element: <MetricDetail />},
     ]
   }
 ]);

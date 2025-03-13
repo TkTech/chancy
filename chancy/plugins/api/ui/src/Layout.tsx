@@ -123,6 +123,7 @@ function Layout() {
           {navLink({to: "/workers", text: "Workers"})}
           {navLink({to: "/crons", text: "Cron", needs: ["Cron"]})}
           {navLink({to: "/workflows", text: "Workflows", needs: ["WorkflowPlugin"]})}
+          {navLink({to: "/metrics", text: "Metrics", needs: ["Metrics"]})}
         </ul>
       </div>
       <div className="flex-grow-1 overflow-x-scroll vh-100 p-3">

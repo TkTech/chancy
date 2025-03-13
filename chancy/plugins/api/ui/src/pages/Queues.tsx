@@ -1,15 +1,39 @@
+import { useState } from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
 import {useWorkers} from '../hooks/useWorkers.tsx';
+import {useMetricDetail} from '../hooks/useMetrics.tsx';
+import {MetricChart, ResolutionSelector} from '../components/MetricCharts';
 
 export function Queue() {
   const { name } = useParams<{name: string}>();
   const { url } = useServerConfiguration();
   const { data: queues, isLoading } = useQueues(url);
   const { data: workers, isLoading: workersLoading } = useWorkers(url);
+  const [resolution, setResolution] = useState<string>('5min');
+  
+  // Fetch throughput metrics for this queue
+  const { data: throughputData, isLoading: throughputLoading } = useMetricDetail({
+    url,
+    type: 'queue',
+    name: `${name}:throughput` || '',
+    resolution
+  });
+  
+  // Fetch execution time metrics for this queue
+  const { data: executionTimeData, isLoading: executionTimeLoading } = useMetricDetail({
+    url,
+    type: 'queue',
+    name: `${name}:execution_time` || '',
+    resolution
+  });
 
+  // Check if metrics plugin is available
+  const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
+  const metricsLoading = throughputLoading || executionTimeLoading;
+  
   if (isLoading || workersLoading) return <Loading />;
   const queue = queues?.find(queue => queue.name === name);
 
@@ -73,6 +97,60 @@ export function Queue() {
         </tr>
         </tbody>
       </table>
+      
+      {hasMetricsPlugin && (
+        <div className="mt-4">
+          <h3>Queue Metrics</h3>
+          <ResolutionSelector resolution={resolution} setResolution={setResolution} />
+          
+          <div className="row">
+            {/* Throughput Chart */}
+            <div className="col-md-6 mb-4">
+              <div className="card h-100">
+                <div className="card-header">
+                  <h5 className="mb-0">Throughput</h5>
+                </div>
+                <div className="card-body">
+                  {throughputLoading ? (
+                    <Loading />
+                  ) : (
+                    <>
+                      {throughputData?.default && throughputData.default.length > 0 ? (
+                        <MetricChart points={throughputData.default} height={250} />
+                      ) : (
+                        <div className="alert alert-info">No throughput data available.</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Execution Time Chart */}
+            <div className="col-md-6 mb-4">
+              <div className="card h-100">
+                <div className="card-header">
+                  <h5 className="mb-0">Execution Time</h5>
+                </div>
+                <div className="card-body">
+                  {executionTimeLoading ? (
+                    <Loading />
+                  ) : (
+                    <>
+                      {executionTimeData?.default && executionTimeData.default.length > 0 ? (
+                        <MetricChart points={executionTimeData.default} height={250} isHistogram={true} />
+                      ) : (
+                        <div className="alert alert-info">No execution time data available.</div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <h3 className={"mt-4"}>Active Workers</h3>
       <p>
         These workers have announced that they are actively accepting jobs from the <code>{queue.name}</code> queue.

@@ -782,7 +782,10 @@ class Worker:
         try:
             async with asyncio.timeout(self.shutdown_timeout) as cm:
                 # Stop accepting new queues and queue changes.
-                await self.manager.cancel("queues")
+                try:
+                    await self.manager.cancel("queues")
+                except KeyError:
+                    pass
                 # Delete all the queues we know about so the executors can
                 # clean up.
                 self._queues.clear()
