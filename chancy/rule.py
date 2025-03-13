@@ -116,7 +116,7 @@ class JobRules:
 
     class Job(Rule):
         def __init__(self):
-            super().__init__("payload->>'func'")
+            super().__init__("func")
 
     class State(Rule):
         def __init__(self):
