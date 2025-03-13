@@ -18,7 +18,7 @@ export function Queue() {
   const { data: throughputData, isLoading: throughputLoading } = useMetricDetail({
     url,
     type: 'queue',
-    name: `${name}:throughput` || '',
+    name: `${name}:throughput`,
     resolution
   });
   
@@ -26,14 +26,13 @@ export function Queue() {
   const { data: executionTimeData, isLoading: executionTimeLoading } = useMetricDetail({
     url,
     type: 'queue',
-    name: `${name}:execution_time` || '',
+    name: `${name}:execution_time`,
     resolution
   });
 
   // Check if metrics plugin is available
   const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
-  const metricsLoading = throughputLoading || executionTimeLoading;
-  
+
   if (isLoading || workersLoading) return <Loading />;
   const queue = queues?.find(queue => queue.name === name);
 
