@@ -4,8 +4,8 @@ import {Link, useParams} from 'react-router-dom';
 import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
 import {useWorkers} from '../hooks/useWorkers.tsx';
-import {useMetricDetail} from '../hooks/useMetrics.tsx';
-import {MetricChart, ResolutionSelector} from '../components/MetricCharts';
+import {QueueMetrics, ResolutionSelector, SparklineChart} from '../components/MetricCharts';
+import {useQueueThroughput} from '../hooks/useMetrics';
 
 export function Queue() {
   const { name } = useParams<{name: string}>();
@@ -14,22 +14,6 @@ export function Queue() {
   const { data: workers, isLoading: workersLoading } = useWorkers(url);
   const [resolution, setResolution] = useState<string>('5min');
   
-  // Fetch throughput metrics for this queue
-  const { data: throughputData, isLoading: throughputLoading } = useMetricDetail({
-    url,
-    type: 'queue',
-    name: `${name}:throughput`,
-    resolution
-  });
-  
-  // Fetch execution time metrics for this queue
-  const { data: executionTimeData, isLoading: executionTimeLoading } = useMetricDetail({
-    url,
-    type: 'queue',
-    name: `${name}:execution_time`,
-    resolution
-  });
-
   // Check if metrics plugin is available
   const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
 
@@ -99,54 +83,14 @@ export function Queue() {
       
       {hasMetricsPlugin && (
         <div className="mt-4">
-          <h3>Queue Metrics</h3>
+          <h3 className={"mb-3"}>Queue Metrics</h3>
           <ResolutionSelector resolution={resolution} setResolution={setResolution} />
           
-          <div className="row">
-            {/* Throughput Chart */}
-            <div className="col-md-6 mb-4">
-              <div className="card h-100">
-                <div className="card-header">
-                  <h5 className="mb-0">Throughput</h5>
-                </div>
-                <div className="card-body">
-                  {throughputLoading ? (
-                    <Loading />
-                  ) : (
-                    <>
-                      {throughputData?.default && throughputData.default.length > 0 ? (
-                        <MetricChart points={throughputData.default} height={250} />
-                      ) : (
-                        <div className="alert alert-info">No throughput data available.</div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            {/* Execution Time Chart */}
-            <div className="col-md-6 mb-4">
-              <div className="card h-100">
-                <div className="card-header">
-                  <h5 className="mb-0">Execution Time</h5>
-                </div>
-                <div className="card-body">
-                  {executionTimeLoading ? (
-                    <Loading />
-                  ) : (
-                    <>
-                      {executionTimeData?.default && executionTimeData.default.length > 0 ? (
-                        <MetricChart points={executionTimeData.default} height={250} isHistogram={true} />
-                      ) : (
-                        <div className="alert alert-info">No execution time data available.</div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <QueueMetrics
+            apiUrl={url}
+            queueName={queue.name}
+            resolution={resolution}
+          />
         </div>
       )}
       
@@ -180,9 +124,25 @@ export function Queue() {
   );
 }
 
+// QueueThroughputSpark component for displaying throughput sparkline in the queue list
+function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl: string | null }) {
+  const { data: throughputPoints, isLoading } = useQueueThroughput({
+    url: apiUrl,
+    queueName,
+    enabled: !!apiUrl,
+  });
+  
+  if (isLoading || !throughputPoints) {
+    return <div style={{ width: 80, height: 30 }} />;
+  }
+  
+  return <SparklineChart points={throughputPoints} />;
+}
+
 export function Queues() {
   const { url } = useServerConfiguration();
   const { data: queues, isLoading } = useQueues(url);
+  const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
 
   if (isLoading) return <Loading />;
 
@@ -194,6 +154,7 @@ export function Queues() {
         <tr>
           <th>Name</th>
           <th className={"w-100"}>Tags</th>
+          {hasMetricsPlugin && <th className="text-center">Throughput</th>}
           <th className={"text-center"}>State</th>
         </tr>
         </thead>
@@ -208,6 +169,11 @@ export function Queues() {
                 <span key={tag} className={"badge bg-primary me-1"}>{tag}</span>
               ))}
             </td>
+            {hasMetricsPlugin && (
+              <td className="text-center">
+                <QueueThroughputSpark queueName={queue.name} apiUrl={url} />
+              </td>
+            )}
             <td className={"text-center"}>
               <span className={`badge bg-${queue.state === 'active' ? 'success' : 'danger'}`}>{queue.state}</span>
             </td>

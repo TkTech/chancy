@@ -20,9 +20,10 @@ class MetricsInitialMigration(Migration):
             sql.SQL(
                 """
                 CREATE TABLE IF NOT EXISTS {metrics_table} (
-                    -- Primary key: metric_key + resolution combination
+                    -- Primary key: metric_key + resolution + worker_id combination
                     metric_key VARCHAR(255) NOT NULL,
                     resolution VARCHAR(10) NOT NULL,  -- '1min', '5min', '1hour', etc.
+                    worker_id VARCHAR(255) NOT NULL,  -- Worker identifier
                     
                     -- Storage for time-series data
                     -- timestamp -> value mapping, stored in descending order (newest first)
@@ -34,7 +35,7 @@ class MetricsInitialMigration(Migration):
                     metadata JSONB NOT NULL DEFAULT '{{}}',
                     
                     -- Primary key
-                    PRIMARY KEY (metric_key, resolution)
+                    PRIMARY KEY (metric_key, resolution, worker_id)
                 )
                 """
             ).format(metrics_table=sql.Identifier(f"{migrator.prefix}metrics"))

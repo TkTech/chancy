@@ -99,6 +99,7 @@ export function MetricDetail() {
   
   const { type, name } = getParts();
   
+  // Get aggregated metrics across all workers
   const { data: metrics, isLoading } = useMetricDetail({ 
     url, 
     type,
@@ -113,11 +114,8 @@ export function MetricDetail() {
       errorMessage={`No metrics data available for ${metricKey}`}
     >
       <div className="container-fluid">
-        <h2 className="mb-2">
+        <h2 className="mb-4">
           {metricKey}
-          <Link to="/metrics" className="btn btn-outline-secondary btn-sm ms-3">
-            Back to Metrics List
-          </Link>
         </h2>
         
         <ResolutionSelector resolution={resolution} setResolution={setResolution} />
@@ -129,7 +127,7 @@ export function MetricDetail() {
               'avg' in points[0].value;
             
             // Format subtitle label
-            const subtitleLabel = subtype === 'default' 
+            const subtitleLabel = subtype === 'default'
               ? `${metricKey}` 
               : `${metricKey}:${subtype}`;
             

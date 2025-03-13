@@ -1,8 +1,10 @@
-import { 
+import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
-import { MetricPoint } from '../hooks/useMetrics';
+import { MetricPoint, useMetricDetail } from '../hooks/useMetrics';
+import { Loading } from './Loading';
+import { Link } from 'react-router-dom';
 
 // Function to format timestamps
 export const formatTimestamp = (timestamp: string) => {
@@ -53,6 +55,7 @@ export const ResolutionSelector = ({ resolution, setResolution }: {
   </div>
 );
 
+
 // Custom tooltip style settings
 export const tooltipStyles = {
   wrapperStyle: {
@@ -70,6 +73,40 @@ export const tooltipStyles = {
     }
     return time;
   }
+};
+
+// Sparkline-style chart for compact display in tables
+export const SparklineChart = ({ 
+  points, 
+  height = 30,
+  width = 80
+}: { 
+  points: MetricPoint[];
+  height?: number;
+  width?: number;
+}) => {
+  if (!points || points.length === 0) {
+    return <div style={{ height, width }} className="text-center">-</div>;
+  }
+  
+  const data = points.map(point => ({
+    value: formatValue(point.value)
+  })).reverse();
+
+  return (
+    <ResponsiveContainer width={width} height={height}>
+      <LineChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+        <Line 
+          type="monotone" 
+          dataKey="value" 
+          stroke="#8884d8" 
+          strokeWidth={1.5}
+          dot={false}
+          isAnimationActive={false}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  );
 };
 
 // Common chart components
@@ -100,7 +137,7 @@ export const MetricChart = ({
   );
   
   // Set stats to display for histogram
-  const metricHistogramStats = isMetricHistogram ? ['avg', 'count', 'min', 'max'] : [];
+  const metricHistogramStats = isMetricHistogram ? ['avg', 'min', 'max'] : [];
   const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#00C49F'];
 
   if (isMetricHistogram) {
@@ -175,3 +212,97 @@ export const MetricChart = ({
     </ResponsiveContainer>
   );
 };
+
+// Reusable QueueMetrics component
+export function QueueMetrics({ 
+  apiUrl, 
+  queueName, 
+  resolution, 
+  workerId 
+}: {
+  apiUrl: string | null;
+  queueName: string;
+  resolution: string;
+  workerId?: string;
+}) {
+  // Load throughput metrics
+  const { data: throughputData, isLoading: throughputLoading } = useMetricDetail({
+    url: apiUrl,
+    type: 'queue',
+    name: `${queueName}:throughput`,
+    resolution,
+    enabled: !!apiUrl,
+    worker_id: workerId,
+  });
+  
+  // Load execution time metrics
+  const { data: executionTimeData, isLoading: executionTimeLoading } = useMetricDetail({
+    url: apiUrl,
+    type: 'queue',
+    name: `${queueName}:execution_time`,
+    resolution,
+    enabled: !!apiUrl,
+    worker_id: workerId,
+  });
+  
+  const hasThroughputData = throughputData && Object.keys(throughputData).length > 0;
+  const hasExecutionTimeData = executionTimeData && Object.keys(executionTimeData).length > 0;
+  
+  return (
+    <>
+      <div className={"d-flex mb-3 flex-wrap align-items-center"}>
+        <h4 className="flex-grow-1 mb-0">
+          {queueName}
+        </h4>
+        <Link to={`/queues/${queueName}`} className="btn btn-sm btn-outline-primary ms-3">
+          View Queue Details
+        </Link>
+      </div>
+      
+      <div className="row">
+        {/* Throughput Card */}
+        <div className="col-md-6 mb-4">
+          <div className="card h-100">
+            <div className="card-header">
+              <h5 className="mb-0">Throughput</h5>
+            </div>
+            <div className="card-body">
+              {throughputLoading ? (
+                <Loading />
+              ) : !hasThroughputData ? (
+                <div className="alert alert-secondary">No throughput data available</div>
+              ) : (
+                <MetricChart 
+                  points={throughputData.default || []}
+                  height={200}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Execution Time Card */}
+        <div className="col-md-6 mb-4">
+          <div className="card h-100">
+            <div className="card-header">
+              <h5 className="mb-0">Execution Time</h5>
+            </div>
+            <div className="card-body">
+              {executionTimeLoading ? (
+                <Loading />
+              ) : !hasExecutionTimeData ? (
+                <div className="alert alert-secondary">No execution time data available</div>
+              ) : (
+                <MetricChart 
+                  points={executionTimeData.default || []}
+                  isHistogram={true}
+                  height={200}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

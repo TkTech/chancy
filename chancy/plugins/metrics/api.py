@@ -2,8 +2,11 @@
 API endpoints for the metrics plugin.
 """
 
+import json
 from typing import Optional
 
+from psycopg import sql
+from psycopg.rows import dict_row
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -137,6 +140,8 @@ class MetricsApiPlugin(ApiPlugin):
     async def get_metric_detail(request: Request, *, chancy, worker):
         """
         Get detailed data for a specific metric.
+        
+        Can be filtered by worker_id with the worker_id query parameter.
         """
         metrics_plugin = MetricsApiPlugin().get_metrics_plugin(chancy)
         if not metrics_plugin:
@@ -150,32 +155,84 @@ class MetricsApiPlugin(ApiPlugin):
         metric_name = request.path_params.get("name", "")
         resolution = request.query_params.get("resolution", "5min")
         limit = int(request.query_params.get("limit", "60"))
+        worker_id = request.query_params.get("worker_id")
 
         metric_key = f"{metric_type}:{metric_name}"
+        
+        # If worker_id is provided, query metrics directly from the database for that worker
+        if worker_id:
+            result = {}
+            async with chancy.pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cursor:
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            SELECT 
+                                metric_key, timestamps, values
+                            FROM 
+                                {metrics_table}
+                            WHERE 
+                                worker_id = %s AND
+                                resolution = %s AND
+                                metric_key LIKE %s
+                            LIMIT 100
+                            """
+                        ).format(
+                            metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
+                        ),
+                        (worker_id, resolution, f"{metric_key}%"),
+                    )
+                    
+                    rows = await cursor.fetchall()
+                    
+                    # Process results
+                    for row in rows:
+                        row_metric_key = row["metric_key"]
+                        timestamps = row["timestamps"]
+                        values = row["values"]
+                        
+                        # Extract the sub key (part after the metric_key)
+                        subkey = row_metric_key[len(metric_key):].lstrip(":")
+                        if not subkey:
+                            subkey = "default"
+                            
+                        # Process the points
+                        metric_data = []
+                        for i in range(min(limit, len(timestamps))):
+                            value = (
+                                json.loads(values[i])
+                                if isinstance(values[i], str)
+                                else values[i]
+                            )
+                            metric_data.append(
+                                {"timestamp": timestamps[i].isoformat(), "value": value}
+                            )
+                        
+                        result[subkey] = metric_data
+        else:
+            # Get all metrics matching this pattern (could include multiple submetrics)
+            metrics = metrics_plugin.get_metrics(
+                metric_prefix=metric_key, resolution=resolution, limit=limit
+            )
 
-        # Get all metrics matching this pattern (could include multiple submetrics)
-        metrics = metrics_plugin.get_metrics(
-            metric_prefix=metric_key, resolution=resolution, limit=limit
-        )
+            # Transform metrics data for API response
+            result = {}
+            for key, resolutions in metrics.items():
+                # Extract the part after "type:name:"
+                subkey = key[len(metric_key) :].lstrip(":")
 
-        # Transform metrics data for API response
-        result = {}
-        for key, resolutions in metrics.items():
-            # Extract the part after "type:name:"
-            subkey = key[len(metric_key) :].lstrip(":")
+                if not subkey:  # This is the exact match
+                    subkey = "default"
 
-            if not subkey:  # This is the exact match
-                subkey = "default"
+                metric_data = []
+                for res, points in resolutions.items():
+                    if res == resolution:
+                        for timestamp, value in points:
+                            metric_data.append(
+                                {"timestamp": timestamp.isoformat(), "value": value}
+                            )
 
-            metric_data = []
-            for res, points in resolutions.items():
-                if res == resolution:
-                    for timestamp, value in points:
-                        metric_data.append(
-                            {"timestamp": timestamp.isoformat(), "value": value}
-                        )
-
-            result[subkey] = metric_data
+                result[subkey] = metric_data
 
         if not result:
             return Response(
@@ -188,3 +245,4 @@ class MetricsApiPlugin(ApiPlugin):
             json_dumps(result),
             media_type="application/json",
         )
+
