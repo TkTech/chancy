@@ -1,6 +1,17 @@
 Changelog
 =========
 
+0.20.0
+------
+- Built-in support for metrics via the `Metrics()` such as job, queue and worker
+  throughput, job completion times, and more. Available via the API and the 
+  dashboard.
+- Added the ability to filter by job name in the dashboard.
+- Added a `--plugin` option to the `chancy misc migrate` command to migrate only
+  a specific plugin.
+- Fix the `JobRule.Job` preset, which still referenced the old `payload->>func`
+  field.
+
 0.19.0
 ------
 - All executors now support a default concurrency, which typically mimics the
