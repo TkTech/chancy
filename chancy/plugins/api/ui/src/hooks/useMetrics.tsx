@@ -1,13 +1,23 @@
 import { useQuery } from '@tanstack/react-query';
 
+export type MetricType = 'counter' | 'gauge' | 'histogram';
+
 export interface MetricPoint {
   timestamp: string;
   value: number | { [key: string]: number };
 }
 
+export interface MetricData {
+  data: MetricPoint[];
+  type: MetricType;
+}
+
 export interface MetricsOverview {
+  categories: {
+    [category: string]: string[];
+  };
   types: {
-    [type: string]: string[];
+    [metricKey: string]: MetricType;
   };
   count: number;
 }
@@ -41,7 +51,7 @@ export function useMetricDetail({
   enabled?: boolean;
   worker_id?: string;
 }) {
-  return useQuery<Record<string, MetricPoint[]>>({
+  return useQuery<Record<string, MetricData>>({
     queryKey: ['metric-detail', url, type, name, resolution, limit, worker_id],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -85,7 +95,10 @@ export function useQueueThroughput({
       
       const response = await fetch(`${url}/api/v1/metrics/queue/${queueName}:throughput?${params.toString()}`);
       const data = await response.json();
-      return data.default || [];
+      if (!data.default) {
+        throw new Error("Metric data not available");
+      }
+      return data.default.data;
     },
     enabled: enabled && url !== null && queueName !== '',
     refetchInterval: 30000,

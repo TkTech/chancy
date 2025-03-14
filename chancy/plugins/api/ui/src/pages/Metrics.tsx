@@ -41,20 +41,30 @@ export function MetricsList() {
       <div className="container-fluid">
         <h2 className="mb-4">Available Metrics</h2>
         
-        {overview && overview.types && Object.entries(overview.types).length > 0 ? (
-          Object.entries(overview.types)
-            .sort(([typeA], [typeB]) => typeA.localeCompare(typeB))
-            .map(([type, metrics]) => (
-              <div className="card mb-4" key={type}>
+        {overview && overview.categories && Object.entries(overview.categories).length > 0 ? (
+          Object.entries(overview.categories)
+            .sort(([categoryA], [categoryB]) => categoryA.localeCompare(categoryB))
+            .map(([category, metrics]) => (
+              <div className="card mb-4" key={category}>
                 <div className="card-header">
-                  <h5 className="mb-0">{type.charAt(0).toUpperCase() + type.slice(1)} Metrics</h5>
+                  <h5 className="mb-0">{category.charAt(0).toUpperCase() + category.slice(1)} Metrics</h5>
                 </div>
                 <div className="card-body p-0">
                   <div className="list-group list-group-flush">
                     {metrics
                       .sort((a, b) => a.localeCompare(b))
                       .map(metric => {
-                        const metricKey = `${type}:${metric}`;
+                        const metricKey = `${category}:${metric}`;
+                        const metricType = overview.types[metricKey];
+                        
+                        // Choose icon based on metric type
+                        let icon = "bi-graph-up";
+                        if (metricType === 'histogram') {
+                          icon = "bi-bar-chart";
+                        } else if (metricType === 'gauge') {
+                          icon = "bi-speedometer";
+                        }
+                        
                         return (
                           <Link 
                             key={metricKey} 
@@ -62,10 +72,10 @@ export function MetricsList() {
                             className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                           >
                             <span>
-                              <span className="text-muted">{type}:</span>
+                              <span className="text-muted">{category}:</span>
                               <strong className="ms-1">{metric}</strong>
                             </span>
-                            <i className="bi bi-graph-up text-muted"></i>
+                            <i className={`bi ${icon} text-muted`}></i>
                           </Link>
                         );
                       })
@@ -121,11 +131,7 @@ export function MetricDetail() {
         <ResolutionSelector resolution={resolution} setResolution={setResolution} />
 
         <div className="row">
-          {metrics && Object.entries(metrics).map(([subtype, points]) => {
-            const isMetricHistogram = points.length > 0 && 
-              typeof points[0].value === 'object' && 
-              'avg' in points[0].value;
-            
+          {metrics && Object.entries(metrics).map(([subtype, metricData]) => {
             // Format subtitle label
             const subtitleLabel = subtype === 'default'
               ? `${metricKey}` 
@@ -139,8 +145,8 @@ export function MetricDetail() {
                   </div>
                   <div className="card-body">
                     <MetricChart 
-                      points={points} 
-                      isHistogram={isMetricHistogram} 
+                      points={metricData.data} 
+                      metricType={metricData.type}
                     />
                   </div>
                 </div>

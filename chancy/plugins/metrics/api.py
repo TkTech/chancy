@@ -67,27 +67,29 @@ class MetricsApiPlugin(ApiPlugin):
                 media_type="application/json",
             )
 
-        # Get a list of all available metrics
+        # Get a list of all available metrics and their types
         metrics = metrics_plugin.get_metrics()
+        metric_type_map = metrics_plugin.get_metric_types()
 
-        # Get the types as a organized structure
-        metric_types = {}
+        # Organize metrics by their category (part before first colon)
+        metric_categories = {}
         for key in metrics.keys():
             parts = key.split(":")
             if len(parts) >= 2:
-                metric_type = parts[0]
+                category = parts[0]
                 metric_name = parts[1]
 
-                if metric_type not in metric_types:
-                    metric_types[metric_type] = []
+                if category not in metric_categories:
+                    metric_categories[category] = []
 
-                if metric_name not in metric_types[metric_type]:
-                    metric_types[metric_type].append(metric_name)
+                if metric_name not in metric_categories[category]:
+                    metric_categories[category].append(metric_name)
 
         return Response(
             json_dumps(
                 {
-                    "types": metric_types,
+                    "categories": metric_categories,
+                    "types": metric_type_map,
                     "count": len(metrics),
                 }
             ),
@@ -115,6 +117,9 @@ class MetricsApiPlugin(ApiPlugin):
         metrics = metrics_plugin.get_metrics(
             metric_prefix=f"{metric_type}:", resolution=resolution, limit=limit
         )
+        metric_types = metrics_plugin.get_metric_types(
+            metric_prefix=f"{metric_type}:"
+        )
 
         # Transform metrics data for API response
         result = {}
@@ -129,7 +134,7 @@ class MetricsApiPlugin(ApiPlugin):
                             {"timestamp": timestamp.isoformat(), "value": value}
                         )
 
-            result[name] = metric_data
+            result[name] = {"data": metric_data, "type": metric_types.get(key)}
 
         return Response(
             json_dumps(result),
@@ -168,7 +173,7 @@ class MetricsApiPlugin(ApiPlugin):
                         sql.SQL(
                             """
                             SELECT 
-                                metric_key, timestamps, values
+                                metric_key, timestamps, values, metric_type
                             FROM 
                                 {metrics_table}
                             WHERE 
@@ -213,11 +218,22 @@ class MetricsApiPlugin(ApiPlugin):
                                 }
                             )
 
-                        result[subkey] = metric_data
+                        metric_type = row.get("metric_type")
+                        if not metric_type:
+                            raise ValueError(
+                                f"Metric {row_metric_key} is missing required metric_type"
+                            )
+                        result[subkey] = {
+                            "data": metric_data,
+                            "type": metric_type,
+                        }
         else:
             # Get all metrics matching this pattern (could include multiple submetrics)
             metrics = metrics_plugin.get_metrics(
                 metric_prefix=metric_key, resolution=resolution, limit=limit
+            )
+            metric_types = metrics_plugin.get_metric_types(
+                metric_prefix=metric_key
             )
 
             # Transform metrics data for API response
@@ -240,7 +256,12 @@ class MetricsApiPlugin(ApiPlugin):
                                 }
                             )
 
-                result[subkey] = metric_data
+                metric_type = metric_types.get(key)
+                if not metric_type:
+                    raise ValueError(
+                        f"Metric {key} is missing required metric_type"
+                    )
+                result[subkey] = {"data": metric_data, "type": metric_type}
 
         if not result:
             return Response(

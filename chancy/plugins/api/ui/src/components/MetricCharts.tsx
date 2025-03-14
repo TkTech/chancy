@@ -2,7 +2,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
-import { MetricPoint, useMetricDetail } from '../hooks/useMetrics';
+import { MetricPoint, useMetricDetail, MetricType } from '../hooks/useMetrics';
 import { Loading } from './Loading';
 import { Link } from 'react-router-dom';
 
@@ -19,14 +19,14 @@ export const formatValue = (value: number | Record<string, number>): number => {
   }
   
   if (typeof value === 'object') {
-    // For counters, just return the value
-    if ('count' in value) {
-      return value.count;
-    }
-    
     // For histograms, return the average
     if ('avg' in value) {
       return value.avg;
+    }
+    
+    // For other objects with count, return that
+    if ('count' in value) {
+      return value.count;
     }
   }
   
@@ -112,12 +112,12 @@ export const SparklineChart = ({
 // Common chart components
 export const MetricChart = ({ 
   points, 
-  isHistogram = false, 
+  metricType,
   height = 400,
   minTickGap = 30
 }: { 
   points: MetricPoint[];
-  isHistogram?: boolean;
+  metricType: MetricType;
   height?: number;
   minTickGap?: number;
 }) => {
@@ -129,12 +129,7 @@ export const MetricChart = ({
     );
   }
 
-  // Check if this specific metric is a histogram
-  const isMetricHistogram = isHistogram || (
-    points.length > 0 && 
-    typeof points[0].value === 'object' && 
-    'avg' in points[0].value
-  );
+  const isMetricHistogram = metricType === 'histogram';
   
   // Set stats to display for histogram
   const metricHistogramStats = isMetricHistogram ? ['avg', 'min', 'max'] : [];
@@ -273,7 +268,8 @@ export function QueueMetrics({
                 <div className="alert alert-secondary">No throughput data available</div>
               ) : (
                 <MetricChart 
-                  points={throughputData.default || []}
+                  points={throughputData.default.data}
+                  metricType={throughputData.default.type}
                   height={200}
                 />
               )}
@@ -294,8 +290,8 @@ export function QueueMetrics({
                 <div className="alert alert-secondary">No execution time data available</div>
               ) : (
                 <MetricChart 
-                  points={executionTimeData.default || []}
-                  isHistogram={true}
+                  points={executionTimeData.default.data}
+                  metricType={executionTimeData.default.type}
                   height={200}
                 />
               )}

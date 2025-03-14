@@ -5,6 +5,7 @@ Metrics plugin for collecting and sharing metrics across workers.
 import asyncio
 import datetime
 import json
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union, cast
 
 from psycopg import sql
@@ -18,6 +19,30 @@ from chancy.worker import Worker
 Resolution = Literal["1min", "5min", "1hour", "1day"]
 MetricValue = Union[int, float, Dict[str, Union[int, float]]]
 MetricPoint = Tuple[datetime.datetime, MetricValue]
+MetricType = Literal["counter", "gauge", "histogram"]
+
+
+@dataclass
+class Metric:
+    """
+    A class representing a metric with values at different resolutions.
+    """
+
+    metric_type: MetricType
+    values_1min: List[MetricPoint] = field(default_factory=list)
+    values_5min: List[MetricPoint] = field(default_factory=list)
+    values_1hour: List[MetricPoint] = field(default_factory=list)
+    values_1day: List[MetricPoint] = field(default_factory=list)
+
+    @property
+    def values(self) -> Dict[Resolution, List[MetricPoint]]:
+        """Get all values in a dictionary keyed by resolution."""
+        return {
+            "1min": self.values_1min,
+            "5min": self.values_5min,
+            "1hour": self.values_1hour,
+            "1day": self.values_1day,
+        }
 
 
 class Metrics(Plugin):
@@ -85,15 +110,11 @@ class Metrics(Plugin):
 
         # In-memory cache of local metrics for this worker, updated in
         # real-time and synced to DB.
-        self.local_metrics_cache: Dict[
-            str, Dict[Resolution, List[MetricPoint]]
-        ] = {}
+        self.local_metrics_cache: Dict[str, Metric] = {}
 
         # In-memory cache of aggregated metrics from all workers, updated on
         # pulls from DB.
-        self.aggregated_metrics_cache: Dict[
-            str, Dict[Resolution, List[MetricPoint]]
-        ] = {}
+        self.aggregated_metrics_cache: Dict[str, Metric] = {}
 
         # Track metrics that have been modified locally since last sync.
         self.modified_metrics: Set[Tuple[str, Resolution]] = set()
@@ -243,12 +264,21 @@ class Metrics(Plugin):
 
         async with await self._get_metric_lock(metric_key):
             if metric_key not in self.local_metrics_cache:
-                self.local_metrics_cache[metric_key] = {
-                    resolution: [] for resolution in self.max_points.keys()
-                }
+                self.local_metrics_cache[metric_key] = Metric(
+                    metric_type="counter"
+                )
 
-            for resolution in self.local_metrics_cache[metric_key]:
-                points = self.local_metrics_cache[metric_key][resolution]
+            metric = self.local_metrics_cache[metric_key]
+
+            for resolution in self.max_points.keys():
+                if resolution == "1min":
+                    points = metric.values_1min
+                elif resolution == "5min":
+                    points = metric.values_5min
+                elif resolution == "1hour":
+                    points = metric.values_1hour
+                elif resolution == "1day":
+                    points = metric.values_1day
 
                 bucket_time = self._get_bucket_time(now, resolution)
 
@@ -280,12 +310,21 @@ class Metrics(Plugin):
 
         async with await self._get_metric_lock(metric_key):
             if metric_key not in self.local_metrics_cache:
-                self.local_metrics_cache[metric_key] = {
-                    resolution: [] for resolution in self.max_points.keys()
-                }
+                self.local_metrics_cache[metric_key] = Metric(
+                    metric_type="gauge"
+                )
 
-            for resolution in self.local_metrics_cache[metric_key]:
-                points = self.local_metrics_cache[metric_key][resolution]
+            metric = self.local_metrics_cache[metric_key]
+
+            for resolution in self.max_points.keys():
+                if resolution == "1min":
+                    points = metric.values_1min
+                elif resolution == "5min":
+                    points = metric.values_5min
+                elif resolution == "1hour":
+                    points = metric.values_1hour
+                elif resolution == "1day":
+                    points = metric.values_1day
 
                 bucket_time = self._get_bucket_time(now, resolution)
 
@@ -317,12 +356,21 @@ class Metrics(Plugin):
 
         async with await self._get_metric_lock(metric_key):
             if metric_key not in self.local_metrics_cache:
-                self.local_metrics_cache[metric_key] = {
-                    resolution: [] for resolution in self.max_points.keys()
-                }
+                self.local_metrics_cache[metric_key] = Metric(
+                    metric_type="histogram"
+                )
 
-            for resolution in self.local_metrics_cache[metric_key]:
-                points = self.local_metrics_cache[metric_key][resolution]
+            metric = self.local_metrics_cache[metric_key]
+
+            for resolution in self.max_points.keys():
+                if resolution == "1min":
+                    points = metric.values_1min
+                elif resolution == "5min":
+                    points = metric.values_5min
+                elif resolution == "1hour":
+                    points = metric.values_1hour
+                elif resolution == "1day":
+                    points = metric.values_1day
 
                 bucket_time = self._get_bucket_time(now, resolution)
 
@@ -395,13 +443,23 @@ class Metrics(Plugin):
 
         async with chancy.pool.connection() as conn:
             for metric_key, resolution in self.modified_metrics:
-                if (
-                    metric_key not in self.local_metrics_cache
-                    or not self.local_metrics_cache[metric_key].get(resolution)
-                ):
+                if metric_key not in self.local_metrics_cache:
                     continue
 
-                points = self.local_metrics_cache[metric_key][resolution]
+                metric = self.local_metrics_cache[metric_key]
+
+                # Get the points for the specified resolution
+                if resolution == "1min":
+                    points = metric.values_1min
+                elif resolution == "5min":
+                    points = metric.values_5min
+                elif resolution == "1hour":
+                    points = metric.values_1hour
+                elif resolution == "1day":
+                    points = metric.values_1day
+                else:
+                    continue
+
                 if not points:
                     continue
 
@@ -418,9 +476,10 @@ class Metrics(Plugin):
                                 worker_id,
                                 timestamps,
                                 values,
+                                metric_type,
                                 updated_at
                             ) VALUES (
-                                %s, %s, %s, %s, %s, NOW()
+                                %s, %s, %s, %s, %s, %s, NOW()
                             )
                             ON CONFLICT (
                                 metric_key,
@@ -430,6 +489,7 @@ class Metrics(Plugin):
                             SET
                                 timestamps = %s,
                                 values = %s,
+                                metric_type = %s,
                                 updated_at = NOW()
                         """
                         ).format(
@@ -443,8 +503,10 @@ class Metrics(Plugin):
                             self.worker_id,
                             timestamps,
                             values,
+                            metric.metric_type,
                             timestamps,
                             values,
+                            metric.metric_type,
                         ),
                     )
 
@@ -471,7 +533,8 @@ class Metrics(Plugin):
                             resolution,
                             worker_id,
                             timestamps,
-                            values
+                            values,
+                            metric_type
                         FROM 
                             {metrics_table}
                         WHERE 
@@ -491,7 +554,8 @@ class Metrics(Plugin):
                             resolution,
                             worker_id,
                             timestamps,
-                            values
+                            values,
+                            metric_type
                         FROM 
                             {metrics_table}
                         ORDER BY 
@@ -504,9 +568,17 @@ class Metrics(Plugin):
 
                 # Group the results by metric_key and resolution
                 metrics_data = {}
+                metric_types = {}
                 async for row in cursor:
                     metric_key = row["metric_key"]
                     resolution = cast(Resolution, row["resolution"])
+                    # Store the metric type - it should always be present
+                    metric_type = row["metric_type"]
+                    if not metric_type:
+                        raise ValueError(
+                            f"Metric {metric_key} is missing required metric_type"
+                        )
+                    metric_types[metric_key] = cast(MetricType, metric_type)
 
                     if metric_key not in metrics_data:
                         metrics_data[metric_key] = {}
@@ -516,15 +588,18 @@ class Metrics(Plugin):
 
                     metrics_data[metric_key][resolution].append(row)
 
-                # Process each metric_key and resolution
+                # Process each metric_key and resolutions
                 for metric_key, resolutions in metrics_data.items():
-                    # Initialize the metric in aggregated cache if needed
-                    if metric_key not in self.aggregated_metrics_cache:
-                        self.aggregated_metrics_cache[metric_key] = {
-                            cast(Resolution, res): []
-                            for res in self.max_points.keys()
-                        }
+                    # Get the metric type, default to counter if not found
+                    metric_type = metric_types.get(metric_key, "counter")
 
+                    # Initialize result dicts for each resolution
+                    values_1min = []
+                    values_5min = []
+                    values_1hour = []
+                    values_1day = []
+
+                    # Process each resolution
                     for resolution, worker_data in resolutions.items():
                         # Collect all points from all workers
                         all_points = []
@@ -605,11 +680,35 @@ class Metrics(Plugin):
 
                             result_points.append((timestamp, merged_value))
 
-                        # Sort and update cache
+                        # Sort points by timestamp (newest first)
                         result_points.sort(key=lambda p: p[0], reverse=True)
-                        self.aggregated_metrics_cache[metric_key][
-                            resolution
-                        ] = result_points[: self.max_points[resolution]]
+
+                        # Store points in the appropriate resolution list
+                        if resolution == "1min":
+                            values_1min = result_points[
+                                : self.max_points[resolution]
+                            ]
+                        elif resolution == "5min":
+                            values_5min = result_points[
+                                : self.max_points[resolution]
+                            ]
+                        elif resolution == "1hour":
+                            values_1hour = result_points[
+                                : self.max_points[resolution]
+                            ]
+                        elif resolution == "1day":
+                            values_1day = result_points[
+                                : self.max_points[resolution]
+                            ]
+
+                    # Create and store the Metric object in the aggregated cache
+                    self.aggregated_metrics_cache[metric_key] = Metric(
+                        metric_type=cast(MetricType, metric_type),
+                        values_1min=values_1min,
+                        values_5min=values_5min,
+                        values_1hour=values_1hour,
+                        values_1day=values_1day,
+                    )
 
     @staticmethod
     def _get_bucket_time(
@@ -692,12 +791,13 @@ class Metrics(Plugin):
         result = {}
 
         # Use the aggregated metrics cache for queries
-        for key, resolutions in self.aggregated_metrics_cache.items():
+        for key, metric in self.aggregated_metrics_cache.items():
             if metric_prefix and not key.startswith(metric_prefix):
                 continue
 
             result[key] = {}
 
+            resolutions = metric.values
             for res, points in resolutions.items():
                 if resolution and res != resolution:
                     continue
@@ -706,5 +806,24 @@ class Metrics(Plugin):
                     result[key][res] = points[:limit]
                 else:
                     result[key][res] = points
+
+        return result
+
+    def get_metric_types(
+        self, metric_prefix: Optional[str] = None
+    ) -> Dict[str, MetricType]:
+        """
+        Get the type of each metric.
+
+        :param metric_prefix: Optional prefix to filter metrics by
+        :return: Dictionary mapping metric keys to their types
+        """
+        result = {}
+
+        for key, metric in self.aggregated_metrics_cache.items():
+            if metric_prefix and not key.startswith(metric_prefix):
+                continue
+
+            result[key] = metric.metric_type
 
         return result
