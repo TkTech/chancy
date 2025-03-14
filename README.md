@@ -2,7 +2,8 @@
 
 ![Chancy Logo](misc/logo_small.png)
 
-A postgres-backed task queue for Python.
+Chancy is a distributed task queue and scheduler for Python built on top of
+Postgres.
 
 ![MIT License](https://img.shields.io/github/license/tktech/chancy)
 ![Codecov](https://img.shields.io/codecov/c/github/TkTech/chancy)

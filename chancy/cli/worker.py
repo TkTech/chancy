@@ -2,6 +2,7 @@ import click
 
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
+from chancy.plugins.metrics import Metrics
 
 
 @click.group(name="worker")
@@ -83,5 +84,16 @@ async def web_command(
             debug=debug,
         )
 
-        worker = Worker(chancy)
+        has_metrics = next(
+            (
+                plugin
+                for plugin in chancy.plugins
+                if isinstance(plugin, Metrics)
+            ),
+            None,
+        )
+
+        worker = Worker(chancy, tags=set())
+        if has_metrics:
+            worker.manager.add("metrics", has_metrics.run(worker, chancy))
         await api.run(worker, chancy)

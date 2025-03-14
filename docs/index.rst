@@ -19,9 +19,8 @@ Chancy
 .. image:: https://img.shields.io/badge/postgres-%2014%20|%2015%20|%2016%20|%2017-blue
    :alt: PostgreSQL Versions
 
-Chancy is a distributed task queue that uses Postgres as its message broker.
-It's designed to be simple to use, easy to deploy, and easily extendable. Chancy
-is a great alternative to Celery, RabbitMQ, or redis-based task queues.
+Chancy is a distributed task queue and scheduler for Python built on top of
+Postgres.
 
 
 Key Features:

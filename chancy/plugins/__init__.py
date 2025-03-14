@@ -28,4 +28,7 @@ Chancy comes with several built-in plugins:
     the priority of jobs based on how long they've been in the queue.
 - :class:`chancy.plugins.sentry.SentryPlugin`: This plugin sends job exceptions
     to Sentry, along with metadata about the job and worker.
+- :class:`chancy.plugins.metrics.Metrics`: This plugin collects metrics about
+    the performance of the Chancy cluster and makes them available to the API,
+    dashboard, and database.
 """
