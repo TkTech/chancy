@@ -30,6 +30,7 @@ class MetricsInitialMigration(Migration):
                     timestamps TIMESTAMPTZ[] NOT NULL,
                     values JSONB[] NOT NULL,
                     
+                    metric_type VARCHAR(20) NOT NULL,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     metadata JSONB NOT NULL DEFAULT '{{}}',
                     
