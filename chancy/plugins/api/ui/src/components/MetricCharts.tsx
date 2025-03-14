@@ -254,9 +254,9 @@ export function QueueMetrics({
         </Link>
       </div>
       
-      <div className="row">
+      <div className="row row-cols-4 row-cols-md-1 g-4">
         {/* Throughput Card */}
-        <div className="col-md-6 mb-4">
+        <div className="col">
           <div className="card h-100">
             <div className="card-header">
               <h5 className="mb-0">Throughput</h5>
@@ -278,7 +278,7 @@ export function QueueMetrics({
         </div>
         
         {/* Execution Time Card */}
-        <div className="col-md-6 mb-4">
+        <div className="col">
           <div className="card h-100">
             <div className="card-header">
               <h5 className="mb-0">Execution Time</h5>

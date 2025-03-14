@@ -164,7 +164,6 @@ export function Jobs() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = window.location.pathname;
   const pathParts = location.split('/');
-  // Extract the state from URL path or default to 'pending'
   const state = pathParts.length > 2 && ['pending', 'running', 'succeeded', 'failed', 'retrying'].includes(pathParts[2])
     ? pathParts[2]
     : 'pending';
