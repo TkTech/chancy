@@ -117,7 +117,7 @@ class Metrics(Plugin):
         self.aggregated_metrics_cache: Dict[str, Metric] = {}
 
         # Track metrics that have been modified locally since last sync.
-        self.modified_metrics: Set[Tuple[str, Resolution]] = set()
+        self.modified_metrics: Set[str] = set()
 
         # Last sync timestamp.
         self.last_sync_time = datetime.datetime.now(datetime.timezone.utc)
@@ -293,7 +293,7 @@ class Metrics(Plugin):
                 if len(points) > self.max_points[resolution]:
                     points.pop()
 
-                self.modified_metrics.add((metric_key, resolution))
+                self.modified_metrics.add(metric_key)
 
     async def record_gauge(
         self, metric_key: str, value: Union[int, float]
@@ -338,7 +338,7 @@ class Metrics(Plugin):
                 if len(points) > self.max_points[resolution]:
                     points.pop()
 
-                self.modified_metrics.add((metric_key, resolution))
+                self.modified_metrics.add(metric_key)
 
     async def record_histogram_value(
         self, metric_key: str, value: Union[int, float]
@@ -417,7 +417,7 @@ class Metrics(Plugin):
                     points.pop()
 
                 # Mark this metric as modified
-                self.modified_metrics.add((metric_key, resolution))
+                self.modified_metrics.add(metric_key)
 
     async def _sync_metrics(self, chancy: Chancy) -> None:
         """
@@ -436,19 +436,21 @@ class Metrics(Plugin):
         Push modified metrics to the database.
 
         Only pushes metrics from the local_metrics_cache, not the aggregated
-        cache.
+        cache. Uses a bulk insert approach for better performance.
         """
         if not self.modified_metrics:
             return
 
-        async with chancy.pool.connection() as conn:
-            for metric_key, resolution in self.modified_metrics:
-                if metric_key not in self.local_metrics_cache:
-                    continue
+        metrics_to_insert = []
 
-                metric = self.local_metrics_cache[metric_key]
+        # Process each metric key that was modified
+        for metric_key in self.modified_metrics:
+            if metric_key not in self.local_metrics_cache:
+                continue
 
-                # Get the points for the specified resolution
+            metric = self.local_metrics_cache[metric_key]
+
+            for resolution in self.max_points.keys():
                 if resolution == "1min":
                     points = metric.values_1min
                 elif resolution == "5min":
@@ -466,49 +468,54 @@ class Metrics(Plugin):
                 timestamps = [point[0] for point in points]
                 values = [json.dumps(point[1]) for point in points]
 
-                async with conn.cursor() as cursor:
-                    await cursor.execute(
-                        sql.SQL(
-                            """
-                            INSERT INTO {metrics_table} (
-                                metric_key,
-                                resolution,
-                                worker_id,
-                                timestamps,
-                                values,
-                                metric_type,
-                                updated_at
-                            ) VALUES (
-                                %s, %s, %s, %s, %s, %s, NOW()
-                            )
-                            ON CONFLICT (
-                                metric_key,
-                                resolution,
-                                worker_id
-                            ) DO UPDATE
-                            SET
-                                timestamps = %s,
-                                values = %s,
-                                metric_type = %s,
-                                updated_at = NOW()
+                metrics_to_insert.append(
+                    {
+                        "metric_key": metric_key,
+                        "resolution": resolution,
+                        "worker_id": self.worker_id,
+                        "timestamps": timestamps,
+                        "values": values,
+                        "metric_type": metric.metric_type,
+                    }
+                )
+
+        if not metrics_to_insert:
+            return
+
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                # Execute a single query with all metrics using execute_batch
+                await cursor.executemany(
+                    sql.SQL(
                         """
-                        ).format(
-                            metrics_table=sql.Identifier(
-                                f"{chancy.prefix}metrics"
-                            )
-                        ),
-                        (
+                        INSERT INTO {metrics_table} (
                             metric_key,
                             resolution,
-                            self.worker_id,
+                            worker_id,
                             timestamps,
                             values,
-                            metric.metric_type,
-                            timestamps,
-                            values,
-                            metric.metric_type,
-                        ),
-                    )
+                            metric_type,
+                            updated_at
+                        ) VALUES (
+                            %(metric_key)s, %(resolution)s, %(worker_id)s, 
+                            %(timestamps)s, %(values)s, %(metric_type)s, NOW()
+                        )
+                        ON CONFLICT (
+                            metric_key,
+                            resolution,
+                            worker_id
+                        ) DO UPDATE
+                        SET
+                            timestamps = %(timestamps)s,
+                            values = %(values)s,
+                            metric_type = %(metric_type)s,
+                            updated_at = NOW()
+                    """
+                    ).format(
+                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
+                    ),
+                    metrics_to_insert,
+                )
 
     async def _load_metrics_from_db(
         self, chancy: Chancy, load_only_changes: bool = False

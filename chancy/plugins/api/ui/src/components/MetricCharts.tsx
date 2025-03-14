@@ -240,8 +240,8 @@ export function QueueMetrics({
     worker_id: workerId,
   });
   
-  const hasThroughputData = throughputData && Object.keys(throughputData).length > 0;
-  const hasExecutionTimeData = executionTimeData && Object.keys(executionTimeData).length > 0;
+  const hasThroughputData = throughputData && throughputData?.default?.data;
+  const hasExecutionTimeData = executionTimeData && executionTimeData?.default?.data;
   
   return (
     <>
