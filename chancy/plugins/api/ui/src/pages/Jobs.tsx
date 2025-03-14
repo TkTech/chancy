@@ -243,7 +243,7 @@ export function Jobs() {
         <tbody>
         {jobs?.length === 0 && (
           <tr>
-            <td colSpan={4} className={'text-center table-info'}>
+            <td colSpan={4} className={'text-center'}>
               No matching jobs found.
             </td>
           </tr>
