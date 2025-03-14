@@ -168,6 +168,7 @@ class Metrics(Plugin):
         1. Job success/failure count by function
         2. Queue throughput
         3. Job execution time
+        4. Global job status counts
         """
         execution_time = None
         if job.started_at and job.completed_at:
@@ -177,6 +178,9 @@ class Metrics(Plugin):
             f"job:{job.func}:{'success' if exc is None else 'failure'}",
             1,
         )
+
+        # Increment global job status counter
+        await self.increment_counter(f"global:status:{job.state.value}", 1)
 
         await self.increment_counter(f"queue:{job.queue}:throughput", 1)
 
