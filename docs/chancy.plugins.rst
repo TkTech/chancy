@@ -21,3 +21,4 @@ Submodules
    chancy.plugins.retry
    chancy.plugins.reprioritize
    chancy.plugins.sentry
+   chancy.plugins.metrics

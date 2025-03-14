@@ -40,7 +40,7 @@ export function Queue() {
         </tr>
         <tr>
           <th>Concurrency</th>
-          <td>{queue.concurrency}</td>
+          <td>{queue.concurrency || <em>Executor default</em>}</td>
         </tr>
         <tr>
           <th>Tags</th>
@@ -75,7 +75,7 @@ export function Queue() {
         <tr>
           <th>Rate Limit</th>
           <td>
-            {queue.rate_limit ? `${queue.rate_limit} requests per ${queue.rate_limit_window} seconds` : 'N/A'}
+            {queue.rate_limit ?`${queue.rate_limit} requests per ${queue.rate_limit_window} seconds` : <em>No rate limit applied to this queue.</em>}
           </td>
         </tr>
         </tbody>

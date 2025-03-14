@@ -84,10 +84,14 @@ class Metrics(Plugin):
             self.max_points.update(max_points_per_resolution)
 
         # In-memory cache of local metrics for this worker, updated in real-time and synced to DB
-        self.local_metrics_cache: Dict[str, Dict[Resolution, List[MetricPoint]]] = {}
-        
+        self.local_metrics_cache: Dict[
+            str, Dict[Resolution, List[MetricPoint]]
+        ] = {}
+
         # In-memory cache of aggregated metrics from all workers, updated on pulls from DB
-        self.aggregated_metrics_cache: Dict[str, Dict[Resolution, List[MetricPoint]]] = {}
+        self.aggregated_metrics_cache: Dict[
+            str, Dict[Resolution, List[MetricPoint]]
+        ] = {}
 
         # Track metrics that have been modified locally since last sync
         self.modified_metrics: Set[Tuple[str, Resolution]] = set()
@@ -107,7 +111,7 @@ class Metrics(Plugin):
         """
         # Store the worker_id for use in metrics storage/retrieval
         self.worker_id = worker.worker_id
-        
+
         # Initial load of metrics from the database
         await self._load_metrics_from_db(chancy)
 
@@ -146,21 +150,21 @@ class Metrics(Plugin):
         if job.started_at and job.completed_at:
             execution_time = (job.completed_at - job.started_at).total_seconds()
 
-        await self._increment_counter(
+        await self.increment_counter(
             f"job:{job.func}:{'success' if exc is None else 'failure'}",
             1,
             worker.chancy,
         )
 
-        await self._increment_counter(
+        await self.increment_counter(
             f"queue:{job.queue}:throughput", 1, worker.chancy
         )
 
         if execution_time is not None:
-            await self._record_histogram_value(
+            await self.record_histogram_value(
                 f"job:{job.func}:execution_time", execution_time, worker.chancy
             )
-            await self._record_histogram_value(
+            await self.record_histogram_value(
                 f"queue:{job.queue}:execution_time",
                 execution_time,
                 worker.chancy,
@@ -226,7 +230,7 @@ class Metrics(Plugin):
             self.metric_locks[metric_key] = asyncio.Lock()
         return self.metric_locks[metric_key]
 
-    async def _increment_counter(
+    async def increment_counter(
         self, metric_key: str, value: Union[int, float], chancy: Chancy
     ) -> None:
         """
@@ -260,7 +264,7 @@ class Metrics(Plugin):
 
                 self.modified_metrics.add((metric_key, resolution))
 
-    async def _record_gauge(
+    async def record_gauge(
         self, metric_key: str, value: Union[int, float], chancy: Chancy
     ) -> None:
         """
@@ -293,7 +297,7 @@ class Metrics(Plugin):
 
                 self.modified_metrics.add((metric_key, resolution))
 
-    async def _record_histogram_value(
+    async def record_histogram_value(
         self, metric_key: str, value: Union[int, float], chancy: Chancy
     ) -> None:
         """
@@ -368,14 +372,14 @@ class Metrics(Plugin):
             return
 
         await self._push_metrics_to_db(chancy)
-        await self._pull_metrics_from_db(chancy)
+        await self._load_metrics_from_db(chancy, load_only_changes=True)
         self.last_sync_time = datetime.datetime.now(datetime.timezone.utc)
         self.modified_metrics.clear()
 
     async def _push_metrics_to_db(self, chancy: Chancy) -> None:
         """
         Push modified metrics to the database.
-        
+
         Only pushes metrics from the local_metrics_cache, not the aggregated cache.
         """
         if not self.modified_metrics:
@@ -429,33 +433,61 @@ class Metrics(Plugin):
                         ),
                     )
 
-    async def _pull_metrics_from_db(self, chancy: Chancy) -> None:
+    async def _load_metrics_from_db(
+        self, chancy: Chancy, load_only_changes: bool = False
+    ) -> None:
         """
-        Pull updated metrics from the database.
+        Load metrics from the database.
 
         This method retrieves metrics from all workers and merges them together
         into the aggregated_metrics_cache.
+
+        :param chancy: The Chancy application instance
+        :param load_only_changes: If True, only load metrics updated since the
+                                  last sync time
         """
         async with chancy.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
-                # First, get all unique metric_key/resolution combinations that have been updated
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        SELECT DISTINCT
-                            metric_key, resolution
-                        FROM
-                            {metrics_table}
-                        WHERE
-                            updated_at > %s
-                        ORDER BY
-                            metric_key, resolution
-                    """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
-                    ),
-                    (self.last_sync_time,),
-                )
+                # Get unique metric_key/resolution combinations
+                if load_only_changes:
+                    # Only get metrics updated since last sync
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            SELECT DISTINCT
+                                metric_key, resolution
+                            FROM
+                                {metrics_table}
+                            WHERE
+                                updated_at > %s
+                            ORDER BY
+                                metric_key, resolution
+                            """
+                        ).format(
+                            metrics_table=sql.Identifier(
+                                f"{chancy.prefix}metrics"
+                            )
+                        ),
+                        (self.last_sync_time,),
+                    )
+                else:
+                    # Get all metrics
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            SELECT DISTINCT
+                                metric_key, resolution
+                            FROM
+                                {metrics_table}
+                            ORDER BY
+                                metric_key, resolution
+                            """
+                        ).format(
+                            metrics_table=sql.Identifier(
+                                f"{chancy.prefix}metrics"
+                            )
+                        )
+                    )
 
                 metric_combinations = await cursor.fetchall()
 
@@ -463,10 +495,6 @@ class Metrics(Plugin):
                 for combo in metric_combinations:
                     metric_key = combo["metric_key"]
                     resolution = cast(Resolution, combo["resolution"])
-
-                    # Skip if this metric has been locally modified
-                    if (metric_key, resolution) in self.modified_metrics:
-                        continue
 
                     # Query all worker data for this metric
                     await cursor.execute(
@@ -520,7 +548,6 @@ class Metrics(Plugin):
                             merged_points[timestamp] = []
                         merged_points[timestamp].append(value)
 
-                    # Merge values for each timestamp
                     result_points = []
                     for timestamp, values_list in merged_points.items():
                         # If all values are numbers, sum them
@@ -581,135 +608,9 @@ class Metrics(Plugin):
 
                     # Sort and update cache
                     result_points.sort(key=lambda p: p[0], reverse=True)
-                    self.aggregated_metrics_cache[metric_key][resolution] = result_points[
-                        : self.max_points[resolution]
-                    ]
-
-    async def _load_metrics_from_db(self, chancy: Chancy) -> None:
-        """
-        Load all metrics from the database on startup.
-        
-        This method loads and merges metrics from all workers into the 
-        aggregated_metrics_cache.
-        """
-        chancy.log.info("Loading metrics from the database...")
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                # First, get all unique metric_key/resolution combinations
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        SELECT DISTINCT
-                            metric_key, resolution
-                        FROM
-                            {metrics_table}
-                        ORDER BY
-                            metric_key, resolution
-                        """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
+                    self.aggregated_metrics_cache[metric_key][resolution] = (
+                        result_points[: self.max_points[resolution]]
                     )
-                )
-
-                metric_combinations = await cursor.fetchall()
-
-                # For each combination, get and merge worker-specific data
-                for combo in metric_combinations:
-                    metric_key = combo["metric_key"]
-                    resolution = cast(Resolution, combo["resolution"])
-                    
-                    # Query all worker data for this metric
-                    await cursor.execute(
-                        sql.SQL(
-                            """
-                            SELECT
-                                worker_id, timestamps, values
-                            FROM
-                                {metrics_table}
-                            WHERE
-                                metric_key = %s AND
-                                resolution = %s
-                            """
-                        ).format(
-                            metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
-                        ),
-                        (metric_key, resolution),
-                    )
-                    
-                    worker_data = await cursor.fetchall()
-                    
-                    # Initialize the metric in aggregated cache if needed
-                    if metric_key not in self.aggregated_metrics_cache:
-                        self.aggregated_metrics_cache[metric_key] = {
-                            cast(Resolution, res): []
-                            for res in self.max_points.keys()
-                        }
-                    
-                    # Collect all points from all workers
-                    all_points = []
-                    for row in worker_data:
-                        timestamps = row["timestamps"]
-                        values = row["values"]
-                        
-                        for i in range(len(timestamps)):
-                            value = (
-                                json.loads(values[i])
-                                if isinstance(values[i], str)
-                                else values[i]
-                            )
-                            all_points.append((timestamps[i], value))
-                    
-                    # Group points by timestamp for merging
-                    merged_points: Dict[datetime.datetime, List[MetricValue]] = {}
-                    for timestamp, value in all_points:
-                        if timestamp not in merged_points:
-                            merged_points[timestamp] = []
-                        merged_points[timestamp].append(value)
-                    
-                    # Merge values for each timestamp using the same logic as in _pull_metrics_from_db
-                    result_points = []
-                    for timestamp, values_list in merged_points.items():
-                        # If all values are numbers, sum them
-                        if all(isinstance(v, (int, float)) for v in values_list):
-                            merged_value = sum(values_list)
-                        # If all values are dictionaries with the same keys, merge them
-                        elif all(isinstance(v, dict) for v in values_list):
-                            # Handle histogram values (with stats)
-                            if all('count' in v for v in values_list) and all('sum' in v for v in values_list):
-                                total_count = sum(v.get('count', 0) for v in values_list)
-                                total_sum = sum(v.get('sum', 0) for v in values_list)
-                                
-                                # Find min/max across all workers
-                                all_mins = [v.get('min') for v in values_list if 'min' in v]
-                                all_maxs = [v.get('max') for v in values_list if 'max' in v]
-                                
-                                merged_value = {
-                                    'count': total_count,
-                                    'sum': total_sum,
-                                    'avg': total_sum / total_count if total_count > 0 else 0,
-                                    'min': min(all_mins) if all_mins else 0,
-                                    'max': max(all_maxs) if all_maxs else 0
-                                }
-                            else:
-                                # For other dict types, merge by summing values with same keys
-                                merged_value = {}
-                                for v in values_list:
-                                    for k, val in v.items():
-                                        if k in merged_value:
-                                            merged_value[k] += val
-                                        else:
-                                            merged_value[k] = val
-                        # Otherwise just use the first value (should not typically happen)
-                        else:
-                            merged_value = values_list[0]
-                        
-                        result_points.append((timestamp, merged_value))
-                    
-                    # Sort and update cache
-                    result_points.sort(key=lambda p: p[0], reverse=True)
-                    self.aggregated_metrics_cache[metric_key][resolution] = result_points[
-                        : self.max_points[resolution]
-                    ]
 
     def _get_bucket_time(
         self, timestamp: datetime.datetime, resolution: Resolution

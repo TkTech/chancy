@@ -140,7 +140,7 @@ class MetricsApiPlugin(ApiPlugin):
     async def get_metric_detail(request: Request, *, chancy, worker):
         """
         Get detailed data for a specific metric.
-        
+
         Can be filtered by worker_id with the worker_id query parameter.
         """
         metrics_plugin = MetricsApiPlugin().get_metrics_plugin(chancy)
@@ -158,7 +158,7 @@ class MetricsApiPlugin(ApiPlugin):
         worker_id = request.query_params.get("worker_id")
 
         metric_key = f"{metric_type}:{metric_name}"
-        
+
         # If worker_id is provided, query metrics directly from the database for that worker
         if worker_id:
             result = {}
@@ -178,24 +178,26 @@ class MetricsApiPlugin(ApiPlugin):
                             LIMIT 100
                             """
                         ).format(
-                            metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
+                            metrics_table=sql.Identifier(
+                                f"{chancy.prefix}metrics"
+                            )
                         ),
                         (worker_id, resolution, f"{metric_key}%"),
                     )
-                    
+
                     rows = await cursor.fetchall()
-                    
+
                     # Process results
                     for row in rows:
                         row_metric_key = row["metric_key"]
                         timestamps = row["timestamps"]
                         values = row["values"]
-                        
+
                         # Extract the sub key (part after the metric_key)
-                        subkey = row_metric_key[len(metric_key):].lstrip(":")
+                        subkey = row_metric_key[len(metric_key) :].lstrip(":")
                         if not subkey:
                             subkey = "default"
-                            
+
                         # Process the points
                         metric_data = []
                         for i in range(min(limit, len(timestamps))):
@@ -205,9 +207,12 @@ class MetricsApiPlugin(ApiPlugin):
                                 else values[i]
                             )
                             metric_data.append(
-                                {"timestamp": timestamps[i].isoformat(), "value": value}
+                                {
+                                    "timestamp": timestamps[i].isoformat(),
+                                    "value": value,
+                                }
                             )
-                        
+
                         result[subkey] = metric_data
         else:
             # Get all metrics matching this pattern (could include multiple submetrics)
@@ -229,7 +234,10 @@ class MetricsApiPlugin(ApiPlugin):
                     if res == resolution:
                         for timestamp, value in points:
                             metric_data.append(
-                                {"timestamp": timestamp.isoformat(), "value": value}
+                                {
+                                    "timestamp": timestamp.isoformat(),
+                                    "value": value,
+                                }
                             )
 
                 result[subkey] = metric_data
@@ -245,4 +253,3 @@ class MetricsApiPlugin(ApiPlugin):
             json_dumps(result),
             media_type="application/json",
         )
-

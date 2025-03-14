@@ -23,25 +23,22 @@ class MetricsInitialMigration(Migration):
                     -- Primary key: metric_key + resolution + worker_id combination
                     metric_key VARCHAR(255) NOT NULL,
                     resolution VARCHAR(10) NOT NULL,  -- '1min', '5min', '1hour', etc.
-                    worker_id VARCHAR(255) NOT NULL,  -- Worker identifier
+                    worker_id VARCHAR(255) NOT NULL,
                     
                     -- Storage for time-series data
                     -- timestamp -> value mapping, stored in descending order (newest first)
                     timestamps TIMESTAMPTZ[] NOT NULL,
                     values JSONB[] NOT NULL,
                     
-                    -- Metadata
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     metadata JSONB NOT NULL DEFAULT '{{}}',
                     
-                    -- Primary key
                     PRIMARY KEY (metric_key, resolution, worker_id)
                 )
                 """
             ).format(metrics_table=sql.Identifier(f"{migrator.prefix}metrics"))
         )
 
-        # Create index on updated_at for syncing between workers
         await cursor.execute(
             sql.SQL(
                 """
