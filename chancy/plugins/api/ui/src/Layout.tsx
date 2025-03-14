@@ -66,16 +66,16 @@ function Layout() {
       return null;
     }
 
-    if (link.subLinks) {
-      return (
-        <li className="nav-item w-100 mb-2">
-          <NavLink
-            to={link.to}
-            end={!!link.subLinks}
-            className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}
-          >
-            {link.text}
-          </NavLink>
+    return (
+      <li className="nav-item w-100 mb-2">
+        <NavLink
+          to={link.to}
+          end={!!link.subLinks}
+          className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}
+        >
+          {link.text}
+        </NavLink>
+        {link.subLinks && (
           <ul className="nav flex-column ms-3 mt-1">
             {link.subLinks.map(subLink => (
               <li key={subLink.to} className="nav-item">
@@ -88,18 +88,7 @@ function Layout() {
               </li>
             ))}
           </ul>
-        </li>
-      );
-    }
-
-    return (
-      <li className="nav-item w-100 mb-2">
-        <NavLink
-          to={link.to}
-          className={({isActive}) => `nav-link ${isActive ? 'active' : ''}`}
-        >
-          {link.text}
-        </NavLink>
+        )}
       </li>
     );
   }
@@ -107,7 +96,11 @@ function Layout() {
   return (
     <div className="d-flex">
       <div className="flex-shrink-0 vh-100 border-end" style={{width: "280px"}}>
-        <ul className="nav nav-pills flex-column mb-auto p-3">
+        <div className="d-flex align-items-center px-3 pt-3">
+          <img src="/logo_small.png" alt="Chancy Logo" width="40" height="40" />
+          <h4 className="ms-2 mb-0">Chancy</h4>
+        </div>
+        <ul className="nav nav-pills flex-column mb-auto px-3">
           {navLink({
             to: "/jobs",
             text: "Jobs",
