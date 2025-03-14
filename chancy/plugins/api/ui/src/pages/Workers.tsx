@@ -2,7 +2,7 @@ import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {useWorkers} from '../hooks/useWorkers.tsx';
-import {CountdownTimer} from '../components/UpdatingTime.tsx';
+import {CountdownTimer, UpdatingTime} from '../components/UpdatingTime.tsx';
 import {QueueMetrics, ResolutionSelector} from '../components/MetricCharts.tsx';
 import {useState} from 'react';
 
@@ -59,11 +59,11 @@ export function Worker () {
         </tr>
         <tr>
           <th className={"text-nowrap"}>Last Seen</th>
-          <td>{worker.last_seen}</td>
+          <td><UpdatingTime date={worker.last_seen} /></td>
         </tr>
         <tr>
           <th className={"text-nowrap"}>Expires At</th>
-          <td>{worker.expires_at}</td>
+          <td><UpdatingTime date={worker.expires_at} /></td>
         </tr>
         </tbody>
       </table>
