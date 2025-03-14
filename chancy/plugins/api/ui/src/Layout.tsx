@@ -95,7 +95,7 @@ function Layout() {
 
   return (
     <div className="d-flex">
-      <div className="flex-shrink-0 vh-100 border-end" style={{width: "280px"}}>
+      <div id="sidebar" className="flex-shrink-0 vh-100 border-end" style={{width: "280px"}}>
         <div className="d-flex align-items-center px-3 pt-3">
           <img src="/logo_small.png" alt="Chancy Logo" width="40" height="40" />
           <h4 className="ms-2 mb-0">Chancy</h4>
