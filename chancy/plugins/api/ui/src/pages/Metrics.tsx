@@ -5,8 +5,7 @@ import { useMetricsOverview, useMetricDetail } from '../hooks/useMetrics';
 import { Link, useParams } from 'react-router-dom';
 import { MetricChart, ResolutionSelector } from '../components/MetricCharts';
 
-// Common loading and error handling wrapper
-const MetricsWrapper = ({ 
+const MetricsWrapper = ({
   isLoading, 
   data,
   errorMessage,
@@ -39,7 +38,8 @@ export function MetricsList() {
       errorMessage="No metrics data available. Make sure the Metrics plugin is enabled."
     >
       <div className="container-fluid">
-        <h2 className="mb-4">Available Metrics</h2>
+        <h2 className="">Available Metrics</h2>
+        <p>All raw metrics currently known, synchronized each minute across all workers.</p>
         
         {overview && overview.categories && Object.entries(overview.categories).length > 0 ? (
           Object.entries(overview.categories)
@@ -55,27 +55,15 @@ export function MetricsList() {
                       .sort((a, b) => a.localeCompare(b))
                       .map(metric => {
                         const metricKey = `${category}:${metric}`;
-                        const metricType = overview.types[metricKey];
-                        
-                        // Choose icon based on metric type
-                        let icon = "bi-graph-up";
-                        if (metricType === 'histogram') {
-                          icon = "bi-bar-chart";
-                        } else if (metricType === 'gauge') {
-                          icon = "bi-speedometer";
-                        }
-                        
+
                         return (
                           <Link 
                             key={metricKey} 
                             to={`/metrics/${encodeURIComponent(metricKey)}`}
-                            className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                            className="list-group-item list-group-item-action align-items-center"
                           >
-                            <span>
-                              <span className="text-muted">{category}:</span>
-                              <strong className="ms-1">{metric}</strong>
-                            </span>
-                            <i className={`bi ${icon} text-muted`}></i>
+                            <span className="text-muted">{category}:</span>
+                            <strong>{metric}</strong>
                           </Link>
                         );
                       })
