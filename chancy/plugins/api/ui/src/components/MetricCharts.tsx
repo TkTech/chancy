@@ -302,8 +302,7 @@ export const MetricChart = ({
   );
 };
 
-// Reusable QueueMetrics component
-export function QueueMetrics({ 
+export function QueueMetrics({
   apiUrl, 
   queueName, 
   resolution, 
@@ -314,7 +313,6 @@ export function QueueMetrics({
   resolution: string;
   workerId?: string;
 }) {
-  // Load throughput metrics
   const { data: throughputData, isLoading: throughputLoading } = useMetricDetail({
     url: apiUrl,
     type: 'queue',
@@ -324,7 +322,6 @@ export function QueueMetrics({
     worker_id: workerId,
   });
   
-  // Load execution time metrics
   const { data: executionTimeData, isLoading: executionTimeLoading } = useMetricDetail({
     url: apiUrl,
     type: 'queue',
@@ -338,7 +335,7 @@ export function QueueMetrics({
   const hasExecutionTimeData = executionTimeData && executionTimeData?.default?.data;
   
   return (
-    <>
+    <div className={"mb-4"}>
       <div className={"d-flex mb-3 flex-wrap align-items-center"}>
         <h4 className="flex-grow-1 mb-0">
           {queueName}
@@ -348,8 +345,7 @@ export function QueueMetrics({
         </Link>
       </div>
       
-      <div className="row row-cols-4 row-cols-md-1 g-4">
-        {/* Throughput Card */}
+      <div className="row row-cols-4 row-cols-lg-2 row-cols-md-1 g-4">
         <div className="col">
           <div className="card h-100">
             <div className="card-header">
@@ -371,8 +367,6 @@ export function QueueMetrics({
             </div>
           </div>
         </div>
-        
-        {/* Execution Time Card */}
         <div className="col">
           <div className="card h-100">
             <div className="card-header">
@@ -395,6 +389,6 @@ export function QueueMetrics({
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
