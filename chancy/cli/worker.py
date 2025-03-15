@@ -96,4 +96,6 @@ async def web_command(
         worker = Worker(chancy, tags=set())
         if has_metrics:
             worker.manager.add("metrics", has_metrics.run(worker, chancy))
-        await api.run(worker, chancy)
+        worker.manager.add("api", api.run(worker, chancy))
+
+        await worker.wait_for_shutdown()
