@@ -6,12 +6,12 @@ import { MetricPoint, useMetricDetail, MetricType } from '../hooks/useMetrics';
 import { Loading } from './Loading';
 import { Link } from 'react-router-dom';
 
-export const formatTimestamp = (timestamp: string) => {
+const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
   return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
 };
 
-export const formatValue = (value: number | Record<string, number>): number => {
+const formatValue = (value: number | Record<string, number>): number => {
   if (typeof value === 'number') {
     return value;
   }
@@ -51,7 +51,7 @@ export const ResolutionSelector = ({ resolution, setResolution }: {
 );
 
 
-export const tooltipStyles = {
+const tooltipStyles = {
   wrapperStyle: {
     backgroundColor: "#1a1a1a",
     border: "1px solid #2d2d2d",
@@ -60,14 +60,6 @@ export const tooltipStyles = {
     backgroundColor: 'transparent',
     border: "none",
   },
-  labelFormatter: (time: string, items: Array<{payload?: {rawTimestamp?: string}}>) => {
-    const item = items?.[0];
-    if (item?.payload?.rawTimestamp) {
-      const date = new Date(item.payload.rawTimestamp);
-      return date.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-    }
-    return time;
-  }
 };
 
 const generateTimePoints = (resolution: string, count: number) => {
