@@ -106,20 +106,17 @@ const generateTimePoints = (resolution: string, count: number) => {
 export const SparklineChart = ({ 
   points, 
   height = 30,
-  width = 80
+  width = 80,
+  resolution = '5min'
 }: { 
   points: MetricPoint[];
   height?: number;
   width?: number;
+  resolution?: string;
 }) => {
   if (!points || points.length === 0) {
     return <div style={{ height, width }} className="text-center">-</div>;
   }
-  
-  const resolution = points.length >= 2
-    ? new Date(points[1].timestamp).getTime() - new Date(points[0].timestamp).getTime() > 60000 * 10 
-      ? '1hour' : '5min'
-    : '5min';
   
   const timePoints = generateTimePoints(resolution, 20);
   
@@ -216,12 +213,13 @@ export const MetricChart = ({
   points, 
   metricType,
   height = 400,
-  minTickGap = 30
+  resolution = '5min'
 }: { 
   points: MetricPoint[];
   metricType: MetricType;
   height?: number;
   minTickGap?: number;
+  resolution?: string;
 }) => {
   if (!points || points.length === 0) {
     return (
@@ -235,19 +233,6 @@ export const MetricChart = ({
   
   const metricHistogramStats = isMetricHistogram ? ['avg', 'min', 'max'] : [];
   const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#00C49F'];
-  
-  let resolution = '5min';
-  if (points.length >= 2) {
-    const firstDate = new Date(points[0].timestamp);
-    const secondDate = new Date(points[1].timestamp);
-    const diffMinutes = Math.abs((secondDate.getTime() - firstDate.getTime()) / (60 * 1000));
-    
-    if (diffMinutes < 2) resolution = '1min';
-    else if (diffMinutes < 10) resolution = '5min';
-    else if (diffMinutes < 100) resolution = '1hour';
-    else if (diffMinutes >= 1000) resolution = '1day';
-    else resolution = '1hour'; // Default to 1hour for large gaps
-  }
   
   const timePointCount = {
     '1min': 60,
@@ -271,8 +256,6 @@ export const MetricChart = ({
           <XAxis 
             dataKey="time" 
             interval={resolution === '1day' ? 'preserveEnd' : 'preserveStartEnd'}
-            minTickGap={resolution === '1day' ? 60 : minTickGap}
-            tickCount={resolution === '1day' ? 7 : undefined}
           />
           <YAxis />
           <Tooltip {...tooltipStyles} />
@@ -304,8 +287,6 @@ export const MetricChart = ({
         <XAxis 
           dataKey="time" 
           interval={resolution === '1day' ? 'preserveEnd' : 'preserveStartEnd'}
-          minTickGap={resolution === '1day' ? 60 : minTickGap}
-          tickCount={resolution === '1day' ? 7 : undefined}
         />
         <YAxis />
         <Tooltip {...tooltipStyles} />
@@ -384,6 +365,7 @@ export function QueueMetrics({
                   points={throughputData.default.data}
                   metricType={throughputData.default.type}
                   height={200}
+                  resolution={resolution}
                 />
               )}
             </div>
@@ -406,6 +388,7 @@ export function QueueMetrics({
                   points={executionTimeData.default.data}
                   metricType={executionTimeData.default.type}
                   height={200}
+                  resolution={resolution}
                 />
               )}
             </div>

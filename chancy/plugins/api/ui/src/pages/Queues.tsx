@@ -136,7 +136,7 @@ function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl
     return <div style={{ width: 80, height: 30 }} />;
   }
   
-  return <SparklineChart points={throughputPoints} />;
+  return <SparklineChart points={throughputPoints} resolution="5min" />;
 }
 
 export function Queues() {

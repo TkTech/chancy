@@ -135,6 +135,7 @@ export function MetricDetail() {
                     <MetricChart 
                       points={metricData.data} 
                       metricType={metricData.type}
+                      resolution={resolution}
                     />
                   </div>
                 </div>
