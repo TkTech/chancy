@@ -6,7 +6,7 @@ interface Queue {
   tags: string[];
   state: string;
   executor: string;
-  executor_options: Record<string, any>;
+  executor_options: Record<string, unknown>;
   polling_interval: number;
   rate_limit: number | null;
   rate_limit_window: number | null;

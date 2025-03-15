@@ -5,12 +5,12 @@ export interface Job {
   id: string,
   queue: string,
   func: string,
-  kwargs: any,
+  kwargs: Record<string, unknown>,
   limits: {
     key: string,
     value: number
   }[],
-  meta: any,
+  meta: Record<string, unknown>,
   state: string,
   priority: number,
   attempts: number,
