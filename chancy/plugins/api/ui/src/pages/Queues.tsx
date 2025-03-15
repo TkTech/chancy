@@ -1,14 +1,21 @@
+import { useState } from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
 import {useWorkers} from '../hooks/useWorkers.tsx';
+import {QueueMetrics, ResolutionSelector, SparklineChart} from '../components/MetricCharts';
+import {useQueueThroughput} from '../hooks/useMetrics';
 
 export function Queue() {
   const { name } = useParams<{name: string}>();
   const { url } = useServerConfiguration();
   const { data: queues, isLoading } = useQueues(url);
   const { data: workers, isLoading: workersLoading } = useWorkers(url);
+  const [resolution, setResolution] = useState<string>('5min');
+  
+  // Check if metrics plugin is available
+  const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
 
   if (isLoading || workersLoading) return <Loading />;
   const queue = queues?.find(queue => queue.name === name);
@@ -33,7 +40,7 @@ export function Queue() {
         </tr>
         <tr>
           <th>Concurrency</th>
-          <td>{queue.concurrency}</td>
+          <td>{queue.concurrency || <em>Executor default</em>}</td>
         </tr>
         <tr>
           <th>Tags</th>
@@ -68,11 +75,25 @@ export function Queue() {
         <tr>
           <th>Rate Limit</th>
           <td>
-            {queue.rate_limit ? `${queue.rate_limit} requests per ${queue.rate_limit_window} seconds` : 'N/A'}
+            {queue.rate_limit ?`${queue.rate_limit} requests per ${queue.rate_limit_window} seconds` : <em>No rate limit applied to this queue.</em>}
           </td>
         </tr>
         </tbody>
       </table>
+      
+      {hasMetricsPlugin && (
+        <div className="mt-4">
+          <h3 className={"mb-3"}>Queue Metrics</h3>
+          <ResolutionSelector resolution={resolution} setResolution={setResolution} />
+          
+          <QueueMetrics
+            apiUrl={url}
+            queueName={queue.name}
+            resolution={resolution}
+          />
+        </div>
+      )}
+      
       <h3 className={"mt-4"}>Active Workers</h3>
       <p>
         These workers have announced that they are actively accepting jobs from the <code>{queue.name}</code> queue.
@@ -103,9 +124,25 @@ export function Queue() {
   );
 }
 
+// QueueThroughputSpark component for displaying throughput sparkline in the queue list
+function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl: string | null }) {
+  const { data: throughputPoints, isLoading } = useQueueThroughput({
+    url: apiUrl,
+    queueName,
+    enabled: !!apiUrl,
+  });
+  
+  if (isLoading || !throughputPoints) {
+    return <div style={{ width: 80, height: 30 }} />;
+  }
+  
+  return <SparklineChart points={throughputPoints} resolution="5min" />;
+}
+
 export function Queues() {
   const { url } = useServerConfiguration();
   const { data: queues, isLoading } = useQueues(url);
+  const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
 
   if (isLoading) return <Loading />;
 
@@ -117,6 +154,7 @@ export function Queues() {
         <tr>
           <th>Name</th>
           <th className={"w-100"}>Tags</th>
+          {hasMetricsPlugin && <th className="text-center">Throughput</th>}
           <th className={"text-center"}>State</th>
         </tr>
         </thead>
@@ -131,6 +169,11 @@ export function Queues() {
                 <span key={tag} className={"badge bg-primary me-1"}>{tag}</span>
               ))}
             </td>
+            {hasMetricsPlugin && (
+              <td className="text-center">
+                <QueueThroughputSpark queueName={queue.name} apiUrl={url} />
+              </td>
+            )}
             <td className={"text-center"}>
               <span className={`badge bg-${queue.state === 'active' ? 'success' : 'danger'}`}>{queue.state}</span>
             </td>

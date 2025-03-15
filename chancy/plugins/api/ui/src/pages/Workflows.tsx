@@ -118,9 +118,9 @@ export function Workflows() {
       <table className={"table table-hover mb-0"}>
         <thead>
         <tr>
-          <th>Name</th>
-          <th className={"text-center"}>State</th>
-          <th>Created</th>
+          <th className={"w-100"}>Name</th>
+          <th className={"text-center text-nowrap"}>State</th>
+          <th className={"text-center text-nowrap"}>Created</th>
         </tr>
         </thead>
         <tbody>
@@ -134,7 +134,7 @@ export function Workflows() {
             <td className={"text-center"}>
               <span className={`badge bg-${statusToColor(workflow.state)}`}>{workflow.state}</span>
             </td>
-            <td>
+            <td className={"text-center text-nowrap"}>
               <UpdatingTime date={workflow.created_at} />
             </td>
           </tr>

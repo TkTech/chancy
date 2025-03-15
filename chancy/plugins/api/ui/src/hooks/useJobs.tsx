@@ -5,12 +5,12 @@ export interface Job {
   id: string,
   queue: string,
   func: string,
-  kwargs: any,
+  kwargs: Record<string, unknown>,
   limits: {
     key: string,
     value: number
   }[],
-  meta: any,
+  meta: Record<string, unknown>,
   state: string,
   priority: number,
   attempts: number,
@@ -29,18 +29,23 @@ export interface Job {
 
 export function useJobs ({
   url,
-  state
+  state,
+  func
 }: {
   url: string | null,
-  state: string | undefined
+  state: string | undefined,
+  func?: string | undefined
 }) {
   const fullUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (state) {
       params.append('state', state);
     }
+    if (func) {
+      params.append('func', func);
+    }
     return `${url}/api/v1/jobs?${params.toString()}`;
-  }, [url, state]);
+  }, [url, state, func]);
 
   return useQuery<Job[]>({
     queryKey: ['jobs', fullUrl],
@@ -48,6 +53,9 @@ export function useJobs ({
       const params = new URLSearchParams();
       if (state) {
         params.append('state', state);
+      }
+      if (func) {
+        params.append('func', func);
       }
 
       const response = await fetch(fullUrl);

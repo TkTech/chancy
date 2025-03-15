@@ -17,6 +17,7 @@ import {Worker, Workers} from './pages/Workers.tsx';
 import {Job, Jobs} from './pages/Jobs.tsx';
 import {Cron, Crons} from './pages/Crons.tsx';
 import {Workflow, Workflows} from './pages/Workflows.tsx';
+import {Metrics, MetricDetail} from './pages/Metrics.tsx';
 
 const queryClient = new QueryClient();
 
@@ -29,12 +30,19 @@ const router = createBrowserRouter([
       { path: "/queues/:name", element: <Queue /> },
       { path: "/workers",  element: <Workers /> },
       { path: "/workers/:worker_id",  element: <Worker /> },
-      { path: "/jobs", element: <Jobs />},
+      { path: "/jobs", element: <Jobs />, loader: () => redirect("/jobs/pending") },
+      { path: "/jobs/pending", element: <Jobs />},
+      { path: "/jobs/running", element: <Jobs />},
+      { path: "/jobs/succeeded", element: <Jobs />},
+      { path: "/jobs/failed", element: <Jobs />},
+      { path: "/jobs/retrying", element: <Jobs />},
       { path: "/jobs/:job_id", element: <Job />},
       { path: "/crons", element: <Crons />},
       { path: "/crons/:cron_id", element: <Cron />},
       { path: "/workflows", element: <Workflows />},
       { path: "/workflows/:workflow_id", element: <Workflow />},
+      { path: "/metrics", element: <Metrics />},
+      { path: "/metrics/:metricKey", element: <MetricDetail />},
     ]
   }
 ]);

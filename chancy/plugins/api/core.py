@@ -97,6 +97,7 @@ class CoreApiPlugin(ApiPlugin):
         """
         state = request.query_params.get("state")
         queue = request.query_params.get("queue")
+        func = request.query_params.get("func")
         limit = min(int(request.query_params.get("limit", 100)), 100)
         before = request.query_params.get("before")
 
@@ -110,6 +111,9 @@ class CoreApiPlugin(ApiPlugin):
 
         if queue:
             rule &= JobRules.Queue() == queue
+
+        if func:
+            rule &= JobRules.Job().contains(func)
 
         async with chancy.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
