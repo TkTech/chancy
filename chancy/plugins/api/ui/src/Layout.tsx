@@ -2,7 +2,30 @@ import {NavLink, Outlet} from 'react-router-dom';
 import {useServerConfiguration} from './hooks/useServerConfiguration.tsx';
 import {useQueryClient} from '@tanstack/react-query';
 import {Loading} from './components/Loading.tsx';
-import {useCallback, useState} from 'react';
+import {SparklineChart} from './components/MetricCharts.tsx';
+import {useStatusMetric} from './hooks/useMetrics.tsx';
+import {useCallback, useState, ReactNode} from 'react';
+
+function StatusLink({ status, text }: { status: string, text: string }) {
+  const { url } = useServerConfiguration();
+
+  const { data: metricData } = useStatusMetric({
+    url: url,
+    status,
+    enabled: !!url && !!status
+  });
+  
+  return (
+    <div className="d-flex align-items-center w-100">
+      <span className="flex-grow-1">{text}</span>
+      {metricData && metricData.length > 0 && (
+        <div className="ms-2">
+          <SparklineChart points={metricData} height={20} width={60} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Layout() {
   const {configuration, isLoading, setHost, setPort, host, port} = useServerConfiguration();
@@ -61,7 +84,7 @@ function Layout() {
     )
   }
   
-    function navLink(link: {to: string, text: string, needs?: string[], subLinks?: {to: string, text: string}[]}) {
+    function navLink(link: {to: string, text: ReactNode, needs?: string[], subLinks?: {to: string, text: ReactNode}[]}) {
     if (link.needs && configuration && !link.needs.every(need => configuration.plugins.includes(need))) {
       return null;
     }
@@ -105,11 +128,11 @@ function Layout() {
             to: "/jobs",
             text: "Jobs",
             subLinks: [
-              { to: "/jobs/pending", text: "Pending" },
-              { to: "/jobs/running", text: "Running" },
-              { to: "/jobs/succeeded", text: "Succeeded" },
-              { to: "/jobs/failed", text: "Failed" },
-              { to: "/jobs/retrying", text: "Retrying" },
+              { to: "/jobs/pending", text: <StatusLink status="pending" text="Pending" /> },
+              { to: "/jobs/running", text: <StatusLink status="running" text="Running" /> },
+              { to: "/jobs/succeeded", text: <StatusLink status="succeeded" text="Succeeded" /> },
+              { to: "/jobs/failed", text: <StatusLink status="failed" text="Failed" /> },
+              { to: "/jobs/retrying", text: <StatusLink status="retrying" text="Retrying" /> },
             ]
           })}
           {navLink({to: "/queues", text: "Queues"})}

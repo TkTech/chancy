@@ -22,6 +22,40 @@ export interface MetricsOverview {
   count: number;
 }
 
+export function useStatusMetric({ 
+  url,
+  status, 
+  resolution = '5min',
+  limit = 20,
+  enabled = true
+}: { 
+  url: string | null;
+  status: string;
+  resolution?: string;
+  limit?: number;
+  enabled?: boolean;
+}) {
+  return useQuery<MetricPoint[]>({
+    queryKey: ['status-metric', url, status, resolution, limit],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        resolution,
+        limit: limit.toString()
+      });
+      
+      const response = await fetch(`${url}/api/v1/metrics/global/status:${status}?${params.toString()}`);
+      const data = await response.json();
+      if (!data.default) {
+        return [];
+      }
+      return data.default.data;
+    },
+    enabled: enabled && url !== null && status !== '',
+    refetchInterval: 30000,
+    staleTime: 20000
+  });
+}
+
 export function useMetricsOverview({ url }: { url: string | null }) {
   return useQuery<MetricsOverview>({
     queryKey: ['metrics-overview', url],

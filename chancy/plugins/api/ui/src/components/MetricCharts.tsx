@@ -6,25 +6,21 @@ import { MetricPoint, useMetricDetail, MetricType } from '../hooks/useMetrics';
 import { Loading } from './Loading';
 import { Link } from 'react-router-dom';
 
-// Function to format timestamps
 export const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  return `${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
 };
 
-// Function to format a value that might be complex
 export const formatValue = (value: number | Record<string, number>): number => {
   if (typeof value === 'number') {
     return value;
   }
   
   if (typeof value === 'object') {
-    // For histograms, return the average
     if ('avg' in value) {
       return value.avg;
     }
     
-    // For other objects with count, return that
     if ('count' in value) {
       return value.count;
     }
@@ -33,8 +29,7 @@ export const formatValue = (value: number | Record<string, number>): number => {
   return 0;
 };
 
-// Reusable component for resolution selector
-export const ResolutionSelector = ({ resolution, setResolution }: { 
+export const ResolutionSelector = ({ resolution, setResolution }: {
   resolution: string;
   setResolution: (res: string) => void;
 }) => (
@@ -56,7 +51,6 @@ export const ResolutionSelector = ({ resolution, setResolution }: {
 );
 
 
-// Custom tooltip style settings
 export const tooltipStyles = {
   wrapperStyle: {
     backgroundColor: "#1a1a1a",
@@ -69,10 +63,51 @@ export const tooltipStyles = {
   labelFormatter: (time: string, items: Array<{payload?: {rawTimestamp?: string}}>) => {
     const item = items?.[0];
     if (item?.payload?.rawTimestamp) {
-      return new Date(item.payload.rawTimestamp).toLocaleString();
+      const date = new Date(item.payload.rawTimestamp);
+      return date.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
     }
     return time;
   }
+};
+
+const generateTimePoints = (resolution: string, count: number) => {
+  const now = new Date();
+  const timePoints: Date[] = [];
+  
+  now.setMilliseconds(0);
+  now.setSeconds(0);
+  
+  let interval: number;
+  switch (resolution) {
+    case '1min':
+      interval = 60 * 1000;
+      now.setUTCMinutes(now.getUTCMinutes(), 0, 0);
+      break;
+    case '5min':
+      interval = 5 * 60 * 1000;
+      now.setUTCMinutes(Math.floor(now.getUTCMinutes() / 5) * 5, 0, 0);
+      break;
+    case '1hour':
+      interval = 60 * 60 * 1000;
+      now.setUTCMinutes(0, 0, 0);
+      break;
+    case '1day':
+      interval = 24 * 60 * 60 * 1000;
+      now.setUTCHours(0, 0, 0, 0); // Round to the current day at midnight
+      // For 1day resolution, we want to ensure we're at midnight
+      now.setUTCHours(0, 0, 0, 0);
+      break;
+    default:
+      interval = 5 * 60 * 1000;
+      now.setUTCMinutes(Math.floor(now.getUTCMinutes() / 5) * 5, 0, 0);
+  }
+  
+  for (let i = 0; i < count; i++) {
+    const timePoint = new Date(now.getTime() - (interval * i));
+    timePoints.unshift(timePoint);
+  }
+  
+  return timePoints;
 };
 
 // Sparkline-style chart for compact display in tables
@@ -89,13 +124,30 @@ export const SparklineChart = ({
     return <div style={{ height, width }} className="text-center">-</div>;
   }
   
-  const data = points.map(point => ({
-    value: formatValue(point.value)
-  })).reverse();
+  const resolution = points.length >= 2
+    ? new Date(points[1].timestamp).getTime() - new Date(points[0].timestamp).getTime() > 60000 * 10 
+      ? '1hour' : '5min'
+    : '5min';
+  
+  const timePoints = generateTimePoints(resolution, 20);
+  
+  const dataPointsMap = new Map();
+  points.forEach(point => {
+    dataPointsMap.set(new Date(point.timestamp).getTime(), point);
+  });
+  
+  const completeData = timePoints.map(timePoint => {
+    const timestamp = timePoint.getTime();
+    const existingPoint = dataPointsMap.get(timestamp);
+    
+    return {
+      value: existingPoint ? formatValue(existingPoint.value) : 0
+    };
+  });
 
   return (
     <ResponsiveContainer width={width} height={height}>
-      <LineChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+      <LineChart data={completeData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
         <Line 
           type="monotone" 
           dataKey="value" 
@@ -109,8 +161,66 @@ export const SparklineChart = ({
   );
 };
 
-// Common chart components
-export const MetricChart = ({ 
+const createCompleteDataset = (
+  timePoints: Date[], 
+  dataPoints: MetricPoint[], 
+  isHistogram: boolean, 
+  histogramStats: string[] = []
+) => {
+  const dataPointsMap = new Map();
+  dataPoints.forEach(point => {
+    dataPointsMap.set(new Date(point.timestamp).getTime(), point);
+  });
+  
+  return timePoints.map(timePoint => {
+    const timestamp = timePoint.getTime();
+    const existingPoint = dataPointsMap.get(timestamp);
+    
+    if (existingPoint) {
+      if (isHistogram) {
+        const obj: Record<string, string | number> = {
+          time: formatTimestamp(existingPoint.timestamp),
+          rawTimestamp: existingPoint.timestamp
+        };
+        
+        for (const [key, val] of Object.entries(existingPoint.value as Record<string, number>)) {
+          obj[key] = val;
+        }
+        
+        return obj;
+      } else {
+        return {
+          time: formatTimestamp(existingPoint.timestamp),
+          value: formatValue(existingPoint.value),
+          rawTimestamp: existingPoint.timestamp
+        };
+      }
+    } else {
+      const iso = timePoint.toISOString();
+      
+      if (isHistogram) {
+        const obj: Record<string, string | number> = {
+          time: formatTimestamp(iso),
+          rawTimestamp: iso
+        };
+        
+        histogramStats.forEach(stat => {
+          obj[stat] = 0;
+        });
+        
+        return obj;
+      } else {
+        return {
+          time: formatTimestamp(iso),
+          value: 0,
+          rawTimestamp: iso
+        };
+      }
+    }
+  });
+};
+
+export const MetricChart = ({
   points, 
   metricType,
   height = 400,
@@ -131,34 +241,46 @@ export const MetricChart = ({
 
   const isMetricHistogram = metricType === 'histogram';
   
-  // Set stats to display for histogram
   const metricHistogramStats = isMetricHistogram ? ['avg', 'min', 'max'] : [];
   const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#00C49F'];
-
+  
+  let resolution = '5min';
+  if (points.length >= 2) {
+    const firstDate = new Date(points[0].timestamp);
+    const secondDate = new Date(points[1].timestamp);
+    const diffMinutes = Math.abs((secondDate.getTime() - firstDate.getTime()) / (60 * 1000));
+    
+    if (diffMinutes < 2) resolution = '1min';
+    else if (diffMinutes < 10) resolution = '5min';
+    else if (diffMinutes < 100) resolution = '1hour';
+    else if (diffMinutes >= 1000) resolution = '1day';
+    else resolution = '1hour'; // Default to 1hour for large gaps
+  }
+  
+  const timePointCount = {
+    '1min': 60,
+    '5min': 60,
+    '1hour': 24,
+    '1day': 30
+  }[resolution] || 60;
+  
+  const timePoints = generateTimePoints(resolution, timePointCount);
+  
   if (isMetricHistogram) {
+    const completeData = createCompleteDataset(timePoints, points, true, metricHistogramStats);
+    
     return (
       <ResponsiveContainer width="100%" height={height}>
         <LineChart
-          data={points.map(point => {
-            const obj: Record<string, string | number> = {
-              time: formatTimestamp(point.timestamp),
-              rawTimestamp: point.timestamp
-            };
-            
-            // Add all values from the histogram
-            for (const [key, val] of Object.entries(point.value as Record<string, number>)) {
-              obj[key] = val;
-            }
-            
-            return obj;
-          }).reverse()}
+          data={completeData}
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis 
             dataKey="time" 
-            interval="preserveStartEnd"
-            minTickGap={minTickGap}
+            interval={resolution === '1day' ? 'preserveEnd' : 'preserveStartEnd'}
+            minTickGap={resolution === '1day' ? 60 : minTickGap}
+            tickCount={resolution === '1day' ? 7 : undefined}
           />
           <YAxis />
           <Tooltip {...tooltipStyles} />
@@ -178,21 +300,20 @@ export const MetricChart = ({
     );
   }
   
+  const completeData = createCompleteDataset(timePoints, points, false);
+  
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart
-        data={points.map(point => ({
-          time: formatTimestamp(point.timestamp),
-          value: formatValue(point.value),
-          rawTimestamp: point.timestamp
-        })).reverse()}
+        data={completeData}
         margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
       >
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis 
           dataKey="time" 
-          interval="preserveStartEnd"
-          minTickGap={minTickGap}
+          interval={resolution === '1day' ? 'preserveEnd' : 'preserveStartEnd'}
+          minTickGap={resolution === '1day' ? 60 : minTickGap}
+          tickCount={resolution === '1day' ? 7 : undefined}
         />
         <YAxis />
         <Tooltip {...tooltipStyles} />
