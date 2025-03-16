@@ -85,6 +85,7 @@ class Metrics(Plugin):
         sync_interval: int = 60,
         max_points_per_resolution: Dict[Resolution, int] = None,
         maximum_metric_age: int = 60 * 60 * 24 * 90,
+        collection_interval: int = 30,
     ):
         """
         Initialize the metrics plugin.
@@ -95,11 +96,12 @@ class Metrics(Plugin):
                                           resolution.
         :param maximum_metric_age: The maximum age of metrics to keep in the
                                    database, in seconds. Defaults to 90 days.
+        :param collection_interval: The interval at which to collect table size
+                                    metrics, in seconds.
         """
         super().__init__()
         self.sync_interval = sync_interval
 
-        # Worker ID will be set in run()
         self.worker_id = None
 
         # Default retention policy: how many points to keep for each resolution
@@ -133,6 +135,9 @@ class Metrics(Plugin):
         # Maximum age of metrics to keep in the database
         self.maximum_metric_age = maximum_metric_age
 
+        # The interval at which to collect table size metrics
+        self.collection_interval = 30
+
     async def run(self, worker: Worker, chancy: Chancy):
         """
         Run the metrics plugin.
@@ -145,6 +150,12 @@ class Metrics(Plugin):
 
         # Initial load of metrics from the database
         await self._load_metrics_from_db(chancy)
+
+        # Start a task to collect table size metrics
+        worker.manager.add(
+            f"metrics_table_sizes_{self.worker_id}",
+            self._collect_table_sizes(worker, chancy),
+        )
 
         while await self.sleep(self.sync_interval):
             await self._sync_metrics(chancy)
@@ -670,10 +681,70 @@ class Metrics(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.metrics.api.MetricsApiPlugin"
-        
+
     def get_tables(self) -> list[str]:
         """Get the names of all tables this plugin is responsible for."""
         return ["metrics"]
+
+    async def _collect_table_sizes(self, worker: Worker, chancy: Chancy):
+        """
+        Collect size metrics for database tables.
+
+        This runs as a separate task and collects table sizes every 30 seconds,
+        but only when this worker is the leader to avoid duplicate metrics.
+        """
+        core_tables = [
+            "jobs",
+            "queues",
+            "workers",
+            "leader",
+            "queue_rate_limits",
+        ]
+
+        while await self.sleep(self.collection_interval):
+            await self.wait_for_leader(worker)
+
+            plugin_tables = []
+            for plugin in chancy.plugins:
+                plugin_tables.extend(plugin.get_tables())
+
+            all_tables = list(set(plugin_tables + core_tables))
+            prefixed_tables = [
+                f"{chancy.prefix}{table}" for table in all_tables
+            ]
+
+            async with chancy.pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cursor:
+                    query = sql.SQL(
+                        """
+                        SELECT
+                            table_name,
+                            pg_total_relation_size(table_name) as total_size_bytes,
+                            pg_relation_size(table_name) as table_size_bytes,
+                            pg_indexes_size(table_name) as index_size_bytes
+                        FROM unnest({tables}::text[]) AS table_name
+                    """
+                    ).format(tables=sql.Literal(prefixed_tables))
+
+                    await cursor.execute(query)
+
+                    async for result in cursor:
+                        table_name = result["table_name"].removeprefix(
+                            chancy.prefix
+                        )
+
+                        await self.record_histogram_value(
+                            f"table:{table_name}:total_size_bytes",
+                            result["total_size_bytes"],
+                        )
+                        await self.record_histogram_value(
+                            f"table:{table_name}:table_size_bytes",
+                            result["table_size_bytes"],
+                        )
+                        await self.record_histogram_value(
+                            f"table:{table_name}:index_size_bytes",
+                            result["index_size_bytes"],
+                        )
 
     def get_metrics(
         self,
