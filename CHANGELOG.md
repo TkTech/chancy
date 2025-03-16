@@ -1,6 +1,19 @@
 Changelog
 =========
 
+0.21.0
+------
+
+- Worker's page on the dashboard now shows worker tags and a badge if the
+  worker is the cluster's current leader.
+
+0.20.1
+------
+
+- Workers that had no metrics to _push_ skipped _pulling_ metrics from other
+  workers, which mainly affected a standalone API worker (since it would never
+  have metrics)
+
 0.20.0
 ------
 - Built-in support for metrics via the `Metrics()` such as job, queue and worker

@@ -783,11 +783,17 @@ class Chancy:
         return sql.SQL(
             """
             SELECT
-                *
+                wr.*,
+                l.worker_id IS NOT NULL as is_leader
             FROM
-                {workers}
+                {workers} wr
+            LEFT JOIN
+                {leader} l on l.worker_id = wr.worker_id
             """
-        ).format(workers=sql.Identifier(f"{self.prefix}workers"))
+        ).format(
+            workers=sql.Identifier(f"{self.prefix}workers"),
+            leader=sql.Identifier(f"{self.prefix}leader"),
+        )
 
     def _get_queue_sql(self):
         return sql.SQL(
