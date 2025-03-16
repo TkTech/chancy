@@ -202,10 +202,10 @@ class WorkflowPlugin(Plugin):
             ) as chancy:
                 workflow = (
                     Workflow("example")
-                    .add(top, "top")
-                    .add(left, "left", ["top"])
-                    .add(right, "right", ["top"])
-                    .add(bottom, "bottom", ["left", "right"])
+                    .add("top", top)
+                    .add("left", left, ["top"])
+                    .add("right", right, ["top"])
+                    .add("bottom", bottom, ["left", "right"])
                 )
                 await WorkflowPlugin.push(chancy, workflow)
 
