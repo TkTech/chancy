@@ -2,10 +2,12 @@ import asyncio
 import enum
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import List, Dict, TextIO, Self
 from psycopg import sql
 from psycopg.rows import dict_row
 
+from chancy.hub import Event
 from chancy.plugin import Plugin, PluginScope
 from chancy.app import Chancy
 from chancy.worker import Worker
@@ -253,6 +255,10 @@ class WorkflowPlugin(Plugin):
             "workflow.created",
             lambda *args, **kwargs: self.wake_up(),
         )
+        worker.hub.on(
+            "workflow.step_completed",
+            partial(self._on_single_step_completed, chancy=chancy),
+        )
 
         while await self.sleep(self.polling_interval):
             await self.wait_for_leader(worker)
@@ -263,6 +269,31 @@ class WorkflowPlugin(Plugin):
             )
             for workflow in workflows:
                 await self.process_workflow(chancy, workflow)
+
+    async def _on_single_step_completed(self, event: Event, chancy: Chancy):
+        """
+        Called whenever a single step in a workflow is completed.
+
+        Used to immediately process the workflow and check if it can be
+        progressed to the next step without waiting for the next polling
+        interval.
+        """
+        workflow = await self.fetch_workflow(chancy, event.body["workflow_id"])
+        if workflow is not None:
+            await self.process_workflow(chancy, workflow)
+
+    async def on_job_updated(
+        self,
+        *,
+        worker: "Worker",
+        job: QueuedJob,
+    ):
+        if not job.meta.get("workflow_id"):
+            return
+
+        await worker.hub.emit(
+            "workflow.step_completed", {"workflow_id": job.meta["workflow_id"]}
+        )
 
     @classmethod
     async def fetch_workflow(cls, chancy: Chancy, id_: str) -> Workflow | None:
@@ -403,7 +434,16 @@ class WorkflowPlugin(Plugin):
                 dep.state == QueuedJob.State.SUCCEEDED for dep in dependencies
             ):
                 if step.job_id is None:
-                    step.job_id = (await chancy.push(step.job)).identifier
+                    step.job_id = (
+                        await chancy.push(
+                            step.job.with_meta(
+                                {
+                                    **step.job.meta,
+                                    "workflow_id": str(workflow.id),
+                                }
+                            )
+                        )
+                    ).identifier
                     has_change = True
 
         # Are all jobs complete, or any jobs failed? If so, we can mark the

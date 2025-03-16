@@ -527,6 +527,10 @@ class Worker:
                                 await self.outgoing.put(update)
                             raise
 
+            for update in pending_updates:
+                for plugin in self.chancy.plugins:
+                    await plugin.on_job_updated(job=update, worker=self)
+
             await asyncio.sleep(self.send_outgoing_interval)
 
     async def announce_worker(self, conn: AsyncConnection):

@@ -7,8 +7,10 @@ Changelog
 - Worker's page on the dashboard now shows worker tags and a badge if the
   worker is the cluster's current leader.
 - The `workflow.upserted` event has been split into `workflow.created` and
-  `workflow.updated` events.
+  `workflow.updated` events. Added a new `workflow.step_completed` event.
 - `WorkflowPlugin.push` now only pushes the workflow if it has actually changed.
+- `workflow.step_completed` is now used to nearly instantly progress a workflow
+   to the next step, instead of waiting for the next polling interval.
 
 0.20.1
 ------
