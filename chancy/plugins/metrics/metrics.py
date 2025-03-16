@@ -670,6 +670,10 @@ class Metrics(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.metrics.api.MetricsApiPlugin"
+        
+    def get_tables(self) -> list[str]:
+        """Get the names of all tables this plugin is responsible for."""
+        return ["metrics"]
 
     def get_metrics(
         self,

@@ -675,6 +675,10 @@ class WorkflowPlugin(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.workflow.api.WorkflowApiPlugin"
+        
+    def get_tables(self) -> list[str]:
+        """Get the names of all tables this plugin is responsible for."""
+        return ["workflows", "workflow_steps"]
 
 
 class Sequence:

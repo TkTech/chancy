@@ -44,6 +44,10 @@ class Leadership(Plugin):
     @classmethod
     def get_scope(cls) -> PluginScope:
         return PluginScope.WORKER
+        
+    def get_tables(self) -> list[str]:
+        """Get the names of all tables this plugin is responsible for."""
+        return ["leader"]
 
     async def run(self, worker: Worker, chancy: Chancy):
         prune_q = sql.SQL(

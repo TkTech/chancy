@@ -150,6 +150,10 @@ class Cron(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.cron.api.CronApiPlugin"
+        
+    def get_tables(self) -> list[str]:
+        """Get the names of all tables this plugin is responsible for."""
+        return ["cron"]
 
     @classmethod
     async def unschedule(cls, chancy: Chancy, *unique_keys: str):
