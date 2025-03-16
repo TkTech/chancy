@@ -82,6 +82,7 @@ class Metrics(Plugin):
         *,
         sync_interval: int = 60,
         max_points_per_resolution: Dict[Resolution, int] = None,
+        maximum_metric_age: int = 60 * 60 * 24 * 90,
     ):
         """
         Initialize the metrics plugin.
@@ -90,6 +91,8 @@ class Metrics(Plugin):
                               database and other workers.
         :param max_points_per_resolution: How many points to keep for each
                                           resolution.
+        :param maximum_metric_age: The maximum age of metrics to keep in the
+                                   database, in seconds. Defaults to 90 days.
         """
         super().__init__()
         self.sync_interval = sync_interval
@@ -124,6 +127,9 @@ class Metrics(Plugin):
 
         # Locks to prevent race conditions.
         self.metric_locks: Dict[str, asyncio.Lock] = {}
+
+        # Maximum age of metrics to keep in the database
+        self.maximum_metric_age = maximum_metric_age
 
     async def run(self, worker: Worker, chancy: Chancy):
         """
@@ -170,28 +176,24 @@ class Metrics(Plugin):
         3. Job execution time
         4. Global job status counts
         """
-        execution_time = None
         if job.started_at and job.completed_at:
             execution_time = (job.completed_at - job.started_at).total_seconds()
+            await self.record_histogram_value(
+                f"job:{job.func}:execution_time",
+                execution_time,
+            )
+            await self.record_histogram_value(
+                f"queue:{job.queue}:execution_time",
+                execution_time,
+            )
 
         await self.increment_counter(
             f"job:{job.func}:{'success' if exc is None else 'failure'}",
             1,
         )
 
-        # Increment global job status counter
         await self.increment_counter(f"global:status:{job.state.value}", 1)
-
         await self.increment_counter(f"queue:{job.queue}:throughput", 1)
-
-        if execution_time is not None:
-            await self.record_histogram_value(
-                f"job:{job.func}:execution_time", execution_time
-            )
-            await self.record_histogram_value(
-                f"queue:{job.queue}:execution_time",
-                execution_time,
-            )
 
         return job
 
@@ -199,53 +201,25 @@ class Metrics(Plugin):
         """
         Clean up old metrics data.
 
-        Called by the Pruner plugin.
+        Called automatically by the Pruner plugin, or may be manually invoked.
         """
-        pruned_count = 0
 
         async with chancy.pool.connection() as conn:
             async with conn.cursor() as cursor:
-                for resolution, max_points in self.max_points.items():
-                    # Query to prune the arrays, keeping only the most recent
-                    # max_points.
-                    query = sql.SQL(
-                        """
-                        UPDATE {metrics_table}
-                        SET
-                            timestamps = (
-                                SELECT ARRAY(
-                                    SELECT unnest(timestamps) 
-                                    ORDER BY unnest DESC 
-                                    LIMIT {max_points}
-                                )
-                            ),
-                            values = (
-                                SELECT ARRAY(
-                                    SELECT unnest(values)
-                                    FROM (
-                                        SELECT ROW_NUMBER() OVER (ORDER BY unnest(timestamps) DESC) as rn,
-                                               unnest(values) as unnest
-                                        FROM {metrics_table} m2
-                                        WHERE m2.metric_key = {metrics_table}.metric_key
-                                        AND m2.resolution = {metrics_table}.resolution
-                                    ) ranked
-                                    WHERE rn <= {max_points}
-                                )
-                            )
-                        WHERE
-                            resolution = {resolution}
-                            AND array_length(timestamps, 1) > {max_points}
+                query = sql.SQL(
                     """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
-                        max_points=sql.Literal(max_points),
-                        resolution=sql.Literal(resolution),
-                    )
+                    DELETE
+                    FROM {metrics_table}
+                    WHERE
+                        updated_at < NOW() - interval %s
+                    """
+                ).format(
+                    metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
+                    maximum_metric_age=sql.Literal(self.maximum_metric_age),
+                )
 
-                    await cursor.execute(query)
-                    pruned_count += cursor.rowcount
-
-        return pruned_count if pruned_count > 0 else None
+                await cursor.execute(query)
+                return cursor.rowcount if cursor.rowcount > 0 else None
 
     async def _get_metric_lock(self, metric_key: str) -> asyncio.Lock:
         """Get a lock for a specific metric to prevent race conditions."""
@@ -385,7 +359,6 @@ class Metrics(Plugin):
                         Dict[str, Union[int, float]], points[0][1]
                     )
 
-                    # Update the stats
                     count = cast(int, current_stats.get("count", 0)) + 1
                     current_sum = (
                         cast(float, current_stats.get("sum", 0)) + value
@@ -406,7 +379,6 @@ class Metrics(Plugin):
                     }
                     points[0] = (points[0][0], new_stats)
                 else:
-                    # Create a new histogram bucket
                     initial_stats = {
                         "count": 1,
                         "sum": value,
@@ -416,11 +388,9 @@ class Metrics(Plugin):
                     }
                     points.insert(0, (bucket_time, initial_stats))
 
-                # Prune if we have too many points
                 if len(points) > self.max_points[resolution]:
                     points.pop()
 
-                # Mark this metric as modified
                 self.modified_metrics.add(metric_key)
 
     async def _sync_metrics(self, chancy: Chancy) -> None:
@@ -446,7 +416,6 @@ class Metrics(Plugin):
 
         metrics_to_insert = []
 
-        # Process each metric key that was modified
         for metric_key in self.modified_metrics:
             if metric_key not in self.local_metrics_cache:
                 continue
@@ -487,7 +456,6 @@ class Metrics(Plugin):
 
         async with chancy.pool.connection() as conn:
             async with conn.cursor() as cursor:
-                # Execute a single query with all metrics using execute_batch
                 await cursor.executemany(
                     sql.SQL(
                         """
@@ -500,8 +468,13 @@ class Metrics(Plugin):
                             metric_type,
                             updated_at
                         ) VALUES (
-                            %(metric_key)s, %(resolution)s, %(worker_id)s, 
-                            %(timestamps)s, %(values)s, %(metric_type)s, NOW()
+                            %(metric_key)s,
+                            %(resolution)s,
+                            %(worker_id)s, 
+                            %(timestamps)s,
+                            %(values)s,
+                            %(metric_type)s,
+                            NOW()
                         )
                         ON CONFLICT (
                             metric_key,
