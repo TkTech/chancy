@@ -5,7 +5,9 @@ Metrics plugin for collecting and sharing metrics across workers.
 import asyncio
 import datetime
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field
+from itertools import groupby
 from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union, cast
 
 from psycopg import sql
@@ -400,7 +402,7 @@ class Metrics(Plugin):
         if self.modified_metrics:
             await self._push_metrics_to_db(chancy)
 
-        await self._load_metrics_from_db(chancy, load_only_changes=True)
+        await self._load_metrics_from_db(chancy)
         self.last_sync_time = datetime.datetime.now(datetime.timezone.utc)
         self.modified_metrics.clear()
 
@@ -493,9 +495,7 @@ class Metrics(Plugin):
                     metrics_to_insert,
                 )
 
-    async def _load_metrics_from_db(
-        self, chancy: Chancy, load_only_changes: bool = False
-    ) -> None:
+    async def _load_metrics_from_db(self, chancy: Chancy) -> None:
         """
         Load metrics from the database.
 
@@ -503,195 +503,109 @@ class Metrics(Plugin):
         into the aggregated_metrics_cache.
 
         :param chancy: The Chancy application instance
-        :param load_only_changes: If True, only load metrics updated since the
-                                  last sync time
         """
         async with chancy.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
-                if load_only_changes:
-                    query = sql.SQL(
-                        """
-                        SELECT 
-                            metric_key,
-                            resolution,
-                            worker_id,
-                            timestamps,
-                            values,
-                            metric_type
-                        FROM 
-                            {metrics_table}
-                        WHERE 
-                            updated_at > %s
-                        ORDER BY 
-                            metric_key, resolution
-                        """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
+                query = sql.SQL(
+                    """
+                    SELECT 
+                        metric_key,
+                        resolution,
+                        metric_type,
+                        json_agg(timestamps ORDER BY worker_id, updated_at) as all_timestamps,
+                        json_agg(values ORDER BY worker_id, updated_at) as all_values
+                    FROM 
+                        {metrics_table}
+                    GROUP BY 
+                        metric_key, resolution, metric_type
+                    ORDER BY 
+                        metric_key, resolution
+                    """
+                ).format(
+                    metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
+                )
+                await cursor.execute(query)
+
+                for metric_key, group in groupby(
+                    [r async for r in cursor],
+                    key=lambda r: r["metric_key"],
+                ):
+                    group_list = list(group)
+                    metric = self.aggregated_metrics_cache.setdefault(
+                        metric_key,
+                        Metric(metric_type=group_list[0]["metric_type"]),
                     )
-                    await cursor.execute(query, (self.last_sync_time,))
-                else:
-                    query = sql.SQL(
-                        """
-                        SELECT 
-                            metric_key,
-                            resolution,
-                            worker_id,
-                            timestamps,
-                            values,
-                            metric_type
-                        FROM 
-                            {metrics_table}
-                        ORDER BY 
-                            metric_key, resolution
-                        """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
-                    )
-                    await cursor.execute(query)
 
-                # Group the results by metric_key and resolution
-                metrics_data = {}
-                metric_types = {}
-                async for row in cursor:
-                    metric_key = row["metric_key"]
-                    resolution = cast(Resolution, row["resolution"])
-                    # Store the metric type - it should always be present
-                    metric_type = row["metric_type"]
-                    if not metric_type:
-                        raise ValueError(
-                            f"Metric {metric_key} is missing required metric_type"
-                        )
-                    metric_types[metric_key] = cast(MetricType, metric_type)
+                    for row in group_list:
+                        resolution = cast(Resolution, row["resolution"])
+                        merged_points = defaultdict(list)
 
-                    if metric_key not in metrics_data:
-                        metrics_data[metric_key] = {}
+                        for worker_idx, timestamps_array in enumerate(
+                            row["all_timestamps"]
+                        ):
+                            values_array = row["all_values"][worker_idx]
 
-                    if resolution not in metrics_data[metric_key]:
-                        metrics_data[metric_key][resolution] = []
-
-                    metrics_data[metric_key][resolution].append(row)
-
-                # Process each metric_key and resolutions
-                for metric_key, resolutions in metrics_data.items():
-                    # Get the metric type, default to counter if not found
-                    metric_type = metric_types.get(metric_key, "counter")
-
-                    # Initialize result dicts for each resolution
-                    values_1min = []
-                    values_5min = []
-                    values_1hour = []
-                    values_1day = []
-
-                    # Process each resolution
-                    for resolution, worker_data in resolutions.items():
-                        # Collect all points from all workers
-                        all_points = []
-                        for row in worker_data:
-                            timestamps = row["timestamps"]
-                            values = row["values"]
-
-                            for i in range(len(timestamps)):
-                                value = (
-                                    json.loads(values[i])
-                                    if isinstance(values[i], str)
-                                    else values[i]
-                                )
-                                all_points.append((timestamps[i], value))
-
-                        # Group points by timestamp for merging
-                        merged_points: Dict[
-                            datetime.datetime, List[MetricValue]
-                        ] = {}
-                        for timestamp, value in all_points:
-                            if timestamp not in merged_points:
-                                merged_points[timestamp] = []
-                            merged_points[timestamp].append(value)
+                            for i in range(len(timestamps_array)):
+                                timestamp = timestamps_array[i]
+                                merged_points[timestamp].append(values_array[i])
 
                         result_points = []
                         for timestamp, values_list in merged_points.items():
-                            # If all values are numbers, sum them
-                            if all(
-                                isinstance(v, (int, float)) for v in values_list
-                            ):
+                            if metric.metric_type == "counter":
                                 merged_value = sum(values_list)
-                            # If all values are dictionaries with the same keys, merge them
-                            elif all(isinstance(v, dict) for v in values_list):
-                                # Handle histogram values (with stats)
-                                if all(
-                                    "count" in v for v in values_list
-                                ) and all("sum" in v for v in values_list):
-                                    total_count = sum(
-                                        v.get("count", 0) for v in values_list
-                                    )
-                                    total_sum = sum(
-                                        v.get("sum", 0) for v in values_list
-                                    )
-
-                                    # Find min/max across all workers
-                                    all_mins = [
-                                        v.get("min")
-                                        for v in values_list
-                                        if "min" in v
-                                    ]
-                                    all_maxs = [
-                                        v.get("max")
-                                        for v in values_list
-                                        if "max" in v
-                                    ]
-
-                                    merged_value = {
-                                        "count": total_count,
-                                        "sum": total_sum,
-                                        "avg": (
-                                            total_sum / total_count
-                                            if total_count > 0
-                                            else 0
-                                        ),
-                                        "min": min(all_mins) if all_mins else 0,
-                                        "max": max(all_maxs) if all_maxs else 0,
-                                    }
-                                else:
-                                    merged_value = {}
-                                    for v in values_list:
-                                        for k, val in v.items():
-                                            if k in merged_value:
-                                                merged_value[k] += val
-                                            else:
-                                                merged_value[k] = val
-                            else:
+                            elif metric.metric_type == "gauge":
                                 merged_value = values_list[0]
+                            elif metric.metric_type == "histogram":
+                                total_count = sum(
+                                    v.get("count", 0) for v in values_list
+                                )
+                                total_sum = sum(
+                                    v.get("sum", 0) for v in values_list
+                                )
+
+                                all_mins = [
+                                    v.get("min")
+                                    for v in values_list
+                                    if "min" in v
+                                ]
+                                all_maxs = [
+                                    v.get("max")
+                                    for v in values_list
+                                    if "max" in v
+                                ]
+
+                                merged_value = {
+                                    "count": total_count,
+                                    "sum": total_sum,
+                                    "avg": (
+                                        total_sum / total_count
+                                        if total_count > 0
+                                        else 0
+                                    ),
+                                    "min": min(all_mins) if all_mins else 0,
+                                    "max": max(all_maxs) if all_maxs else 0,
+                                }
 
                             result_points.append((timestamp, merged_value))
 
-                        # Sort points by timestamp (newest first)
                         result_points.sort(key=lambda p: p[0], reverse=True)
 
-                        # Store points in the appropriate resolution list
                         if resolution == "1min":
-                            values_1min = result_points[
+                            metric.values_1min = result_points[
                                 : self.max_points[resolution]
                             ]
                         elif resolution == "5min":
-                            values_5min = result_points[
+                            metric.values_5min = result_points[
                                 : self.max_points[resolution]
                             ]
                         elif resolution == "1hour":
-                            values_1hour = result_points[
+                            metric.values_1hour = result_points[
                                 : self.max_points[resolution]
                             ]
                         elif resolution == "1day":
-                            values_1day = result_points[
+                            metric.values_1day = result_points[
                                 : self.max_points[resolution]
                             ]
-
-                    # Create and store the Metric object in the aggregated cache
-                    self.aggregated_metrics_cache[metric_key] = Metric(
-                        metric_type=cast(MetricType, metric_type),
-                        values_1min=values_1min,
-                        values_5min=values_5min,
-                        values_1hour=values_1hour,
-                        values_1day=values_1day,
-                    )
 
     @staticmethod
     def _get_bucket_time(

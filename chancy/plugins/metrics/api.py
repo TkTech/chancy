@@ -251,7 +251,7 @@ class MetricsApiPlugin(ApiPlugin):
                         for timestamp, value in points:
                             metric_data.append(
                                 {
-                                    "timestamp": timestamp.isoformat(),
+                                    "timestamp": timestamp,
                                     "value": value,
                                 }
                             )
