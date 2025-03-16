@@ -257,7 +257,9 @@ class WorkflowPlugin(Plugin):
         )
         worker.hub.on(
             "workflow.step_completed",
-            partial(self._on_single_step_completed, chancy=chancy),
+            partial(
+                self._on_single_step_completed, chancy=chancy, worker=worker
+            ),
         )
 
         while await self.sleep(self.polling_interval):
@@ -270,7 +272,9 @@ class WorkflowPlugin(Plugin):
             for workflow in workflows:
                 await self.process_workflow(chancy, workflow)
 
-    async def _on_single_step_completed(self, event: Event, chancy: Chancy):
+    async def _on_single_step_completed(
+        self, event: Event, chancy: Chancy, worker: Worker
+    ):
         """
         Called whenever a single step in a workflow is completed.
 
@@ -278,6 +282,9 @@ class WorkflowPlugin(Plugin):
         progressed to the next step without waiting for the next polling
         interval.
         """
+        if not worker.is_leader:
+            return
+
         workflow = await self.fetch_workflow(chancy, event.body["workflow_id"])
         if workflow is not None:
             await self.process_workflow(chancy, workflow)
@@ -675,7 +682,7 @@ class WorkflowPlugin(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.workflow.api.WorkflowApiPlugin"
-        
+
     def get_tables(self) -> list[str]:
         """Get the names of all tables this plugin is responsible for."""
         return ["workflows", "workflow_steps"]
