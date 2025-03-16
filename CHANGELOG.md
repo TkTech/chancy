@@ -6,6 +6,9 @@ Changelog
 
 - Worker's page on the dashboard now shows worker tags and a badge if the
   worker is the cluster's current leader.
+- The `workflow.upserted` event has been split into `workflow.created` and
+  `workflow.updated` events.
+- `WorkflowPlugin.push` now only pushes the workflow if it has actually changed.
 
 0.20.1
 ------

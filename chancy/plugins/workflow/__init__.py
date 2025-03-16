@@ -235,7 +235,7 @@ class WorkflowPlugin(Plugin):
     def __init__(
         self,
         *,
-        polling_interval: int = 1,
+        polling_interval: int = 30,
         max_workflows_per_run: int = 1000,
         pruning_rule: Rule = Rules.Age() > 60 * 60 * 24,
     ):
@@ -250,7 +250,7 @@ class WorkflowPlugin(Plugin):
 
     async def run(self, worker: Worker, chancy: Chancy):
         worker.hub.on(
-            "workflow.upserted",
+            "workflow.created",
             lambda *args, **kwargs: self.wake_up(),
         )
 
@@ -381,6 +381,11 @@ class WorkflowPlugin(Plugin):
         if workflow.state in [Workflow.State.COMPLETED, Workflow.State.FAILED]:
             return
 
+        # Keep track of whether any changes were made to the workflow. If no
+        # changes are made, we can skip updating the database.
+        has_change = False
+        starting_state = workflow.state
+
         # We check each step in the workflow to see:
         #    - If it has an associated job, and if so, what's the state of it?
         #    - If it has any dependencies, and if so, are they all completed?
@@ -399,6 +404,7 @@ class WorkflowPlugin(Plugin):
             ):
                 if step.job_id is None:
                     step.job_id = (await chancy.push(step.job)).identifier
+                    has_change = True
 
         # Are all jobs complete, or any jobs failed? If so, we can mark the
         # workflow as completed or failed.
@@ -408,8 +414,8 @@ class WorkflowPlugin(Plugin):
         elif states.get(QueuedJob.State.FAILED):
             workflow.state = Workflow.State.FAILED
 
-        # We update the workflow in the database to reflect the new state
-        await self.push(chancy, workflow)
+        if starting_state != workflow.state or has_change:
+            await self.push(chancy, workflow)
 
     @classmethod
     async def push(cls, chancy: Chancy, workflow: Workflow) -> str:
@@ -441,7 +447,11 @@ class WorkflowPlugin(Plugin):
                             SET name = EXCLUDED.name,
                                 state = EXCLUDED.state,
                                 updated_at = NOW()
-                            RETURNING id, created_at, updated_at
+                            RETURNING
+                                id,
+                                created_at,
+                                updated_at,
+                                (xmax = 0) as inserted
                             """
                         ).format(
                             workflows=sql.Identifier(
@@ -451,9 +461,12 @@ class WorkflowPlugin(Plugin):
                         [workflow.id, workflow.name, workflow.state.value],
                     )
                     result = await cursor.fetchone()
-                    workflow.id, workflow.created_at, workflow.updated_at = (
-                        result
-                    )
+                    (
+                        workflow.id,
+                        workflow.created_at,
+                        workflow.updated_at,
+                        inserted,
+                    ) = result
 
                     for step_id, step in workflow.steps.items():
                         await cursor.execute(
@@ -489,7 +502,7 @@ class WorkflowPlugin(Plugin):
 
                     await chancy.notify(
                         cursor,
-                        "workflow.upserted",
+                        f"workflow.{'created' if inserted else 'updated'}",
                         {
                             "id": workflow.id,
                             "name": workflow.name,

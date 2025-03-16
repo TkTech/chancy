@@ -211,11 +211,11 @@ class Metrics(Plugin):
                     DELETE
                     FROM {metrics_table}
                     WHERE
-                        updated_at < NOW() - interval %s
+                        updated_at < NOW() - interval '{max_age} seconds'
                     """
                 ).format(
                     metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
-                    maximum_metric_age=sql.Literal(self.maximum_metric_age),
+                    max_age=sql.Literal(self.maximum_metric_age),
                 )
 
                 await cursor.execute(query)
