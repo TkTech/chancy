@@ -9,7 +9,7 @@ import {
 
 import Layout from './Layout.tsx'
 import './index.scss'
-// @ts-expect-error We need to import this for the side-effects
+// @ts-expect-error We need to import this for the side effects
 import * as bootstrap from 'bootstrap'; // eslint-disable-line
 import {ServerConfigurationProvider} from './hooks/useServerConfiguration.tsx';
 import {Queue, Queues} from './pages/Queues.tsx';
