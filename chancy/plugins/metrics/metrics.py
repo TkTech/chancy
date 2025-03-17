@@ -413,7 +413,7 @@ class Metrics(Plugin):
         if self.modified_metrics:
             await self._push_metrics_to_db(chancy)
 
-        await self._load_metrics_from_db(chancy)
+        await self._load_metrics_from_db(chancy, load_only_changes=True)
         self.last_sync_time = datetime.datetime.now(datetime.timezone.utc)
         self.modified_metrics.clear()
 
