@@ -29,6 +29,24 @@ const formatValue = (value: number | Record<string, number>): number => {
   return 0;
 };
 
+/**
+ * Format a number with appropriate units for display on the Y-axis
+ * This helps with large values (like table sizes in bytes) to be displayed more compactly
+ */
+const formatYAxisTick = (value: number): string => {
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(1)}G`;
+  } else if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  } else if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  } else if (Math.floor(value) === value) {
+    return value.toString();
+  } else {
+    return value.toFixed(1);
+  }
+};
+
 export const ResolutionSelector = ({ resolution, setResolution }: {
   resolution: string;
   setResolution: (res: string) => void;
@@ -250,14 +268,14 @@ export const MetricChart = ({
       <ResponsiveContainer width="100%" height={height}>
         <LineChart
           data={completeData}
-          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          margin={{ top: 10, right: 30, left: 5, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis 
             dataKey="time" 
             interval={resolution === '1day' ? 'preserveEnd' : 'preserveStartEnd'}
           />
-          <YAxis />
+          <YAxis tickFormatter={formatYAxisTick} />
           <Tooltip {...tooltipStyles} />
           <Legend />
           {metricHistogramStats.map((stat, idx) => (
@@ -281,14 +299,14 @@ export const MetricChart = ({
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart
         data={completeData}
-        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+        margin={{ top: 10, right: 30, left: 5, bottom: 0 }}
       >
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis 
           dataKey="time" 
           interval={resolution === '1day' ? 'preserveEnd' : 'preserveStartEnd'}
         />
-        <YAxis />
+        <YAxis tickFormatter={formatYAxisTick} />
         <Tooltip {...tooltipStyles} />
         <Area 
           type="monotone" 

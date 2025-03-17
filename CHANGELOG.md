@@ -16,6 +16,9 @@ Changelog
   workflow is created in the same transaction as other operations.
 - The `WorkflowPlugin` now locks the workflow row when updating it and performs
   all updates in a single transaction.
+- All `_ex` functions which take a cursor now expect a cursor using a dict_row
+  row factory.
+- Improved metrics display by adding automatic formatting for large numbers (K, M, G) on chart Y-axes.
 
 0.20.1
 ------
