@@ -2,7 +2,7 @@ import asyncio
 import enum
 import functools
 import logging
-from typing import Any, Iterator
+from typing import Any, Iterator, AsyncGenerator
 from functools import cached_property, cache
 
 from psycopg import sql, Cursor, AsyncCursor
@@ -466,7 +466,7 @@ class Chancy:
     @_ensure_pool_is_open_async_iter
     async def push_many(
         self, jobs: list[Job], *, batch_size: int = 1000
-    ) -> Iterator[list[Reference]]:
+    ) -> AsyncGenerator[list[Reference]]:
         """
         Push multiple jobs onto the queue.
 
