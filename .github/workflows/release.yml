@@ -35,10 +35,10 @@ jobs:
       run: npm run build
 
     - name: Checking for code smells
-      run: uv run ruff check
+      run: uvx ruff check
 
     - name: Checking for formatting issues
-      run: uv run ruff format --check
+      run: uvx ruff format --check
 
     - name: Build package
       run: uv build
