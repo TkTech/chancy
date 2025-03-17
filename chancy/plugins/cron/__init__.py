@@ -112,16 +112,15 @@ class Cron(Plugin):
                         )
 
                         for row in await cursor.fetchall():
-                            unique_key, cron, job = row
                             # If we're using our built-in default queue, we
                             # can push this as part of our transaction.
                             await chancy.push_many_ex(
                                 cursor,
-                                [Job.unpack(job)],
+                                [Job.unpack(row["job"])],
                             )
 
                             chancy.log.debug(
-                                f"Pushed scheduled cron job {unique_key!r}"
+                                f"Pushed scheduled cron job {row['unique_key']!r}"
                             )
 
                             await cursor.execute(
@@ -135,11 +134,11 @@ class Cron(Plugin):
                                     """
                                 ).format(table=table),
                                 {
-                                    "next_run": croniter(cron, now).get_next(
-                                        datetime
-                                    ),
+                                    "next_run": croniter(
+                                        row["cron"], now
+                                    ).get_next(datetime),
                                     "last_run": now,
-                                    "unique_key": unique_key,
+                                    "unique_key": row["unique_key"],
                                 },
                             )
 

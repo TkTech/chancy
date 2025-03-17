@@ -1,5 +1,5 @@
 from psycopg import AsyncCursor, sql
-from psycopg.rows import DictRow
+from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
 from chancy.worker import Worker

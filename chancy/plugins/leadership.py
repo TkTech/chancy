@@ -1,7 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
 from psycopg import sql
-from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
 from chancy.plugin import Plugin, PluginScope

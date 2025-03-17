@@ -3,7 +3,7 @@ import code
 
 import click
 from psycopg import AsyncCursor
-from psycopg.rows import DictRow
+from psycopg.rows import DictRow, dict_row
 
 from chancy import Chancy, Worker, Job, QueuedJob, Limit, Reference, Queue
 from chancy.cli import run_async_command

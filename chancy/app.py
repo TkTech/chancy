@@ -416,6 +416,23 @@ class Chancy:
             async with conn.cursor(row_factory=dict_row) as cursor:
                 return (await self.push_many_ex(cursor, [job]))[0]
 
+    @_ensure_pool_is_open
+    async def push_ex(
+        self, cursor: AsyncCursor, job: Job | IsAJob[..., Any]
+    ) -> Reference:
+        """
+        Push a job onto the queue using a specific cursor.
+
+        This is a low-level method that allows for more control over the
+        database connection and transaction management. It is recommended to
+        use the higher-level `push` method in most cases.
+
+        :param cursor: The cursor to use for the operation.
+        :param job: The job to push onto the queue.
+        :return: A reference to the job in the queue.
+        """
+        return (await self.push_many_ex(cursor, [job]))[0]
+
     @_ensure_sync_pool_is_open
     def sync_push(self, job: Job) -> Reference:
         """
