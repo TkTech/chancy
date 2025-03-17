@@ -11,6 +11,11 @@ Changelog
 - `WorkflowPlugin.push` now only pushes the workflow if it has actually changed.
 - `workflow.step_completed` is now used to nearly instantly progress a workflow
    to the next step, instead of waiting for the next polling interval.
+- The `WorkflowPlugin` now exposes `_ex` versions of most functions which touch
+  the database, allowing you to pass in your own cursor to ensure that a
+  workflow is created in the same transaction as other operations.
+- The `WorkflowPlugin` now locks the workflow row when updating it and performs
+  all updates in a single transaction.
 
 0.20.1
 ------
