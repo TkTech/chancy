@@ -250,7 +250,7 @@ class Cron(Plugin):
                      job.
         :param jobs: The jobs to run.
         """
-        jobs = list(jobs)
+        jobs = list(job if isinstance(job, Job) else job.job for job in jobs)
         for job in jobs:
             if not job.unique_key:
                 raise ValueError(

@@ -1,9 +1,10 @@
 import pytest
 
-from chancy import Job, Queue
+from chancy import job, Queue
 from chancy.plugins.cron import Cron
 
 
+@job()
 def test_job():
     """Simple job function for testing"""
     pass
@@ -17,9 +18,9 @@ async def test_schedule_job(chancy, worker):
     """Test scheduling a job with cron plugin"""
     await chancy.declare(Queue("default"))
 
-    job = Job.from_func(test_job).with_unique_key("test_job_cron")
+    j = test_job.job.with_unique_key("test_job_cron")
 
-    await Cron.schedule(chancy, "*/1 * * * *", job)
+    await Cron.schedule(chancy, "*/1 * * * *", j)
 
     schedules = await Cron.get_schedules(chancy, unique_keys=["test_job_cron"])
 
@@ -38,8 +39,8 @@ async def test_unschedule_job(chancy, worker):
     """Test unscheduling a job"""
     await chancy.declare(Queue("default"))
 
-    job = Job.from_func(test_job).with_unique_key("test_job_cron")
-    await Cron.schedule(chancy, "*/5 * * * *", job)
+    j = test_job.job.with_unique_key("test_job_cron")
+    await Cron.schedule(chancy, "*/5 * * * *", j)
 
     schedules = await Cron.get_schedules(chancy, unique_keys=["test_job_cron"])
     assert len(schedules) == 1
@@ -58,9 +59,9 @@ async def test_update_existing_job_schedule(chancy, worker):
     """Test updating an existing job's schedule"""
     await chancy.declare(Queue("default"))
 
-    job = Job.from_func(test_job).with_unique_key("test_job_cron")
-    await Cron.schedule(chancy, "*/5 * * * *", job)
-    await Cron.schedule(chancy, "*/10 * * * *", job)
+    j = test_job.job.with_unique_key("test_job_cron")
+    await Cron.schedule(chancy, "*/5 * * * *", j)
+    await Cron.schedule(chancy, "*/10 * * * *", j)
 
     schedules = await Cron.get_schedules(chancy, unique_keys=["test_job_cron"])
     assert len(schedules) == 1
@@ -76,12 +77,10 @@ async def test_fail_scheduling_without_unique_key(chancy, worker):
     """Test that scheduling a job without a unique key fails"""
     await chancy.declare(Queue("default"))
 
-    job = Job.from_func(test_job)
-
     with pytest.raises(
         ValueError, match="requires that each job has a unique_key"
     ):
-        await Cron.schedule(chancy, "*/5 * * * *", job)
+        await Cron.schedule(chancy, "*/5 * * * *", test_job)
 
 
 @pytest.mark.parametrize(
@@ -92,9 +91,9 @@ async def test_job_execution(chancy, worker):
     """Test that a scheduled job executes by verifying next_run is set"""
     await chancy.declare(Queue("default"))
 
-    job = Job.from_func(test_job).with_unique_key("immediate_job")
+    j = test_job.job.with_unique_key("immediate_job")
 
-    await Cron.schedule(chancy, "*/1 * * * *", job)
+    await Cron.schedule(chancy, "*/1 * * * *", j)
 
     schedules = await Cron.get_schedules(chancy, unique_keys=["immediate_job"])
     assert len(schedules) == 1
@@ -110,9 +109,9 @@ async def test_get_schedules_all(chancy, worker):
     """Test getting all scheduled jobs"""
     await chancy.declare(Queue("default"))
 
-    job1 = Job.from_func(test_job).with_unique_key("test_job_1")
-    job2 = Job.from_func(test_job).with_unique_key("test_job_2")
-    job3 = Job.from_func(test_job).with_unique_key("test_job_3")
+    job1 = test_job.job.with_unique_key("test_job_1")
+    job2 = test_job.job.with_unique_key("test_job_2")
+    job3 = test_job.job.with_unique_key("test_job_3")
 
     await Cron.schedule(chancy, "*/5 * * * *", job1)
     await Cron.schedule(chancy, "*/10 * * * *", job2)
@@ -135,9 +134,9 @@ async def test_get_schedules_filtered(chancy, worker):
     """Test getting scheduled jobs filtered by unique keys"""
     await chancy.declare(Queue("default"))
 
-    job1 = Job.from_func(test_job).with_unique_key("test_job_1")
-    job2 = Job.from_func(test_job).with_unique_key("test_job_2")
-    job3 = Job.from_func(test_job).with_unique_key("test_job_3")
+    job1 = test_job.job.with_unique_key("test_job_1")
+    job2 = test_job.job.with_unique_key("test_job_2")
+    job3 = test_job.job.with_unique_key("test_job_3")
 
     await Cron.schedule(chancy, "*/5 * * * *", job1)
     await Cron.schedule(chancy, "*/10 * * * *", job2)

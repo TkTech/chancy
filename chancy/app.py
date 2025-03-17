@@ -466,7 +466,7 @@ class Chancy:
     @_ensure_pool_is_open_async_iter
     async def push_many(
         self, jobs: list[Job], *, batch_size: int = 1000
-    ) -> AsyncGenerator[list[Reference]]:
+    ) -> AsyncGenerator[list[Reference], None]:
         """
         Push multiple jobs onto the queue.
 
