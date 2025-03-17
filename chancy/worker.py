@@ -477,7 +477,7 @@ class Worker:
             )
 
             async with self.chancy.pool.connection() as conn:
-                async with conn.cursor() as cursor:
+                async with conn.cursor(row_factory=dict_row) as cursor:
                     async with conn.transaction():
                         try:
                             await cursor.executemany(
@@ -542,7 +542,7 @@ class Worker:
 
         :param conn: The connection to use for the announcement.
         """
-        async with conn.cursor() as cur:
+        async with conn.cursor(row_factory=dict_row) as cur:
             async with conn.transaction():
                 await cur.execute(
                     sql.SQL(

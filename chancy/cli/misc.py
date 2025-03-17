@@ -3,6 +3,7 @@ import code
 
 import click
 from psycopg import AsyncCursor
+from psycopg.rows import DictRow
 
 from chancy import Chancy, Worker, Job, QueuedJob, Limit, Reference, Queue
 from chancy.cli import run_async_command
@@ -69,7 +70,7 @@ async def migrate(
             await chancy.migrate(to_version=to_version)
 
 
-async def _check_migrations(migrator: Migrator, cursor: AsyncCursor):
+async def _check_migrations(migrator: Migrator, cursor: AsyncCursor[DictRow]):
     """
     Check the migrations for a migrator.
     """
@@ -98,7 +99,7 @@ async def check_migrations(ctx: click.Context):
     async with chancy:
         migrator = Migrator("chancy", "chancy.migrations", prefix=chancy.prefix)
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 click.echo("Chancy Core")
                 await _check_migrations(migrator, cursor)
 

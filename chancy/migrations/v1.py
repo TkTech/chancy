@@ -1,11 +1,11 @@
-from psycopg import AsyncCursor
-from psycopg import sql
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow
 
 from chancy.migrate import Migration, Migrator
 
 
 class V1Migration(Migration):
-    async def up(self, migrator: Migrator, cursor: AsyncCursor):
+    async def up(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         """
         Create the initial $prefix_jobs, $prefix_leaders tables.
         """
@@ -131,7 +131,7 @@ class V1Migration(Migration):
             ).format(queues=sql.Identifier(f"{migrator.prefix}queues"))
         )
 
-    async def down(self, migrator: Migrator, cursor: AsyncCursor):
+    async def down(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         """
         Drop the $prefix_jobs, $prefix_leaders tables.
         """

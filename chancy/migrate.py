@@ -10,8 +10,8 @@ import re
 import abc
 import importlib.resources
 
-from psycopg import AsyncConnection, AsyncCursor
-from psycopg import sql
+from psycopg import AsyncConnection, AsyncCursor, sql
+from psycopg.rows import DictRow, dict_row
 
 VERSION_R = re.compile(r"v(\d+)\.py")
 
@@ -29,11 +29,11 @@ class Migration(abc.ABC):
     """
 
     @abc.abstractmethod
-    async def up(self, migrator: "Migrator", cursor: AsyncCursor):
+    async def up(self, migrator: "Migrator", cursor: AsyncCursor[DictRow]):
         pass
 
     @abc.abstractmethod
-    async def down(self, migrator: "Migrator", cursor: AsyncCursor):
+    async def down(self, migrator: "Migrator", cursor: AsyncCursor[DictRow]):
         pass
 
 
@@ -117,7 +117,7 @@ class Migrator:
         migrations = self.discover_all_migrations()
         to_version = len(migrations) if to_version is None else to_version
 
-        async with conn.cursor() as cursor:
+        async with conn.cursor(row_factory=dict_row) as cursor:
             async with conn.transaction():
                 current_version = await self.get_current_version(cursor)
 
@@ -143,7 +143,7 @@ class Migrator:
 
         return True
 
-    async def is_migration_required(self, cursor: AsyncCursor) -> bool:
+    async def is_migration_required(self, cursor: AsyncCursor[DictRow]) -> bool:
         """
         Check if a newer schema version is available.
         """
@@ -152,7 +152,7 @@ class Migrator:
         migrations = self.discover_all_migrations()
         return current_version < len(migrations)
 
-    async def upsert_version_table(self, cursor: AsyncCursor):
+    async def upsert_version_table(self, cursor: AsyncCursor[DictRow]):
         """
         Create the schema_version table if it doesn't exist.
         """
@@ -167,7 +167,7 @@ class Migrator:
             ).format(prefix=sql.Identifier(f"{self.prefix}schema_version"))
         )
 
-    async def get_current_version(self, cursor: AsyncCursor) -> int:
+    async def get_current_version(self, cursor: AsyncCursor[DictRow]) -> int:
         """
         Get the current schema version from the database.
         """
@@ -179,9 +179,11 @@ class Migrator:
             [self.key],
         )
         result = await cursor.fetchone()
-        return 0 if result is None else result[0]
+        return 0 if result is None else result["version"]
 
-    async def set_current_version(self, cursor: AsyncCursor, version: int):
+    async def set_current_version(
+        self, cursor: AsyncCursor[DictRow], version: int
+    ):
         """
         Set the current schema version in the database.
 

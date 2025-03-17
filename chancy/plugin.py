@@ -196,10 +196,10 @@ class Plugin(abc.ABC):
     def get_tables(self) -> list[str]:
         """
         Get the names of all tables this plugin is responsible for.
-        
+
         By default, returns an empty list.
         """
         return []
-        
+
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"

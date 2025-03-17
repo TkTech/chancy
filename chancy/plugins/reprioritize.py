@@ -1,4 +1,5 @@
 from psycopg import sql
+from psycopg.rows import dict_row
 
 from chancy.plugin import Plugin, PluginScope
 from chancy.rule import JobRules
@@ -66,7 +67,7 @@ class Reprioritize(Plugin):
         total_updated = 0
 
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 while True:
                     # Update jobs in batches to avoid long-running transactions
                     async with conn.transaction():

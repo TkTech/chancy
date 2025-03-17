@@ -478,7 +478,7 @@ class WorkflowPlugin(Plugin):
         """
         async with chancy.pool.connection() as conn:
             async with conn.transaction():
-                async with conn.cursor() as cursor:
+                async with conn.cursor(row_factory=dict_row) as cursor:
                     await cursor.execute(
                         sql.SQL(
                             """
@@ -508,12 +508,10 @@ class WorkflowPlugin(Plugin):
                         [workflow.id, workflow.name, workflow.state.value],
                     )
                     result = await cursor.fetchone()
-                    (
-                        workflow.id,
-                        workflow.created_at,
-                        workflow.updated_at,
-                        inserted,
-                    ) = result
+                    workflow.id = result["id"]
+                    workflow.created_at = result["created_at"]
+                    workflow.updated_at = result["updated_at"]
+                    inserted = result["inserted"]
 
                     for step_id, step in workflow.steps.items():
                         await cursor.execute(
@@ -605,7 +603,7 @@ class WorkflowPlugin(Plugin):
 
     async def cleanup(self, chancy: Chancy) -> int | None:
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(
                     sql.SQL(
                         """

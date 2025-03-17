@@ -36,7 +36,9 @@ class CronApiPlugin(ApiPlugin):
                 await cursor.execute(
                     """
                     SELECT * FROM {table}
-                    """.format(table=f"{chancy.prefix}cron")
+                    """.format(
+                        table=f"{chancy.prefix}cron"
+                    )
                 )
 
                 results = await cursor.fetchall()

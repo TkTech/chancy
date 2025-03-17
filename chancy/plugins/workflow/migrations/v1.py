@@ -1,11 +1,11 @@
-from psycopg import AsyncCursor
-from psycopg import sql
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow
 
 from chancy.migrate import Migration, Migrator
 
 
 class V1Migration(Migration):
-    async def up(self, migrator: Migrator, cursor: AsyncCursor):
+    async def up(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         # Create workflows table
         await cursor.execute(
             sql.SQL(
@@ -73,7 +73,7 @@ class V1Migration(Migration):
             )
         )
 
-    async def down(self, migrator: Migrator, cursor: AsyncCursor):
+    async def down(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         await cursor.execute(
             sql.SQL("DROP TABLE IF EXISTS {table}").format(
                 table=sql.Identifier(f"{migrator.prefix}workflow_steps")

@@ -2,6 +2,7 @@ from datetime import datetime, timezone, timedelta
 
 from psycopg import sql
 from psycopg import AsyncConnection
+from psycopg.rows import dict_row
 
 from chancy.plugin import Plugin, PluginScope
 from chancy.app import Chancy
@@ -44,7 +45,7 @@ class Leadership(Plugin):
     @classmethod
     def get_scope(cls) -> PluginScope:
         return PluginScope.WORKER
-        
+
     def get_tables(self) -> list[str]:
         """Get the names of all tables this plugin is responsible for."""
         return ["leader"]
@@ -81,8 +82,7 @@ class Leadership(Plugin):
             expires = now + timedelta(seconds=self.timeout)
 
             async with chancy.pool.connection() as conn:
-                conn: AsyncConnection
-                async with conn.cursor() as cur:
+                async with conn.cursor(row_factory=dict_row) as cur:
                     async with conn.transaction():
                         await cur.execute(prune_q, {"now": now})
                         if worker.is_leader.is_set():

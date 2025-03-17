@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+from psycopg.rows import dict_row
 
 from chancy import Chancy, Queue, Worker, job
 from chancy.plugins.pruner import Pruner
@@ -36,7 +37,7 @@ async def test_pruner_functionality(chancy: Chancy, worker: Worker):
     assert initial_job is not None, "Job should exist before pruning"
 
     async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(row_factory=dict_row) as cursor:
             await p.prune(chancy, cursor)
 
     pruned_job = await chancy.get_job(ref)
@@ -50,7 +51,7 @@ async def test_pruner_functionality(chancy: Chancy, worker: Worker):
     assert initial_job is not None, "Job should exist before pruning"
 
     async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(row_factory=dict_row) as cursor:
             await p.prune(chancy, cursor)
 
     not_pruned_job = await chancy.get_job(ref)
@@ -59,7 +60,7 @@ async def test_pruner_functionality(chancy: Chancy, worker: Worker):
     await asyncio.sleep(10)
 
     async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(row_factory=dict_row) as cursor:
             await p.prune(chancy, cursor)
 
     pruned_job = await chancy.get_job(ref)

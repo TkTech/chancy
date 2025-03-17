@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from psycopg import sql
 from croniter import croniter
+from psycopg.rows import dict_row
 
 from chancy.plugin import Plugin, PluginScope
 from chancy.worker import Worker
@@ -93,7 +94,7 @@ class Cron(Plugin):
                 # lock it, update the next_run time, and then push the job onto
                 # the queue.
                 now = datetime.now(tz=timezone.utc)
-                async with conn.cursor() as cursor:
+                async with conn.cursor(row_factory=dict_row) as cursor:
                     async with conn.transaction():
                         await cursor.execute(
                             sql.SQL(
@@ -150,7 +151,7 @@ class Cron(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.cron.api.CronApiPlugin"
-        
+
     def get_tables(self) -> list[str]:
         """Get the names of all tables this plugin is responsible for."""
         return ["cron"]
@@ -168,7 +169,7 @@ class Cron(Plugin):
         :param unique_keys: The unique keys of the jobs to unschedule.
         """
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 async with conn.transaction():
                     await cursor.execute(
                         sql.SQL(
@@ -207,7 +208,7 @@ class Cron(Plugin):
         base = datetime.now(tz=timezone.utc)
 
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 async with conn.transaction():
                     await cursor.executemany(
                         sql.SQL(

@@ -218,7 +218,7 @@ class Metrics(Plugin):
         """
 
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 query = sql.SQL(
                     """
                     DELETE
@@ -468,7 +468,7 @@ class Metrics(Plugin):
             return
 
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.executemany(
                     sql.SQL(
                         """

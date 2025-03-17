@@ -1,11 +1,11 @@
-from psycopg import AsyncCursor
-from psycopg import sql
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow
 
 from chancy.migrate import Migration, Migrator
 
 
 class V2Migration(Migration):
-    async def up(self, migrator: Migrator, cursor: AsyncCursor):
+    async def up(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         """
         Adds common indexes.
         """
@@ -38,7 +38,7 @@ class V2Migration(Migration):
             )
         )
 
-    async def down(self, migrator: Migrator, cursor: AsyncCursor):
+    async def down(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         await cursor.execute(
             sql.SQL(
                 """
