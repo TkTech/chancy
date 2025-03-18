@@ -8,6 +8,7 @@ import json
 import secrets
 import itertools
 import contextlib
+from dataclasses import is_dataclass, asdict
 from typing import Iterable, Coroutine
 
 
@@ -136,6 +137,8 @@ def json_dumps(obj, **kwargs):
             return o.isoformat()
         elif isinstance(o, enum.Enum):
             return o.value
+        elif is_dataclass(o):
+            return asdict(o)
 
         raise TypeError(
             f"Object of type {o.__class__.__name__} is not JSON serializable"
