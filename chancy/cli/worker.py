@@ -87,6 +87,10 @@ async def web_command(
             debug=debug,
         )
 
+        worker = Worker(chancy, tags=set())
+
+        # The metrics plugin needs to be running to pull in cluster-wide
+        # metrics.
         has_metrics = next(
             (
                 plugin
@@ -95,10 +99,15 @@ async def web_command(
             ),
             None,
         )
-
-        worker = Worker(chancy, tags=set())
         if has_metrics:
             worker.manager.add("metrics", has_metrics.run(worker, chancy))
+
+        # Enable notifications processing to power the /events feed.
+        if chancy.notifications:
+            worker.manager.add(
+                "notifications", worker._maintain_notifications()
+            )
+
         worker.manager.add("api", api.run(worker, chancy))
 
         await worker.wait_for_shutdown()

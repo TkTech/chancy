@@ -53,3 +53,7 @@ export function ServerConfigurationProvider({children}: {children: React.ReactNo
 export function useServer() {
   return React.useContext(ServerContext);
 }
+
+export function getWebSocketUrl(url: string): string {
+  return url.replace(/^http/, 'ws');
+}

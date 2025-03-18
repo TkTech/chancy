@@ -1,5 +1,6 @@
 import abc
 import typing
+from typing import Optional
 
 
 class RouteT(typing.TypedDict):
@@ -11,6 +12,7 @@ class RouteT(typing.TypedDict):
     endpoint: typing.Callable
     methods: str | None
     name: str | None
+    is_websocket: Optional[bool]
 
 
 class ApiPlugin(abc.ABC):

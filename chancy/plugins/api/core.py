@@ -1,7 +1,10 @@
+import asyncio
 from psycopg import sql
 from psycopg.rows import dict_row
 from starlette.responses import Response
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from chancy.hub import Event
 from chancy.plugins.api.plugin import ApiPlugin
 from chancy.rule import JobRules
 from chancy.utils import json_dumps
@@ -47,6 +50,13 @@ class CoreApiPlugin(ApiPlugin):
                 "endpoint": self.get_job,
                 "methods": ["GET"],
                 "name": "get_job",
+            },
+            {
+                "path": "/api/v1/events",
+                "endpoint": self.events_websocket,
+                "methods": ["GET", "POST", "DELETE"],
+                "name": "events_websocket",
+                "is_websocket": True,
             },
         ]
 
@@ -182,3 +192,45 @@ class CoreApiPlugin(ApiPlugin):
                     json_dumps(result),
                     media_type="application/json",
                 )
+
+    @staticmethod
+    async def events_websocket(request, *, chancy, worker):
+        """
+        A WebSocket endpoint that sends all hub events to connected clients.
+        """
+        websocket = WebSocket(request.scope, request.receive, request.send)
+        await websocket.accept()
+
+        # Queue to store events
+        event_queue = asyncio.Queue()
+
+        # Event handler to capture events from the hub
+        async def event_handler(event: Event):
+            await event_queue.put(
+                {
+                    "name": event.name,
+                    "body": event.body,
+                    "timestamp": asyncio.get_event_loop().time(),
+                }
+            )
+
+        # Register the event handler with the hub
+        worker.hub.on_any(event_handler)
+
+        try:
+            while True:
+                # Wait for events or ping every 30 seconds
+                try:
+                    event_data = await asyncio.wait_for(
+                        event_queue.get(), timeout=30
+                    )
+                    await websocket.send_text(json_dumps(event_data))
+                except asyncio.TimeoutError:
+                    # Send a ping to keep the connection alive
+                    await websocket.send_text(json_dumps({"type": "ping"}))
+        except WebSocketDisconnect:
+            # Clean up when the client disconnects
+            worker.hub.remove_on_any(event_handler)
+        except Exception as e:
+            chancy.log.error(f"WebSocket error: {e}")
+            worker.hub.remove_on_any(event_handler)

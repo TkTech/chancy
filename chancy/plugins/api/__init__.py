@@ -157,12 +157,19 @@ class Api(Plugin):
             chancy.log.info(f"Loading API sub-plugin {wp.name()}")
 
             for route in wp.routes():
-                app.add_route(
-                    route["path"],
-                    _r(route["endpoint"]),
-                    methods=route["methods"],
-                    name=route["name"],
-                )
+                if route.get("is_websocket"):
+                    app.add_websocket_route(
+                        route["path"],
+                        _r(route["endpoint"]),
+                        name=route["name"],
+                    )
+                else:
+                    app.add_route(
+                        route["path"],
+                        _r(route["endpoint"]),
+                        methods=route["methods"],
+                        name=route["name"],
+                    )
 
         # Add the wildcard route to the end of the list so that it doesn't
         # override any other routes and serves anything that should be handled
