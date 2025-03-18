@@ -4,6 +4,7 @@ import asyncio
 import pytest
 
 from chancy import Worker, Chancy, Job, Queue, QueuedJob
+from chancy.errors import MigrationsNeededError
 
 
 def job_to_run():
@@ -95,3 +96,15 @@ async def test_queue_removal(chancy: Chancy, worker: Worker):
     await asyncio.sleep(5)
 
     assert "test_removal" not in worker.executors
+
+
+@pytest.mark.asyncio
+async def test_error_on_needed_migrations(chancy_just_app):
+    """
+    Test that an error is raised if there are migrations that need to be
+    applied before starting the worker.
+    """
+    with pytest.raises(MigrationsNeededError):
+        async with chancy_just_app:
+            async with Worker(chancy_just_app):
+                pass

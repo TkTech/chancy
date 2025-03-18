@@ -2,6 +2,7 @@ import click
 
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
+from chancy.errors import MigrationsNeededError
 from chancy.plugins.metrics import Metrics
 
 
@@ -32,7 +33,14 @@ async def worker_command(
     chancy: Chancy = ctx.obj["app"]
 
     async with chancy:
-        if not await chancy.is_up_to_date():
+        try:
+            async with Worker(
+                chancy,
+                worker_id=worker_id,
+                tags=set(tags) if tags else None,
+            ) as worker:
+                await worker.wait_for_shutdown()
+        except MigrationsNeededError:
             click.echo(
                 "The database is not up to date and is missing migrations.\n"
                 "Please run `chancy misc migrate` to update the database.\n"
@@ -40,11 +48,6 @@ async def worker_command(
                 " `chancy misc check-migrations`."
             )
             return 1
-
-        async with Worker(
-            chancy, worker_id=worker_id, tags=set(tags) if tags else None
-        ) as worker:
-            await worker.wait_for_shutdown()
 
 
 @worker_group.command("web")
