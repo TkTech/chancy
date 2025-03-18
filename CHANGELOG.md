@@ -22,6 +22,8 @@ Changelog
   (K, M, G) on chart Y-axes.
 - Added `get_schedules()` helper method to the Cron plugin to retrieve
   scheduled jobs.
+- Added a live stream of the internal events queue to the dashboard.
+- Table size metrics are now collected for all tables known to plugins.
 
 0.20.1
 ------
