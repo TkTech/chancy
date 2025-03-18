@@ -1,11 +1,11 @@
-from psycopg import AsyncCursor
-from psycopg import sql
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow
 
 from chancy.migrate import Migration, Migrator
 
 
 class V1Migration(Migration):
-    async def up(self, migrator: Migrator, cursor: AsyncCursor):
+    async def up(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         # Create workflows table
         await cursor.execute(
             sql.SQL(
@@ -73,36 +73,13 @@ class V1Migration(Migration):
             )
         )
 
-    async def down(self, migrator: Migrator, cursor: AsyncCursor):
-        # Drop indexes
-        await cursor.execute(
-            sql.SQL(
-                """
-                DROP INDEX IF EXISTS {workflow_steps_workflow_id_idx};
-                DROP INDEX IF EXISTS {workflow_steps_state_idx};
-                DROP INDEX IF EXISTS {workflows_state_idx};
-                """
-            ).format(
-                workflow_steps_workflow_id_idx=sql.Identifier(
-                    f"{migrator.prefix}workflow_steps_workflow_id_idx"
-                ),
-                workflow_steps_state_idx=sql.Identifier(
-                    f"{migrator.prefix}workflow_steps_state_idx"
-                ),
-                workflows_state_idx=sql.Identifier(
-                    f"{migrator.prefix}workflows_state_idx"
-                ),
-            )
-        )
-
-        # Drop the workflow_steps table
+    async def down(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         await cursor.execute(
             sql.SQL("DROP TABLE IF EXISTS {table}").format(
                 table=sql.Identifier(f"{migrator.prefix}workflow_steps")
             )
         )
 
-        # Drop the workflows table
         await cursor.execute(
             sql.SQL("DROP TABLE IF EXISTS {table}").format(
                 table=sql.Identifier(f"{migrator.prefix}workflows")

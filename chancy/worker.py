@@ -16,6 +16,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from chancy.app import Chancy
+from chancy.errors import MigrationsNeededError
 from chancy.executors.base import Executor
 from chancy.hub import Hub, Event
 from chancy.queue import Queue
@@ -200,6 +201,9 @@ class Worker:
             async with Worker(chancy) as worker:
                 await worker.wait_for_shutdown()
         """
+        if not await self.chancy.is_up_to_date():
+            raise MigrationsNeededError()
+
         self.hub.on("job.cancelled", self._handle_cancellation)
 
         for plugin in self.chancy.plugins:
@@ -477,7 +481,7 @@ class Worker:
             )
 
             async with self.chancy.pool.connection() as conn:
-                async with conn.cursor() as cursor:
+                async with conn.cursor(row_factory=dict_row) as cursor:
                     async with conn.transaction():
                         try:
                             await cursor.executemany(
@@ -527,6 +531,10 @@ class Worker:
                                 await self.outgoing.put(update)
                             raise
 
+            for update in pending_updates:
+                for plugin in self.chancy.plugins:
+                    await plugin.on_job_updated(job=update, worker=self)
+
             await asyncio.sleep(self.send_outgoing_interval)
 
     async def announce_worker(self, conn: AsyncConnection):
@@ -538,7 +546,7 @@ class Worker:
 
         :param conn: The connection to use for the announcement.
         """
-        async with conn.cursor() as cur:
+        async with conn.cursor(row_factory=dict_row) as cur:
             async with conn.transaction():
                 await cur.execute(
                     sql.SQL(

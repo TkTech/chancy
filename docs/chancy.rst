@@ -25,3 +25,4 @@ Submodules
    chancy.hub
    chancy.rule
    chancy.utils
+   chancy.errors

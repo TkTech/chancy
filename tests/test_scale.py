@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 from psycopg import sql
+from psycopg.rows import dict_row
 
 from chancy import Chancy, Job, Queue, Worker
 from chancy.utils import chancy_uuid, timed_block
@@ -34,7 +35,7 @@ async def test_busy_chancy(chancy: Chancy, worker_no_start: Worker):
     await chancy.declare(queue)
 
     async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(row_factory=dict_row) as cursor:
             async with cursor.copy(
                 sql.SQL(
                     "COPY {jobs_table} ("

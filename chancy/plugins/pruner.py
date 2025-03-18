@@ -1,5 +1,5 @@
-from psycopg import AsyncCursor
-from psycopg import sql
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
 from chancy.worker import Worker
@@ -99,7 +99,7 @@ class Pruner(Plugin):
         while await self.sleep(self.poll_interval):
             await self.wait_for_leader(worker)
             async with chancy.pool.connection() as conn:
-                async with conn.cursor() as cursor:
+                async with conn.cursor(row_factory=dict_row) as cursor:
                     with timed_block() as chancy_time:
                         rows_removed = await self.prune(chancy, cursor)
                         chancy.log.info(
@@ -127,7 +127,7 @@ class Pruner(Plugin):
                     f" row(s) from the database."
                 )
 
-    async def prune(self, chancy: Chancy, cursor: AsyncCursor) -> int:
+    async def prune(self, chancy: Chancy, cursor: AsyncCursor[DictRow]) -> int:
         """
         Prune stale records from the database.
 

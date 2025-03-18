@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from psycopg import sql
 from croniter import croniter
+from psycopg.rows import dict_row
 
 from chancy.plugin import Plugin, PluginScope
 from chancy.worker import Worker
@@ -93,7 +94,7 @@ class Cron(Plugin):
                 # lock it, update the next_run time, and then push the job onto
                 # the queue.
                 now = datetime.now(tz=timezone.utc)
-                async with conn.cursor() as cursor:
+                async with conn.cursor(row_factory=dict_row) as cursor:
                     async with conn.transaction():
                         await cursor.execute(
                             sql.SQL(
@@ -111,16 +112,15 @@ class Cron(Plugin):
                         )
 
                         for row in await cursor.fetchall():
-                            unique_key, cron, job = row
                             # If we're using our built-in default queue, we
                             # can push this as part of our transaction.
                             await chancy.push_many_ex(
                                 cursor,
-                                [Job.unpack(job)],
+                                [Job.unpack(row["job"])],
                             )
 
                             chancy.log.debug(
-                                f"Pushed scheduled cron job {unique_key!r}"
+                                f"Pushed scheduled cron job {row['unique_key']!r}"
                             )
 
                             await cursor.execute(
@@ -134,11 +134,11 @@ class Cron(Plugin):
                                     """
                                 ).format(table=table),
                                 {
-                                    "next_run": croniter(cron, now).get_next(
-                                        datetime
-                                    ),
+                                    "next_run": croniter(
+                                        row["cron"], now
+                                    ).get_next(datetime),
                                     "last_run": now,
-                                    "unique_key": unique_key,
+                                    "unique_key": row["unique_key"],
                                 },
                             )
 
@@ -150,6 +150,64 @@ class Cron(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.cron.api.CronApiPlugin"
+
+    def get_tables(self) -> list[str]:
+        """Get the names of all tables this plugin is responsible for."""
+        return ["cron"]
+
+    @classmethod
+    async def get_schedules(
+        cls, chancy: Chancy, *, unique_keys: list[str] = None
+    ) -> dict[str, dict]:
+        """
+        Get scheduled cron jobs by their unique keys.
+
+        If no unique keys are provided, all scheduled jobs will be returned.
+
+        .. code-block:: python
+
+            # Get all scheduled jobs
+            all_schedules = await Cron.get_schedules(chancy)
+
+            # Get a specific job
+            job_schedule = await Cron.get_schedules(chancy, ["hello_world_cron"])
+
+        :param chancy: The Chancy application.
+        :param unique_keys: Optional list of unique keys to filter by.
+        :return: A list of dictionaries containing the job schedules.
+        """
+        table = sql.Identifier(f"{chancy.prefix}cron")
+
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            unique_key,
+                            job,
+                            cron,
+                            last_run,
+                            next_run
+                        FROM {table}
+                        WHERE 
+                            (%(unique_keys)s::text[] IS NULL
+                                OR unique_key = ANY(%(unique_keys)s))
+                        """
+                    ).format(table=table),
+                    {"unique_keys": unique_keys},
+                )
+
+                return {
+                    result["unique_key"]: {
+                        "unique_key": result["unique_key"],
+                        "job": Job.unpack(result["job"]),
+                        "cron": result["cron"],
+                        "last_run": result["last_run"],
+                        "next_run": result["next_run"],
+                    }
+                    async for result in cursor
+                }
 
     @classmethod
     async def unschedule(cls, chancy: Chancy, *unique_keys: str):
@@ -164,7 +222,7 @@ class Cron(Plugin):
         :param unique_keys: The unique keys of the jobs to unschedule.
         """
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 async with conn.transaction():
                     await cursor.execute(
                         sql.SQL(
@@ -173,7 +231,7 @@ class Cron(Plugin):
                             WHERE unique_key = ANY(%(unique_keys)s)
                             """
                         ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
-                        {"unique_keys": unique_keys},
+                        {"unique_keys": list(unique_keys)},
                     )
 
     @classmethod
@@ -192,7 +250,7 @@ class Cron(Plugin):
                      job.
         :param jobs: The jobs to run.
         """
-        jobs = list(jobs)
+        jobs = list(job if isinstance(job, Job) else job.job for job in jobs)
         for job in jobs:
             if not job.unique_key:
                 raise ValueError(
@@ -203,7 +261,7 @@ class Cron(Plugin):
         base = datetime.now(tz=timezone.utc)
 
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 async with conn.transaction():
                     await cursor.executemany(
                         sql.SQL(

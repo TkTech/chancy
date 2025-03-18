@@ -1,10 +1,7 @@
-from dataclasses import asdict
-
-from psycopg.rows import dict_row
 from starlette.responses import Response
 
-from chancy import Job
 from chancy.plugins.api import ApiPlugin
+from chancy.plugins.cron import Cron
 from chancy.utils import json_dumps
 
 
@@ -31,25 +28,9 @@ class CronApiPlugin(ApiPlugin):
         """
         Get all known cron jobs.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    """
-                    SELECT * FROM {table}
-                    """.format(table=f"{chancy.prefix}cron")
-                )
+        plugin = next((p for p in chancy.plugins if isinstance(p, Cron)), None)
 
-                results = await cursor.fetchall()
-
-                return Response(
-                    json_dumps(
-                        [
-                            {
-                                **result,
-                                "job": asdict(Job.unpack(result["job"])),
-                            }
-                            for result in results
-                        ]
-                    ),
-                    media_type="application/json",
-                )
+        return Response(
+            json_dumps(list((await plugin.get_schedules(chancy)).values())),
+            media_type="application/json",
+        )

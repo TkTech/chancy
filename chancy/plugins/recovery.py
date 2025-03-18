@@ -1,5 +1,5 @@
-from psycopg import AsyncCursor
-from psycopg import sql
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
 from chancy.worker import Worker
@@ -33,7 +33,7 @@ class Recovery(Plugin):
         while await self.sleep(self.poll_interval):
             await self.wait_for_leader(worker)
             async with chancy.pool.connection() as conn:
-                async with conn.cursor() as cursor:
+                async with conn.cursor(row_factory=dict_row) as cursor:
                     with timed_block() as chancy_time:
                         rows_recovered = await self.recover(
                             worker, chancy, cursor
@@ -54,7 +54,7 @@ class Recovery(Plugin):
 
     @classmethod
     async def recover(
-        cls, worker: Worker, chancy: Chancy, cursor: AsyncCursor
+        cls, worker: Worker, chancy: Chancy, cursor: AsyncCursor[DictRow]
     ) -> int:
         """
         Recover jobs that were running when the worker was unexpectedly

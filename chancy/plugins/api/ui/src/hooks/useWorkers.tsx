@@ -6,6 +6,7 @@ interface Worker {
   queues: string[];
   last_seen: string;
   expires_at: string;
+  is_leader: boolean;
 }
 
 export function useWorkers(url: string | null) {

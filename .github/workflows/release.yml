@@ -34,6 +34,12 @@ jobs:
       working-directory: chancy/plugins/api/ui
       run: npm run build
 
+    - name: Checking for code smells
+      run: uvx ruff check
+
+    - name: Checking for formatting issues
+      run: uvx ruff format --check
+
     - name: Build package
       run: uv build
 

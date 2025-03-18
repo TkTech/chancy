@@ -2,11 +2,11 @@ import asyncio
 import enum
 import functools
 import logging
-from typing import Any, Iterator
+from typing import Any, Iterator, AsyncGenerator
 from functools import cached_property, cache
 
 from psycopg import sql, Cursor, AsyncCursor
-from psycopg.rows import dict_row
+from psycopg.rows import dict_row, DictRow
 from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
@@ -293,7 +293,7 @@ class Chancy:
         """
         migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 if await migrator.is_migration_required(cursor):
                     return False
 
@@ -336,13 +336,17 @@ class Chancy:
         :return: The queue as it exists in the database.
         """
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 queue = await self.declare_ex(cursor, queue, upsert=upsert)
                 await self.notify(cursor, "queue.declared", {"q": queue.name})
                 return queue
 
     async def declare_ex(
-        self, cursor: AsyncCursor, queue: Queue, *, upsert: bool = False
+        self,
+        cursor: AsyncCursor[DictRow],
+        queue: Queue,
+        *,
+        upsert: bool = False,
     ) -> Queue:
         """
         Declare a queue in the database using a specific cursor.
@@ -373,15 +377,11 @@ class Chancy:
 
         result = await cursor.fetchone()
         return Queue(
-            name=queue.name,
-            state=result[0],
-            concurrency=result[1],
-            tags=set(result[2]),
-            polling_interval=result[3],
-            executor=result[4],
-            executor_options=result[5],
-            rate_limit=result[6],
-            rate_limit_window=result[7],
+            **{
+                **result,
+                "name": queue.name,
+                "tags": set(result["tags"]),
+            }
         )
 
     @_ensure_pool_is_open
@@ -413,8 +413,25 @@ class Chancy:
         :return: A reference to the job in the queue.
         """
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 return (await self.push_many_ex(cursor, [job]))[0]
+
+    @_ensure_pool_is_open
+    async def push_ex(
+        self, cursor: AsyncCursor, job: Job | IsAJob[..., Any]
+    ) -> Reference:
+        """
+        Push a job onto the queue using a specific cursor.
+
+        This is a low-level method that allows for more control over the
+        database connection and transaction management. It is recommended to
+        use the higher-level `push` method in most cases.
+
+        :param cursor: The cursor to use for the operation.
+        :param job: The job to push onto the queue.
+        :return: A reference to the job in the queue.
+        """
+        return (await self.push_many_ex(cursor, [job]))[0]
 
     @_ensure_sync_pool_is_open
     def sync_push(self, job: Job) -> Reference:
@@ -443,13 +460,13 @@ class Chancy:
         :return: A reference to the job in the queue.
         """
         with self.sync_pool.connection() as conn:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=dict_row) as cursor:
                 return self.sync_push_many_ex(cursor, [job])[0]
 
     @_ensure_pool_is_open_async_iter
     async def push_many(
         self, jobs: list[Job], *, batch_size: int = 1000
-    ) -> Iterator[list[Reference]]:
+    ) -> AsyncGenerator[list[Reference], None]:
         """
         Push multiple jobs onto the queue.
 
@@ -477,7 +494,7 @@ class Chancy:
         :return: An iterator of lists of references to the jobs in the queue.
         """
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 for chunk in chunked(jobs, batch_size):
                     async with conn.transaction():
                         yield await self.push_many_ex(cursor, chunk)
@@ -505,13 +522,13 @@ class Chancy:
         :return: An iterator of lists of references to the jobs in the queue.
         """
         with self.sync_pool.connection() as conn:
-            with conn.cursor() as cursor:
+            with conn.cursor(row_factory=dict_row) as cursor:
                 for chunk in chunked(jobs, batch_size):
                     with conn.transaction():
                         yield self.sync_push_many_ex(cursor, chunk)
 
     async def push_many_ex(
-        self, cursor: AsyncCursor, jobs: list[Job | IsAJob[..., Any]]
+        self, cursor: AsyncCursor[DictRow], jobs: list[Job | IsAJob[..., Any]]
     ) -> list[Reference]:
         """
         Push multiple jobs onto the queue using a specific cursor.
@@ -540,7 +557,7 @@ class Chancy:
                 self._get_job_params(job),
             )
             record = await cursor.fetchone()
-            references.append(Reference(record[0]))
+            references.append(Reference(record["id"]))
 
         if self.notifications:
             for queue in set(
@@ -671,7 +688,7 @@ class Chancy:
             database.
         """
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(
                     sql.SQL(
                         """
@@ -703,7 +720,7 @@ class Chancy:
                 return [record async for record in cursor]
 
     async def notify(
-        self, cursor: AsyncCursor, event: str, payload: dict[str, Any]
+        self, cursor: AsyncCursor[DictRow], event: str, payload: dict[str, Any]
     ):
         """
         Send a notification via Postgres NOTIFY/LISTEN to all other listening
@@ -760,7 +777,7 @@ class Chancy:
         :param ref: The reference to the job to cancel.
         """
         async with self.pool.connection() as conn:
-            async with conn.cursor() as cursor:
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 async with conn.transaction():
                     await cursor.execute(
                         sql.SQL(
@@ -783,11 +800,17 @@ class Chancy:
         return sql.SQL(
             """
             SELECT
-                *
+                wr.*,
+                l.worker_id IS NOT NULL as is_leader
             FROM
-                {workers}
+                {workers} wr
+            LEFT JOIN
+                {leader} l on l.worker_id = wr.worker_id
             """
-        ).format(workers=sql.Identifier(f"{self.prefix}workers"))
+        ).format(
+            workers=sql.Identifier(f"{self.prefix}workers"),
+            leader=sql.Identifier(f"{self.prefix}leader"),
+        )
 
     def _get_queue_sql(self):
         return sql.SQL(

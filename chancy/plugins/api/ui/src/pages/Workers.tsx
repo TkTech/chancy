@@ -33,7 +33,12 @@ export function Worker () {
         <tbody>
         <tr>
           <th className={"text-nowrap"}>Worker ID</th>
-          <td>{worker.worker_id}</td>
+          <td>
+            {worker.worker_id}
+            {worker.is_leader && (
+              <span className={'badge bg-success ms-2'}>Leader Node</span>
+            )}
+          </td>
         </tr>
         <tr>
           <th>Tags</th>
@@ -111,7 +116,8 @@ export function Workers() {
         <thead>
         <tr>
           <th className={"text-nowrap"}>Worker ID</th>
-          <th className={"text-nowrap"}>Active Queues</th>
+          <th>Active Queues</th>
+          <th>Tags</th>
           <th className={"text-nowrap text-center"}>Last Seen</th>
         </tr>
         </thead>
@@ -120,6 +126,9 @@ export function Workers() {
           <tr key={worker.worker_id}>
             <td className={'text-nowrap'}>
               <Link to={`/workers/${worker.worker_id}`}>{worker.worker_id}</Link>
+              {worker.is_leader && (
+                <span className={'badge bg-success ms-2'}>Leader Node</span>
+              )}
             </td>
             <td>
               {worker.queues.map((queue) => (
@@ -128,6 +137,11 @@ export function Workers() {
                     {queue}
                   </a>
                 </span>
+              ))}
+            </td>
+            <td>
+              {worker.tags.map((tag) => (
+                <span key={tag} className={'badge bg-secondary me-1'}>{tag}</span>
               ))}
             </td>
             <td className={"text-center"}>

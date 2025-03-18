@@ -9,7 +9,7 @@ import {
 
 import Layout from './Layout.tsx'
 import './index.scss'
-// @ts-expect-error We need to import this for the side-effects
+// @ts-expect-error We need to import this for the side effects
 import * as bootstrap from 'bootstrap'; // eslint-disable-line
 import {ServerConfigurationProvider} from './hooks/useServerConfiguration.tsx';
 import {Queue, Queues} from './pages/Queues.tsx';
@@ -18,6 +18,7 @@ import {Job, Jobs} from './pages/Jobs.tsx';
 import {Cron, Crons} from './pages/Crons.tsx';
 import {Workflow, Workflows} from './pages/Workflows.tsx';
 import {Metrics, MetricDetail} from './pages/Metrics.tsx';
+import {Events} from './pages/Events.tsx';
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
       { path: "/workflows/:workflow_id", element: <Workflow />},
       { path: "/metrics", element: <Metrics />},
       { path: "/metrics/:metricKey", element: <MetricDetail />},
+      { path: "/events", element: <Events />},
     ]
   }
 ]);

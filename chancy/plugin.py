@@ -81,11 +81,11 @@ class Plugin(abc.ABC):
         """
         key = self.migrate_key()
         if key is None:
-            return
+            return None
 
         package = self.migrate_package()
         if package is None:
-            return
+            return None
 
         return Migrator(key, package, prefix=chancy.prefix)
 
@@ -175,6 +175,31 @@ class Plugin(abc.ABC):
         :return: The job to update in the database.
         """
         raise NotImplementedError()
+
+    async def on_job_updated(
+        self,
+        *,
+        worker: "Worker",
+        job: QueuedJob,
+    ):
+        """
+        Called after a job has been run and saved.
+
+        Unlike on_job_completed, this method cannot modify the job, but the job
+        is guaranteed to have been updated in the database by the time it is
+        called.
+
+        :param worker: The worker that is running the job.
+        :param job: The job that was completed.
+        """
+
+    def get_tables(self) -> list[str]:
+        """
+        Get the names of all tables this plugin is responsible for.
+
+        By default, returns an empty list.
+        """
+        return []
 
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"

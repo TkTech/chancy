@@ -5,7 +5,9 @@ Metrics plugin for collecting and sharing metrics across workers.
 import asyncio
 import datetime
 import json
+from collections import defaultdict
 from dataclasses import dataclass, field
+from itertools import groupby
 from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union, cast
 
 from psycopg import sql
@@ -82,6 +84,8 @@ class Metrics(Plugin):
         *,
         sync_interval: int = 60,
         max_points_per_resolution: Dict[Resolution, int] = None,
+        maximum_metric_age: int = 60 * 60 * 24 * 90,
+        collection_interval: int = 30,
     ):
         """
         Initialize the metrics plugin.
@@ -90,11 +94,14 @@ class Metrics(Plugin):
                               database and other workers.
         :param max_points_per_resolution: How many points to keep for each
                                           resolution.
+        :param maximum_metric_age: The maximum age of metrics to keep in the
+                                   database, in seconds. Defaults to 90 days.
+        :param collection_interval: The interval at which to collect table size
+                                    metrics, in seconds.
         """
         super().__init__()
         self.sync_interval = sync_interval
 
-        # Worker ID will be set in run()
         self.worker_id = None
 
         # Default retention policy: how many points to keep for each resolution
@@ -125,6 +132,12 @@ class Metrics(Plugin):
         # Locks to prevent race conditions.
         self.metric_locks: Dict[str, asyncio.Lock] = {}
 
+        # Maximum age of metrics to keep in the database
+        self.maximum_metric_age = maximum_metric_age
+
+        # The interval at which to collect table size metrics
+        self.collection_interval = 30
+
     async def run(self, worker: Worker, chancy: Chancy):
         """
         Run the metrics plugin.
@@ -137,6 +150,12 @@ class Metrics(Plugin):
 
         # Initial load of metrics from the database
         await self._load_metrics_from_db(chancy)
+
+        # Start a task to collect table size metrics
+        worker.manager.add(
+            f"metrics_table_sizes_{self.worker_id}",
+            self._collect_table_sizes(worker, chancy),
+        )
 
         while await self.sleep(self.sync_interval):
             await self._sync_metrics(chancy)
@@ -170,28 +189,24 @@ class Metrics(Plugin):
         3. Job execution time
         4. Global job status counts
         """
-        execution_time = None
         if job.started_at and job.completed_at:
             execution_time = (job.completed_at - job.started_at).total_seconds()
+            await self.record_histogram_value(
+                f"job:{job.func}:execution_time",
+                execution_time,
+            )
+            await self.record_histogram_value(
+                f"queue:{job.queue}:execution_time",
+                execution_time,
+            )
 
         await self.increment_counter(
             f"job:{job.func}:{'success' if exc is None else 'failure'}",
             1,
         )
 
-        # Increment global job status counter
         await self.increment_counter(f"global:status:{job.state.value}", 1)
-
         await self.increment_counter(f"queue:{job.queue}:throughput", 1)
-
-        if execution_time is not None:
-            await self.record_histogram_value(
-                f"job:{job.func}:execution_time", execution_time
-            )
-            await self.record_histogram_value(
-                f"queue:{job.queue}:execution_time",
-                execution_time,
-            )
 
         return job
 
@@ -199,53 +214,25 @@ class Metrics(Plugin):
         """
         Clean up old metrics data.
 
-        Called by the Pruner plugin.
+        Called automatically by the Pruner plugin, or may be manually invoked.
         """
-        pruned_count = 0
 
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                for resolution, max_points in self.max_points.items():
-                    # Query to prune the arrays, keeping only the most recent
-                    # max_points.
-                    query = sql.SQL(
-                        """
-                        UPDATE {metrics_table}
-                        SET
-                            timestamps = (
-                                SELECT ARRAY(
-                                    SELECT unnest(timestamps) 
-                                    ORDER BY unnest DESC 
-                                    LIMIT {max_points}
-                                )
-                            ),
-                            values = (
-                                SELECT ARRAY(
-                                    SELECT unnest(values)
-                                    FROM (
-                                        SELECT ROW_NUMBER() OVER (ORDER BY unnest(timestamps) DESC) as rn,
-                                               unnest(values) as unnest
-                                        FROM {metrics_table} m2
-                                        WHERE m2.metric_key = {metrics_table}.metric_key
-                                        AND m2.resolution = {metrics_table}.resolution
-                                    ) ranked
-                                    WHERE rn <= {max_points}
-                                )
-                            )
-                        WHERE
-                            resolution = {resolution}
-                            AND array_length(timestamps, 1) > {max_points}
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                query = sql.SQL(
                     """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
-                        max_points=sql.Literal(max_points),
-                        resolution=sql.Literal(resolution),
-                    )
+                    DELETE
+                    FROM {metrics_table}
+                    WHERE
+                        updated_at < NOW() - interval '{max_age} seconds'
+                    """
+                ).format(
+                    metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
+                    max_age=sql.Literal(self.maximum_metric_age),
+                )
 
-                    await cursor.execute(query)
-                    pruned_count += cursor.rowcount
-
-        return pruned_count if pruned_count > 0 else None
+                await cursor.execute(query)
+                return cursor.rowcount if cursor.rowcount > 0 else None
 
     async def _get_metric_lock(self, metric_key: str) -> asyncio.Lock:
         """Get a lock for a specific metric to prevent race conditions."""
@@ -385,7 +372,6 @@ class Metrics(Plugin):
                         Dict[str, Union[int, float]], points[0][1]
                     )
 
-                    # Update the stats
                     count = cast(int, current_stats.get("count", 0)) + 1
                     current_sum = (
                         cast(float, current_stats.get("sum", 0)) + value
@@ -406,7 +392,6 @@ class Metrics(Plugin):
                     }
                     points[0] = (points[0][0], new_stats)
                 else:
-                    # Create a new histogram bucket
                     initial_stats = {
                         "count": 1,
                         "sum": value,
@@ -416,11 +401,9 @@ class Metrics(Plugin):
                     }
                     points.insert(0, (bucket_time, initial_stats))
 
-                # Prune if we have too many points
                 if len(points) > self.max_points[resolution]:
                     points.pop()
 
-                # Mark this metric as modified
                 self.modified_metrics.add(metric_key)
 
     async def _sync_metrics(self, chancy: Chancy) -> None:
@@ -430,7 +413,7 @@ class Metrics(Plugin):
         if self.modified_metrics:
             await self._push_metrics_to_db(chancy)
 
-        await self._load_metrics_from_db(chancy, load_only_changes=True)
+        await self._load_metrics_from_db(chancy)
         self.last_sync_time = datetime.datetime.now(datetime.timezone.utc)
         self.modified_metrics.clear()
 
@@ -446,7 +429,6 @@ class Metrics(Plugin):
 
         metrics_to_insert = []
 
-        # Process each metric key that was modified
         for metric_key in self.modified_metrics:
             if metric_key not in self.local_metrics_cache:
                 continue
@@ -486,8 +468,7 @@ class Metrics(Plugin):
             return
 
         async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                # Execute a single query with all metrics using execute_batch
+            async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.executemany(
                     sql.SQL(
                         """
@@ -500,8 +481,13 @@ class Metrics(Plugin):
                             metric_type,
                             updated_at
                         ) VALUES (
-                            %(metric_key)s, %(resolution)s, %(worker_id)s, 
-                            %(timestamps)s, %(values)s, %(metric_type)s, NOW()
+                            %(metric_key)s,
+                            %(resolution)s,
+                            %(worker_id)s, 
+                            %(timestamps)s,
+                            %(values)s,
+                            %(metric_type)s,
+                            NOW()
                         )
                         ON CONFLICT (
                             metric_key,
@@ -520,9 +506,7 @@ class Metrics(Plugin):
                     metrics_to_insert,
                 )
 
-    async def _load_metrics_from_db(
-        self, chancy: Chancy, load_only_changes: bool = False
-    ) -> None:
+    async def _load_metrics_from_db(self, chancy: Chancy) -> None:
         """
         Load metrics from the database.
 
@@ -530,195 +514,109 @@ class Metrics(Plugin):
         into the aggregated_metrics_cache.
 
         :param chancy: The Chancy application instance
-        :param load_only_changes: If True, only load metrics updated since the
-                                  last sync time
         """
         async with chancy.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
-                if load_only_changes:
-                    query = sql.SQL(
-                        """
-                        SELECT 
-                            metric_key,
-                            resolution,
-                            worker_id,
-                            timestamps,
-                            values,
-                            metric_type
-                        FROM 
-                            {metrics_table}
-                        WHERE 
-                            updated_at > %s
-                        ORDER BY 
-                            metric_key, resolution
-                        """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
+                query = sql.SQL(
+                    """
+                    SELECT 
+                        metric_key,
+                        resolution,
+                        metric_type,
+                        json_agg(timestamps ORDER BY worker_id, updated_at) as all_timestamps,
+                        json_agg(values ORDER BY worker_id, updated_at) as all_values
+                    FROM 
+                        {metrics_table}
+                    GROUP BY 
+                        metric_key, resolution, metric_type
+                    ORDER BY 
+                        metric_key, resolution
+                    """
+                ).format(
+                    metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
+                )
+                await cursor.execute(query)
+
+                for metric_key, group in groupby(
+                    [r async for r in cursor],
+                    key=lambda r: r["metric_key"],
+                ):
+                    group_list = list(group)
+                    metric = self.aggregated_metrics_cache.setdefault(
+                        metric_key,
+                        Metric(metric_type=group_list[0]["metric_type"]),
                     )
-                    await cursor.execute(query, (self.last_sync_time,))
-                else:
-                    query = sql.SQL(
-                        """
-                        SELECT 
-                            metric_key,
-                            resolution,
-                            worker_id,
-                            timestamps,
-                            values,
-                            metric_type
-                        FROM 
-                            {metrics_table}
-                        ORDER BY 
-                            metric_key, resolution
-                        """
-                    ).format(
-                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
-                    )
-                    await cursor.execute(query)
 
-                # Group the results by metric_key and resolution
-                metrics_data = {}
-                metric_types = {}
-                async for row in cursor:
-                    metric_key = row["metric_key"]
-                    resolution = cast(Resolution, row["resolution"])
-                    # Store the metric type - it should always be present
-                    metric_type = row["metric_type"]
-                    if not metric_type:
-                        raise ValueError(
-                            f"Metric {metric_key} is missing required metric_type"
-                        )
-                    metric_types[metric_key] = cast(MetricType, metric_type)
+                    for row in group_list:
+                        resolution = cast(Resolution, row["resolution"])
+                        merged_points = defaultdict(list)
 
-                    if metric_key not in metrics_data:
-                        metrics_data[metric_key] = {}
+                        for worker_idx, timestamps_array in enumerate(
+                            row["all_timestamps"]
+                        ):
+                            values_array = row["all_values"][worker_idx]
 
-                    if resolution not in metrics_data[metric_key]:
-                        metrics_data[metric_key][resolution] = []
-
-                    metrics_data[metric_key][resolution].append(row)
-
-                # Process each metric_key and resolutions
-                for metric_key, resolutions in metrics_data.items():
-                    # Get the metric type, default to counter if not found
-                    metric_type = metric_types.get(metric_key, "counter")
-
-                    # Initialize result dicts for each resolution
-                    values_1min = []
-                    values_5min = []
-                    values_1hour = []
-                    values_1day = []
-
-                    # Process each resolution
-                    for resolution, worker_data in resolutions.items():
-                        # Collect all points from all workers
-                        all_points = []
-                        for row in worker_data:
-                            timestamps = row["timestamps"]
-                            values = row["values"]
-
-                            for i in range(len(timestamps)):
-                                value = (
-                                    json.loads(values[i])
-                                    if isinstance(values[i], str)
-                                    else values[i]
-                                )
-                                all_points.append((timestamps[i], value))
-
-                        # Group points by timestamp for merging
-                        merged_points: Dict[
-                            datetime.datetime, List[MetricValue]
-                        ] = {}
-                        for timestamp, value in all_points:
-                            if timestamp not in merged_points:
-                                merged_points[timestamp] = []
-                            merged_points[timestamp].append(value)
+                            for i in range(len(timestamps_array)):
+                                timestamp = timestamps_array[i]
+                                merged_points[timestamp].append(values_array[i])
 
                         result_points = []
                         for timestamp, values_list in merged_points.items():
-                            # If all values are numbers, sum them
-                            if all(
-                                isinstance(v, (int, float)) for v in values_list
-                            ):
+                            if metric.metric_type == "counter":
                                 merged_value = sum(values_list)
-                            # If all values are dictionaries with the same keys, merge them
-                            elif all(isinstance(v, dict) for v in values_list):
-                                # Handle histogram values (with stats)
-                                if all(
-                                    "count" in v for v in values_list
-                                ) and all("sum" in v for v in values_list):
-                                    total_count = sum(
-                                        v.get("count", 0) for v in values_list
-                                    )
-                                    total_sum = sum(
-                                        v.get("sum", 0) for v in values_list
-                                    )
-
-                                    # Find min/max across all workers
-                                    all_mins = [
-                                        v.get("min")
-                                        for v in values_list
-                                        if "min" in v
-                                    ]
-                                    all_maxs = [
-                                        v.get("max")
-                                        for v in values_list
-                                        if "max" in v
-                                    ]
-
-                                    merged_value = {
-                                        "count": total_count,
-                                        "sum": total_sum,
-                                        "avg": (
-                                            total_sum / total_count
-                                            if total_count > 0
-                                            else 0
-                                        ),
-                                        "min": min(all_mins) if all_mins else 0,
-                                        "max": max(all_maxs) if all_maxs else 0,
-                                    }
-                                else:
-                                    merged_value = {}
-                                    for v in values_list:
-                                        for k, val in v.items():
-                                            if k in merged_value:
-                                                merged_value[k] += val
-                                            else:
-                                                merged_value[k] = val
-                            else:
+                            elif metric.metric_type == "gauge":
                                 merged_value = values_list[0]
+                            elif metric.metric_type == "histogram":
+                                total_count = sum(
+                                    v.get("count", 0) for v in values_list
+                                )
+                                total_sum = sum(
+                                    v.get("sum", 0) for v in values_list
+                                )
+
+                                all_mins = [
+                                    v.get("min")
+                                    for v in values_list
+                                    if "min" in v
+                                ]
+                                all_maxs = [
+                                    v.get("max")
+                                    for v in values_list
+                                    if "max" in v
+                                ]
+
+                                merged_value = {
+                                    "count": total_count,
+                                    "sum": total_sum,
+                                    "avg": (
+                                        total_sum / total_count
+                                        if total_count > 0
+                                        else 0
+                                    ),
+                                    "min": min(all_mins) if all_mins else 0,
+                                    "max": max(all_maxs) if all_maxs else 0,
+                                }
 
                             result_points.append((timestamp, merged_value))
 
-                        # Sort points by timestamp (newest first)
                         result_points.sort(key=lambda p: p[0], reverse=True)
 
-                        # Store points in the appropriate resolution list
                         if resolution == "1min":
-                            values_1min = result_points[
+                            metric.values_1min = result_points[
                                 : self.max_points[resolution]
                             ]
                         elif resolution == "5min":
-                            values_5min = result_points[
+                            metric.values_5min = result_points[
                                 : self.max_points[resolution]
                             ]
                         elif resolution == "1hour":
-                            values_1hour = result_points[
+                            metric.values_1hour = result_points[
                                 : self.max_points[resolution]
                             ]
                         elif resolution == "1day":
-                            values_1day = result_points[
+                            metric.values_1day = result_points[
                                 : self.max_points[resolution]
                             ]
-
-                    # Create and store the Metric object in the aggregated cache
-                    self.aggregated_metrics_cache[metric_key] = Metric(
-                        metric_type=cast(MetricType, metric_type),
-                        values_1min=values_1min,
-                        values_5min=values_5min,
-                        values_1hour=values_1hour,
-                        values_1day=values_1day,
-                    )
 
     @staticmethod
     def _get_bucket_time(
@@ -783,6 +681,70 @@ class Metrics(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.metrics.api.MetricsApiPlugin"
+
+    def get_tables(self) -> list[str]:
+        """Get the names of all tables this plugin is responsible for."""
+        return ["metrics"]
+
+    async def _collect_table_sizes(self, worker: Worker, chancy: Chancy):
+        """
+        Collect size metrics for database tables.
+
+        This runs as a separate task and collects table sizes every 30 seconds,
+        but only when this worker is the leader to avoid duplicate metrics.
+        """
+        core_tables = [
+            "jobs",
+            "queues",
+            "workers",
+            "leader",
+            "queue_rate_limits",
+        ]
+
+        while await self.sleep(self.collection_interval):
+            await self.wait_for_leader(worker)
+
+            plugin_tables = []
+            for plugin in chancy.plugins:
+                plugin_tables.extend(plugin.get_tables())
+
+            all_tables = list(set(plugin_tables + core_tables))
+            prefixed_tables = [
+                f"{chancy.prefix}{table}" for table in all_tables
+            ]
+
+            async with chancy.pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cursor:
+                    query = sql.SQL(
+                        """
+                        SELECT
+                            table_name,
+                            pg_total_relation_size(table_name) as total_size_bytes,
+                            pg_relation_size(table_name) as table_size_bytes,
+                            pg_indexes_size(table_name) as index_size_bytes
+                        FROM unnest({tables}::text[]) AS table_name
+                    """
+                    ).format(tables=sql.Literal(prefixed_tables))
+
+                    await cursor.execute(query)
+
+                    async for result in cursor:
+                        table_name = result["table_name"].removeprefix(
+                            chancy.prefix
+                        )
+
+                        await self.record_histogram_value(
+                            f"table:{table_name}:total_size_bytes",
+                            result["total_size_bytes"],
+                        )
+                        await self.record_histogram_value(
+                            f"table:{table_name}:table_size_bytes",
+                            result["table_size_bytes"],
+                        )
+                        await self.record_histogram_value(
+                            f"table:{table_name}:index_size_bytes",
+                            result["index_size_bytes"],
+                        )
 
     def get_metrics(
         self,

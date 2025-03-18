@@ -2,11 +2,13 @@ import asyncio
 import enum
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import List, Dict, TextIO, Self
-from psycopg import sql
+from psycopg import sql, AsyncCursor
 from psycopg.rows import dict_row
 
-from chancy.plugin import Plugin, PluginScope
+from chancy.hub import Event
+from chancy.plugin import Plugin
 from chancy.app import Chancy
 from chancy.worker import Worker
 from chancy.job import Job, QueuedJob, IsAJob
@@ -200,10 +202,10 @@ class WorkflowPlugin(Plugin):
             ) as chancy:
                 workflow = (
                     Workflow("example")
-                    .add(top, "top")
-                    .add(left, "left", ["top"])
-                    .add(right, "right", ["top"])
-                    .add(bottom, "bottom", ["left", "right"])
+                    .add("top", top)
+                    .add("left", left, ["top"])
+                    .add("right", right, ["top"])
+                    .add("bottom", bottom, ["left", "right"])
                 )
                 await WorkflowPlugin.push(chancy, workflow)
 
@@ -235,7 +237,7 @@ class WorkflowPlugin(Plugin):
     def __init__(
         self,
         *,
-        polling_interval: int = 1,
+        polling_interval: int = 30,
         max_workflows_per_run: int = 1000,
         pruning_rule: Rule = Rules.Age() > 60 * 60 * 24,
     ):
@@ -244,25 +246,113 @@ class WorkflowPlugin(Plugin):
         self.max_workflows_per_run = max_workflows_per_run
         self.pruning_rule = pruning_rule
 
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
-
     async def run(self, worker: Worker, chancy: Chancy):
         worker.hub.on(
-            "workflow.upserted",
+            "workflow.created",
             lambda *args, **kwargs: self.wake_up(),
+        )
+        worker.hub.on(
+            "workflow.step_completed",
+            partial(
+                self._on_single_step_completed, chancy=chancy, worker=worker
+            ),
         )
 
         while await self.sleep(self.polling_interval):
             await self.wait_for_leader(worker)
-            workflows = await self.fetch_workflows(
-                chancy,
-                states=["pending", "running"],
-                limit=self.max_workflows_per_run,
-            )
-            for workflow in workflows:
-                await self.process_workflow(chancy, workflow)
+
+            async with chancy.pool.connection() as conn:
+                async with conn.cursor(row_factory=dict_row) as cursor:
+                    # Grab the workflow IDs of workflows that are pending or
+                    # running and lock them with FOR UPDATE.
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            SELECT id
+                            FROM {workflows} w
+                            WHERE w.state IN ('pending', 'running')
+                            FOR UPDATE SKIP LOCKED
+                            LIMIT %(limit)s
+                            """
+                        ).format(
+                            workflows=sql.Identifier(
+                                f"{chancy.prefix}workflows"
+                            ),
+                        ),
+                        {
+                            "limit": self.max_workflows_per_run,
+                        },
+                    )
+
+                    results = await cursor.fetchall()
+                    if not results:
+                        continue
+
+                    workflows = await self.fetch_workflows_ex(
+                        cursor,
+                        chancy,
+                        ids=[row["id"] for row in results],
+                    )
+                    for workflow in workflows:
+                        if await self.process_workflow(
+                            cursor, chancy, workflow
+                        ):
+                            await self.push_ex(cursor, chancy, workflow)
+
+    async def _on_single_step_completed(
+        self, event: Event, chancy: Chancy, worker: Worker
+    ):
+        """
+        Called whenever a single step in a workflow is completed.
+
+        Used to immediately process the workflow and check if it can be
+        progressed to the next step without waiting for the next polling
+        interval.
+        """
+        if not worker.is_leader:
+            return
+
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT w.id
+                        FROM {workflows} w
+                        WHERE w.id = %(workflow_id)s
+                        FOR UPDATE SKIP LOCKED
+                        """
+                    ).format(
+                        workflows=sql.Identifier(f"{chancy.prefix}workflows"),
+                        workflow_steps=sql.Identifier(
+                            f"{chancy.prefix}workflow_steps"
+                        ),
+                    ),
+                    {"workflow_id": event.body["workflow_id"]},
+                )
+                # Already locked by someone else.
+                if not await cursor.fetchone():
+                    return
+
+                workflow = await self.fetch_workflow_ex(
+                    cursor, chancy, event.body["workflow_id"]
+                )
+                if workflow is not None:
+                    if await self.process_workflow(cursor, chancy, workflow):
+                        await self.push_ex(cursor, chancy, workflow)
+
+    async def on_job_updated(
+        self,
+        *,
+        worker: "Worker",
+        job: QueuedJob,
+    ):
+        if not job.meta.get("workflow_id"):
+            return
+
+        await worker.hub.emit(
+            "workflow.step_completed", {"workflow_id": job.meta["workflow_id"]}
+        )
 
     @classmethod
     async def fetch_workflow(cls, chancy: Chancy, id_: str) -> Workflow | None:
@@ -276,8 +366,27 @@ class WorkflowPlugin(Plugin):
         workflows = await cls.fetch_workflows(chancy, ids=[id_])
         return workflows[0] if workflows else None
 
-    @staticmethod
+    @classmethod
+    async def fetch_workflow_ex(
+        cls, cursor: AsyncCursor, chancy: Chancy, id_: str
+    ) -> Workflow | None:
+        """
+        Fetch a single workflow from the database.
+
+        This method is a lower-level version of fetch_workflow that accepts
+        an existing cursor object, allowing it to be used in transactions.
+
+        :param cursor: The cursor to use for the query.
+        :param chancy: The Chancy application.
+        :param id_: The ID of the workflow to fetch.
+        :return: The workflow, or None if it does not exist.
+        """
+        workflows = await cls.fetch_workflows_ex(cursor, chancy, ids=[id_])
+        return workflows[0] if workflows else None
+
+    @classmethod
     async def fetch_workflows(
+        cls,
         chancy: Chancy,
         *,
         states: list[str] | None = None,
@@ -296,90 +405,129 @@ class WorkflowPlugin(Plugin):
         """
         async with chancy.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        SELECT 
-                            w.id, 
-                            w.name, 
-                            w.state,
-                            w.created_at,
-                            w.updated_at,
-                            COALESCE(json_agg(
-                                json_build_object(
-                                    'step_id', ws.step_id,
-                                    'job_data', ws.job_data,
-                                    'dependencies', ws.dependencies,
-                                    'state', j.state,
-                                    'job_id', ws.job_id
-                                )
-                            ), '[]'::json) as steps
-                        FROM {workflows} w
-                        LEFT JOIN {workflow_steps} ws ON w.id = ws.workflow_id
-                        LEFT JOIN {jobs} j ON ws.job_id = j.id
-                        WHERE (
-                            %(states)s::text[] IS NULL OR
-                            w.state = ANY(%(states)s::text[])
-                        ) AND (
-                            %(ids)s::uuid[] IS NULL OR
-                            w.id = ANY(%(ids)s::uuid[])
-                        )
-                        GROUP BY w.id, w.name, w.state
-                        LIMIT {limit}
-                        """
-                    ).format(
-                        workflows=sql.Identifier(f"{chancy.prefix}workflows"),
-                        workflow_steps=sql.Identifier(
-                            f"{chancy.prefix}workflow_steps"
-                        ),
-                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
-                        limit=sql.Literal(limit),
-                    ),
-                    {
-                        "states": states,
-                        "ids": ids,
-                    },
+                return await cls.fetch_workflows_ex(
+                    cursor,
+                    chancy,
+                    states=states,
+                    ids=ids,
+                    limit=limit,
                 )
-                rows = await cursor.fetchall()
 
-                return [
-                    Workflow(
-                        id=row["id"],
-                        name=row["name"],
-                        state=Workflow.State(row["state"]),
-                        updated_at=row["updated_at"],
-                        created_at=row["created_at"],
-                        steps={
-                            step["step_id"]: WorkflowStep(
-                                job=Job.unpack(step["job_data"]),
-                                dependencies=step["dependencies"],
-                                state=(
-                                    QueuedJob.State(step["state"])
-                                    if step["state"]
-                                    else None
-                                ),
-                                step_id=step["step_id"],
-                                job_id=step["job_id"],
-                            )
-                            for step in row["steps"]
-                        },
+    @staticmethod
+    async def fetch_workflows_ex(
+        cursor: AsyncCursor,
+        chancy: Chancy,
+        *,
+        states: list[str] | None = None,
+        ids: list[str] | None = None,
+        limit: int = 100,
+    ) -> List[Workflow]:
+        """
+        Fetch workflows from the database, optionally matching the given
+        conditions.
+
+        This method is a lower-level version of fetch_workflows that accepts
+        an existing cursor object, allowing it to be used in transactions.
+
+        :param cursor: The cursor to use for the query.
+        :param chancy: The Chancy application.
+        :param states: A list of states to match.
+        :param ids: A list of IDs to match.
+        :param limit: The maximum number of workflows to fetch.
+        :return: A list of workflows.
+        """
+        await cursor.execute(
+            sql.SQL(
+                """
+                SELECT 
+                    w.id, 
+                    w.name, 
+                    w.state,
+                    w.created_at,
+                    w.updated_at,
+                    COALESCE(json_agg(
+                        json_build_object(
+                            'step_id', ws.step_id,
+                            'job_data', ws.job_data,
+                            'dependencies', ws.dependencies,
+                            'state', j.state,
+                            'job_id', ws.job_id
+                        )
+                    ), '[]'::json) as steps
+                FROM {workflows} w
+                LEFT JOIN {workflow_steps} ws ON w.id = ws.workflow_id
+                LEFT JOIN {jobs} j ON ws.job_id = j.id
+                WHERE (
+                    %(states)s::text[] IS NULL OR
+                    w.state = ANY(%(states)s::text[])
+                ) AND (
+                    %(ids)s::uuid[] IS NULL OR
+                    w.id = ANY(%(ids)s::uuid[])
+                )
+                GROUP BY w.id, w.name, w.state
+                LIMIT {limit}
+                """
+            ).format(
+                workflows=sql.Identifier(f"{chancy.prefix}workflows"),
+                workflow_steps=sql.Identifier(f"{chancy.prefix}workflow_steps"),
+                jobs=sql.Identifier(f"{chancy.prefix}jobs"),
+                limit=sql.Literal(limit),
+            ),
+            {
+                "states": states,
+                "ids": ids,
+            },
+        )
+        rows = await cursor.fetchall()
+
+        return [
+            Workflow(
+                id=row["id"],
+                name=row["name"],
+                state=Workflow.State(row["state"]),
+                updated_at=row["updated_at"],
+                created_at=row["created_at"],
+                steps={
+                    step["step_id"]: WorkflowStep(
+                        job=Job.unpack(step["job_data"]),
+                        dependencies=step["dependencies"],
+                        state=(
+                            QueuedJob.State(step["state"])
+                            if step["state"]
+                            else None
+                        ),
+                        step_id=step["step_id"],
+                        job_id=step["job_id"],
                     )
-                    for row in rows
-                ]
+                    for step in row["steps"]
+                },
+            )
+            for row in rows
+        ]
 
-    async def process_workflow(self, chancy: Chancy, workflow: Workflow):
+    @staticmethod
+    async def process_workflow(
+        cursor: AsyncCursor, chancy: Chancy, workflow: Workflow
+    ) -> bool:
         """
         Process a single iteration of the given workflow, progressing the
         state of each step and the overall workflow as necessary.
 
+        :param cursor: The cursor to use for the query.
         :param chancy: The Chancy application.
         :param workflow: The workflow to process.
+        :return: True if the workflow was updated, False otherwise.
         """
         # If the workflow is already in a terminal state, there's no further
         # processing to do, although we may add future state handling here
         # for retries.
         if workflow.state in [Workflow.State.COMPLETED, Workflow.State.FAILED]:
-            return
+            return False
+
+        # Keep track of whether any changes were made to the workflow. If no
+        # changes are made, we can skip updating the database.
+        has_change = False
+        starting_state = workflow.state
 
         # We check each step in the workflow to see:
         #    - If it has an associated job, and if so, what's the state of it?
@@ -398,7 +546,18 @@ class WorkflowPlugin(Plugin):
                 dep.state == QueuedJob.State.SUCCEEDED for dep in dependencies
             ):
                 if step.job_id is None:
-                    step.job_id = (await chancy.push(step.job)).identifier
+                    step.job_id = (
+                        await chancy.push_ex(
+                            cursor,
+                            step.job.with_meta(
+                                {
+                                    **step.job.meta,
+                                    "workflow_id": str(workflow.id),
+                                }
+                            ),
+                        )
+                    ).identifier
+                    has_change = True
 
         # Are all jobs complete, or any jobs failed? If so, we can mark the
         # workflow as completed or failed.
@@ -408,8 +567,7 @@ class WorkflowPlugin(Plugin):
         elif states.get(QueuedJob.State.FAILED):
             workflow.state = Workflow.State.FAILED
 
-        # We update the workflow in the database to reflect the new state
-        await self.push(chancy, workflow)
+        return starting_state != workflow.state or has_change
 
     @classmethod
     async def push(cls, chancy: Chancy, workflow: Workflow) -> str:
@@ -425,76 +583,98 @@ class WorkflowPlugin(Plugin):
         """
         async with chancy.pool.connection() as conn:
             async with conn.transaction():
-                async with conn.cursor() as cursor:
-                    await cursor.execute(
-                        sql.SQL(
-                            """
-                            INSERT INTO {workflows} (
-                                id,
-                                name,
-                                state,
-                                created_at,
-                                updated_at
-                            )
-                            VALUES (%s, %s, %s, NOW(), NOW())
-                            ON CONFLICT (id) DO UPDATE
-                            SET name = EXCLUDED.name,
-                                state = EXCLUDED.state,
-                                updated_at = NOW()
-                            RETURNING id, created_at, updated_at
-                            """
-                        ).format(
-                            workflows=sql.Identifier(
-                                f"{chancy.prefix}workflows"
-                            )
-                        ),
-                        [workflow.id, workflow.name, workflow.state.value],
-                    )
-                    result = await cursor.fetchone()
-                    workflow.id, workflow.created_at, workflow.updated_at = (
-                        result
-                    )
+                async with conn.cursor(row_factory=dict_row) as cursor:
+                    return await cls.push_ex(cursor, chancy, workflow)
 
-                    for step_id, step in workflow.steps.items():
-                        await cursor.execute(
-                            sql.SQL(
-                                """
-                                INSERT INTO {workflow_steps} (
-                                    workflow_id,
-                                    step_id,
-                                    job_data,
-                                    dependencies,
-                                    job_id
-                                )
-                                VALUES (%s, %s, %s, %s, %s)
-                                ON CONFLICT (workflow_id, step_id) DO UPDATE
-                                SET job_data = EXCLUDED.job_data,
-                                    dependencies = EXCLUDED.dependencies,
-                                    job_id = EXCLUDED.job_id,
-                                    updated_at = NOW()
-                                """
-                            ).format(
-                                workflow_steps=sql.Identifier(
-                                    f"{chancy.prefix}workflow_steps"
-                                )
-                            ),
-                            [
-                                workflow.id,
-                                step_id,
-                                json_dumps(step.job.pack()),
-                                json_dumps(step.dependencies),
-                                step.job_id,
-                            ],
-                        )
+    @staticmethod
+    async def push_ex(
+        cursor: AsyncCursor, chancy: Chancy, workflow: Workflow
+    ) -> str:
+        """
+        Push new workflow to the database.
 
-                    await chancy.notify(
-                        cursor,
-                        "workflow.upserted",
-                        {
-                            "id": workflow.id,
-                            "name": workflow.name,
-                        },
+        This method is a lower-level version of push that accepts an existing
+        cursor object, allowing it to be used in transactions.
+
+        If the workflow already exists in the database, it will be updated
+        instead.
+
+        :param cursor: The cursor to use for the query.
+        :param chancy: The Chancy application.
+        :param workflow: The workflow to push.
+        :return: The UUID of the newly created workflow.
+        """
+        await cursor.execute(
+            sql.SQL(
+                """
+                INSERT INTO {workflows} (
+                    id,
+                    name,
+                    state,
+                    created_at,
+                    updated_at
+                )
+                VALUES (%s, %s, %s, NOW(), NOW())
+                ON CONFLICT (id) DO UPDATE
+                SET name = EXCLUDED.name,
+                    state = EXCLUDED.state,
+                    updated_at = NOW()
+                RETURNING
+                    id,
+                    created_at,
+                    updated_at,
+                    (xmax = 0) as inserted
+                """
+            ).format(workflows=sql.Identifier(f"{chancy.prefix}workflows")),
+            [workflow.id, workflow.name, workflow.state.value],
+        )
+        result = await cursor.fetchone()
+
+        workflow.id = result["id"]
+        workflow.created_at = result["created_at"]
+        workflow.updated_at = result["updated_at"]
+        inserted = result["inserted"]
+
+        for step_id, step in workflow.steps.items():
+            await cursor.execute(
+                sql.SQL(
+                    """
+                    INSERT INTO {workflow_steps} (
+                        workflow_id,
+                        step_id,
+                        job_data,
+                        dependencies,
+                        job_id
                     )
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (workflow_id, step_id) DO UPDATE
+                    SET job_data = EXCLUDED.job_data,
+                        dependencies = EXCLUDED.dependencies,
+                        job_id = EXCLUDED.job_id,
+                        updated_at = NOW()
+                    """
+                ).format(
+                    workflow_steps=sql.Identifier(
+                        f"{chancy.prefix}workflow_steps"
+                    )
+                ),
+                [
+                    workflow.id,
+                    step_id,
+                    json_dumps(step.job.pack()),
+                    json_dumps(step.dependencies),
+                    step.job_id,
+                ],
+            )
+
+        await chancy.notify(
+            cursor,
+            f"workflow.{'created' if inserted else 'updated'}",
+            {
+                "id": workflow.id,
+                "name": workflow.name,
+            },
+        )
 
         return workflow.id
 
@@ -622,6 +802,10 @@ class WorkflowPlugin(Plugin):
 
     def api_plugin(self) -> str | None:
         return "chancy.plugins.workflow.api.WorkflowApiPlugin"
+
+    def get_tables(self) -> list[str]:
+        """Get the names of all tables this plugin is responsible for."""
+        return ["workflows", "workflow_steps"]
 
 
 class Sequence:

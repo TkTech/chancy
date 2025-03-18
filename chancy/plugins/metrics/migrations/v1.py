@@ -3,6 +3,7 @@ Initial migration for the metrics plugin.
 """
 
 from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow
 
 from chancy.migrate import Migration, Migrator
 
@@ -12,7 +13,7 @@ class MetricsInitialMigration(Migration):
     Create the initial tables for the metrics plugin.
     """
 
-    async def up(self, migrator: Migrator, cursor: AsyncCursor):
+    async def up(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         """
         Create the metrics table.
         """
@@ -54,7 +55,7 @@ class MetricsInitialMigration(Migration):
             )
         )
 
-    async def down(self, migrator: Migrator, cursor: AsyncCursor):
+    async def down(self, migrator: Migrator, cursor: AsyncCursor[DictRow]):
         """
         Drop the metrics table.
         """
