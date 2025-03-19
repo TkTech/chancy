@@ -51,7 +51,7 @@ async def migrate(
         if plugin:
             matching_plugins = [
                 p
-                for p in chancy.plugins
+                for p in chancy.plugins.values()
                 if p.__class__.__name__.lower() == plugin.lower()
             ]
 
@@ -103,7 +103,7 @@ async def check_migrations(ctx: click.Context):
                 click.echo("Chancy Core")
                 await _check_migrations(migrator, cursor)
 
-                for plugin in chancy.plugins:
+                for plugin in chancy.plugins.values():
                     migrator = plugin.migrator(chancy)
                     if migrator is None:
                         continue

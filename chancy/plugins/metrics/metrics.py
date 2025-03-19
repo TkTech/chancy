@@ -686,6 +686,10 @@ class Metrics(Plugin):
         """Get the names of all tables this plugin is responsible for."""
         return ["metrics"]
 
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.metrics"
+
     async def _collect_table_sizes(self, worker: Worker, chancy: Chancy):
         """
         Collect size metrics for database tables.
@@ -705,7 +709,7 @@ class Metrics(Plugin):
             await self.wait_for_leader(worker)
 
             plugin_tables = []
-            for plugin in chancy.plugins:
+            for plugin in chancy.plugins.values():
                 plugin_tables.extend(plugin.get_tables())
 
             all_tables = list(set(plugin_tables + core_tables))

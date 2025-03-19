@@ -10,6 +10,10 @@ Changelog
 - Added `queue.resumed` and `queue.paused` events.
 - Added the convenience functions `Chancy.pause_queue()` and
   `Chancy.resume_queue()`.
+- Every plugin now requires a `get_identifier()` method, which should return a
+  unique identifier for the plugin.
+- Plugins can now implement `get_depdenencies()` to return a list of other
+  plugins that they depend on.
 
 0.21.0
 ------

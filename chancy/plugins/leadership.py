@@ -41,6 +41,10 @@ class Leadership(Plugin):
                 " the timeout should be at least twice the poll interval."
             )
 
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.leadership"
+
     @classmethod
     def get_scope(cls) -> PluginScope:
         return PluginScope.WORKER
@@ -154,6 +158,10 @@ class ImmediateLeadership(Plugin):
     @classmethod
     def get_scope(cls) -> PluginScope:
         return PluginScope.WORKER
+
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.leadership"
 
     async def run(self, worker: Worker, chancy: Chancy):
         worker.is_leader.set()

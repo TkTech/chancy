@@ -104,6 +104,8 @@ class Chancy:
         postgres's NOTIFY/LISTEN feature.
     :param log: The logger to use for all application logging. If not provided,
         a default logger will be set up.
+    :param no_default_plugins: If `True`, the default plugins will not be
+        enabled. Defaults to `False`.
     """
 
     class Executor(enum.StrEnum):
@@ -184,11 +186,12 @@ class Chancy:
         poll_reconnect_timeout: int = 60 * 5,
         notifications: bool = True,
         log: logging.Logger | None = None,
+        no_default_plugins: bool = False,
     ):
         #: The DSN to connect to the database.
         self.dsn = dsn
         #: The plugins to use with the application.
-        self.plugins = plugins or []
+        self.plugins = {}
         #: A prefix appended to all table names, which can be used to
         #: namespace the tables for multiple applications or tenants.
         self.prefix = prefix
@@ -204,6 +207,39 @@ class Chancy:
         self.notifications = notifications
         #: The logger to use for all application logging.
         self.log = log or setup_default_logger()
+
+        for plugin in plugins or []:
+            if (identifier := plugin.get_identifier()) in self.plugins:
+                other_type = type(self.plugins[identifier])
+                if isinstance(plugin, other_type):
+                    raise ValueError(
+                        f"Duplicate plugin of type {type(plugin)!r} with"
+                        f" identifier {identifier!r}."
+                    )
+                else:
+                    raise ValueError(
+                        f"The plugin of type {type(plugin)!r} has the same"
+                        f" identifier {identifier!r} which conflicts with"
+                        f" another plugin of type {other_type}."
+                    )
+
+            self.plugins[identifier] = plugin
+
+        if not no_default_plugins:
+            # If the user hasn't specified otherwise, well enable some common
+            # default plugins with reasonable defaults.
+            defaults = {
+                Leadership.get_identifier(): lambda: Leadership(),
+                Pruner.get_identifier(): lambda: Pruner(),
+                Recovery.get_identifier(): lambda: Recovery(),
+                Metrics.get_identifier(): lambda: Metrics(),
+                WorkflowPlugin.get_identifier(): lambda: WorkflowPlugin(),
+            }
+
+            for identifier, plugin in defaults.items():
+                if identifier not in self.plugins:
+                    self.plugins[identifier] = plugin()
+                    self.log.info(f"Enabled default plugin {identifier!r}.")
 
     async def __aenter__(self):
         await self.pool.open()
@@ -281,7 +317,7 @@ class Chancy:
         async with self.pool.connection() as conn:
             await migrator.migrate(conn, to_version=to_version)
 
-        for plugin in self.plugins:
+        for plugin in self.plugins.values():
             await plugin.migrate(self, to_version=to_version)
 
     @_ensure_pool_is_open
@@ -298,7 +334,7 @@ class Chancy:
                 if await migrator.is_migration_required(cursor):
                     return False
 
-                for plugin in self.plugins:
+                for plugin in self.plugins.values():
                     migrator = plugin.migrator(self)
                     if migrator is None:
                         continue
@@ -1037,3 +1073,10 @@ class Chancy:
             "scheduled_at": job.scheduled_at,
             "unique_key": job.unique_key,
         }
+
+
+from chancy.plugins.pruner import Pruner  # noqa: E402
+from chancy.plugins.recovery import Recovery  # noqa: E402
+from chancy.plugins.leadership import Leadership  # noqa: E402
+from chancy.plugins.metrics import Metrics  # noqa: E402
+from chancy.plugins.workflow import WorkflowPlugin  # noqa: E402

@@ -10,7 +10,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
 from chancy import Worker, Chancy
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.plugins.api.core import CoreApiPlugin
 from chancy.plugins.api.plugin import ApiPlugin
 from chancy.utils import import_string
@@ -99,10 +99,6 @@ class Api(Plugin):
     :param allow_origins: A list of origins that are allowed to access the API.
     """
 
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
-
     def __init__(
         self,
         *,
@@ -119,11 +115,15 @@ class Api(Plugin):
         self.allow_origins = allow_origins or []
         self.plugins: set[Type[ApiPlugin]] = {CoreApiPlugin}
 
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.api"
+
     async def run(self, worker: Worker, chancy: Chancy):
         """
         Start the web server.
         """
-        for plug in chancy.plugins:
+        for plug in chancy.plugins.values():
             api_plugin = plug.api_plugin()
             if api_plugin is None:
                 continue

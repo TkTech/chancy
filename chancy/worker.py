@@ -21,6 +21,7 @@ from chancy.app import Chancy
 from chancy.errors import MigrationsNeededError
 from chancy.executors.base import Executor
 from chancy.hub import Hub, Event
+from chancy.plugin import PluginScope
 from chancy.queue import Queue
 from chancy.utils import TaskManager, import_string
 from chancy.job import QueuedJob, Reference
@@ -208,7 +209,16 @@ class Worker:
 
         self.hub.on("job.cancelled", self._handle_cancellation)
 
-        for plugin in self.chancy.plugins:
+        for plugin in self.chancy.plugins.values():
+            if plugin.get_scope() != PluginScope.WORKER:
+                continue
+
+            if set(plugin.get_dependencies()) - self.chancy.plugins.keys():
+                raise ValueError(
+                    f"Plugin {plugin.get_identifier()!r} has unsatisfied "
+                    f"dependencies: {plugin.get_dependencies()}"
+                )
+
             self.manager.add(
                 plugin.__class__.__name__,
                 plugin.run(self, self.chancy),
@@ -548,7 +558,7 @@ class Worker:
                             raise
 
             for update in pending_updates:
-                for plugin in self.chancy.plugins:
+                for plugin in self.chancy.plugins.values():
                     await plugin.on_job_updated(job=update, worker=self)
 
             await asyncio.sleep(self.send_outgoing_interval)

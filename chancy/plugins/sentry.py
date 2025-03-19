@@ -35,6 +35,10 @@ class SentryPlugin(Plugin):
             pass
     """
 
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.sentry_plugin"
+
     async def on_job_completed(
         self,
         *,

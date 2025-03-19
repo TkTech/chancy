@@ -3,7 +3,6 @@ import click
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
 from chancy.errors import MigrationsNeededError
-from chancy.plugins.metrics import Metrics
 
 
 @click.group(name="worker")
@@ -91,16 +90,8 @@ async def web_command(
 
         # The metrics plugin needs to be running to pull in cluster-wide
         # metrics.
-        has_metrics = next(
-            (
-                plugin
-                for plugin in chancy.plugins
-                if isinstance(plugin, Metrics)
-            ),
-            None,
-        )
-        if has_metrics:
-            worker.manager.add("metrics", has_metrics.run(worker, chancy))
+        if metrics := chancy.plugins.get("chancy.metrics"):
+            worker.manager.add("metrics", metrics.run(worker, chancy))
 
         # Enable notifications processing to power the /events feed.
         if chancy.notifications:

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import random
 from typing import Any
 
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.job import QueuedJob
 from chancy.worker import Worker
 
@@ -45,9 +45,9 @@ class RetryPlugin(Plugin):
     random jitter of between 1 and 5 seconds.
     """
 
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.retry_plugin"
 
     @staticmethod
     def calculate_next_run(job: QueuedJob, retry_settings: dict) -> datetime:
