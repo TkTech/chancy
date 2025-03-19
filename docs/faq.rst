@@ -55,3 +55,18 @@ a numeric ID. This makes them unsuitable for use in a multi-tenant system
 where you might have multiple different applications using the same database.
 Advisory locks also have several issues when used with pgbouncer that might
 stop us from officially supporting pgbouncer in the future.
+
+-----
+
+**Q.** Why does Chancy not support other databases or message brokers?
+
+**A.** Chancy is intended to be highly customizable and reliant on the
+implementation of features through plugins. Requiring plugins to support
+multiple databases or message brokers would make them significantly more
+complex or force targeting a lowest common denominator. We'd rather get
+have everything we can out of Postgres and have a very narrow focus done
+well than to have a broad focus done poorly.
+
+Celery supports numerous backends and may be a better option of you're
+looking for portability, but this comes at the cost of complexity and
+limited features - no locking, rate limiting, workflows, etc.
