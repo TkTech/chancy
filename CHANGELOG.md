@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.22.0
+------
+
+- Queue's now support a `resume_at` option, which allows them to automatically
+  go active after the specified time. This can be used to implement circuit
+  breakers.
+- Added `queue.resumed` and `queue.paused` events.
+- Added the convenience functions `Chancy.pause_queue()` and
+  `Chancy.resume_queue()`.
+
 0.21.0
 ------
 

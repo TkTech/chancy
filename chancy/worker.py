@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import re
 import asyncio
@@ -396,10 +397,14 @@ class Worker:
                                 queue.resume_at is not None
                                 and queue.resume_at
                                 < datetime.datetime.now(
-                                    tz=datetime.timezone.utc
+                                    tz=queue.resume_at.tzinfo
                                 )
                             ):
-                                queue.state = Queue.State.ACTIVE
+                                await self.chancy.resume_queue(queue.name)
+                                queue = dataclasses.replace(
+                                    queue, state=Queue.State.ACTIVE
+                                )
+                                continue
                             else:
                                 await asyncio.sleep(queue.polling_interval)
                                 continue

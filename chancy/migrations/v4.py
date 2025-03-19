@@ -13,7 +13,7 @@ class AddResumeAtField(Migration):
             sql.SQL(
                 """
                 ALTER TABLE {queues}
-                ADD COLUMN resume_at TIMESTAMP
+                ADD COLUMN resume_at TIMESTAMP WITH TIME ZONE
                 """
             ).format(queues=sql.Identifier(f"{migrator.prefix}queues"))
         )

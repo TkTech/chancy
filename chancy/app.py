@@ -373,6 +373,7 @@ class Chancy:
                 "polling_interval": queue.polling_interval,
                 "rate_limit": queue.rate_limit,
                 "rate_limit_window": queue.rate_limit_window,
+                "resume_at": queue.resume_at,
             },
         )
 
@@ -735,11 +736,11 @@ class Chancy:
                         UPDATE {queues}
                         SET
                             state = 'paused',
-                            resume_at = %s
-                        WHERE name = %s
+                            resume_at = %(resume_at)s
+                        WHERE name = %(name)s
                         """
                     ).format(queues=sql.Identifier(f"{self.prefix}queues")),
-                    [name, resume_at],
+                    {"name": name, "resume_at": resume_at},
                 )
                 await self.notify(cursor, "queue.paused", {"q": name})
 
@@ -764,10 +765,10 @@ class Chancy:
                         SET
                             state = 'active',
                             resume_at = NULL
-                        WHERE name = %s
+                        WHERE name = %(name)s
                         """
                     ).format(queues=sql.Identifier(f"{self.prefix}queues")),
-                    [name],
+                    {"name": name},
                 )
                 await self.notify(cursor, "queue.resumed", {"q": name})
 
@@ -965,7 +966,8 @@ class Chancy:
                     executor_options = EXCLUDED.executor_options,
                     polling_interval = EXCLUDED.polling_interval,
                     rate_limit = EXCLUDED.rate_limit,
-                    rate_limit_window = EXCLUDED.rate_limit_window
+                    rate_limit_window = EXCLUDED.rate_limit_window,
+                    resume_at = EXCLUDED.resume_at
                 """
             )
 
@@ -980,7 +982,8 @@ class Chancy:
                 executor_options,
                 polling_interval,
                 rate_limit,
-                rate_limit_window
+                rate_limit_window,
+                resume_at
             ) VALUES (
                 %(name)s,
                 %(state)s,
@@ -990,7 +993,8 @@ class Chancy:
                 %(executor_options)s,
                 %(polling_interval)s,
                 %(rate_limit)s,
-                %(rate_limit_window)s
+                %(rate_limit_window)s,
+                %(resume_at)s
             )
             ON CONFLICT (name) DO
                 {action}
@@ -1002,7 +1006,8 @@ class Chancy:
                 executor,
                 executor_options,
                 rate_limit,
-                rate_limit_window;
+                rate_limit_window,
+                resume_at
             """
         ).format(
             queues=sql.Identifier(f"{self.prefix}queues"),
