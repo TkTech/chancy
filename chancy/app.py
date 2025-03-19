@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import enum
 import functools
 import logging
@@ -708,6 +709,67 @@ class Chancy:
                         ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
                         [name],
                     )
+
+    async def pause_queue(
+        self, name: str, *, resume_at: datetime.datetime | None = None
+    ):
+        """
+        Pause a queue by name.
+
+        This will prevent workers from picking up new jobs from the queue,
+        but will not affect jobs that are already running.
+
+        .. note::
+
+            It may take a few seconds for all workers to notice the change.
+
+        :param name: The name of the queue to pause.
+        :param resume_at: A datetime at which the queue should automatically
+                          resume.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        UPDATE {queues}
+                        SET
+                            state = 'paused',
+                            resume_at = %s
+                        WHERE name = %s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    [name, resume_at],
+                )
+                await self.notify(cursor, "queue.paused", {"q": name})
+
+    async def resume_queue(self, name: str):
+        """
+        Resume a queue by name.
+
+        This will allow workers to pick up new jobs from the queue.
+
+        .. note::
+
+            It may take a few seconds for all workers to notice the change.
+
+        :param name: The name of the queue to resume.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        UPDATE {queues}
+                        SET
+                            state = 'active',
+                            resume_at = NULL
+                        WHERE name = %s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    [name],
+                )
+                await self.notify(cursor, "queue.resumed", {"q": name})
 
     @_ensure_pool_is_open
     async def get_all_workers(self) -> list[dict[str, Any]]:

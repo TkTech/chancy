@@ -1,3 +1,4 @@
+import datetime
 import re
 import asyncio
 import json
@@ -278,7 +279,8 @@ class Worker:
                                 executor_options,
                                 polling_interval,
                                 rate_limit,
-                                rate_limit_window
+                                rate_limit_window,
+                                resume_at
                             FROM {queues}
                         """
                         ).format(
@@ -321,7 +323,7 @@ class Worker:
 
             try:
                 await self.hub.wait_for(
-                    "queue.declared",
+                    ["queue.declared", "queue.paused", "queue.resumed"],
                     timeout=self.queue_change_poll_interval,
                 )
             except asyncio.TimeoutError:
@@ -390,8 +392,17 @@ class Worker:
                             break
 
                         if queue.state == Queue.State.PAUSED:
-                            await asyncio.sleep(queue.polling_interval)
-                            continue
+                            if (
+                                queue.resume_at is not None
+                                and queue.resume_at
+                                < datetime.datetime.now(
+                                    tz=datetime.timezone.utc
+                                )
+                            ):
+                                queue.state = Queue.State.ACTIVE
+                            else:
+                                await asyncio.sleep(queue.polling_interval)
+                                continue
 
                         maximum_jobs_to_poll = concurrency - len(executor)
                         if maximum_jobs_to_poll <= 0:
