@@ -139,16 +139,19 @@ Quick Start
 
 
 
-
-
 Congratulations! You've just run your first Chancy job. Next, explore the
-:doc:`How To <howto/index>` or :doc:`plugins <chancy.plugins>`.
+:doc:`How To <howto/index>` and :doc:`plugins <chancy.plugins>`. The
+Leadership, Pruner, Recovery, Metrics, and Workflow plugins are enabled
+by default and provide a lot of powerful features out of the box.
 
 Dashboard
 ---------
 
 Chancy comes with a built-in :class:`dashboard <chancy.plugins.api.Api>` -
-no need to run a separate service like Flower.
+no need to run a separate service like Flower. Track your jobs, queues,
+workers, and workflows in real-time. Track throughput and completion rates
+for each queue, worker, and job type. Monitor the disk space usage of your
+Chancy tables and indexes.
 
 .. image:: ../misc/ux_jobs.png
     :alt: Jobs page
@@ -158,6 +161,9 @@ no need to run a separate service like Flower.
 
 .. image:: ../misc/ux_queue.png
     :alt: Queue page
+
+.. image:: ../misc/ux_worker.png
+    :alt: Worker page
 
 .. image:: ../misc/ux_workflow.png
     :alt: Worker page

@@ -238,8 +238,11 @@ class Chancy:
 
             for identifier, plugin in defaults.items():
                 if identifier not in self.plugins:
-                    self.plugins[identifier] = plugin()
-                    self.log.info(f"Enabled default plugin {identifier!r}.")
+                    self.plugins[identifier] = p = plugin()
+                    self.log.info(
+                        f"Enabled default plugin {p.__class__.__name__!r},"
+                        f" providing {identifier!r}."
+                    )
 
     async def __aenter__(self):
         await self.pool.open()

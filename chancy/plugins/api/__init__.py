@@ -63,6 +63,18 @@ class Api(Plugin):
         public internet. It is intended for use in a secure environment, such
         as a private network or a VPN where only trusted users have access.
 
+    Since it's very common to only want the dashboard temporarily, you can
+    start it with the CLI. This can also be used to connect to a remote Chancy
+    instance:
+
+    .. code-block:: bash
+
+        pip install chancy[cli,web]
+        chancy --app worker.chancy worker web
+
+    This will run the API and dashboard on port 8000 by default (you can change
+    this with the ``--port`` and ``--host`` flags).
+
     Screenshots
     -----------
 
@@ -78,20 +90,6 @@ class Api(Plugin):
     .. image:: ../misc/ux_workflow.png
         :alt: Worker page
 
-
-    CLI
-    ---
-
-    Since it's very common to only want the dashboard temporarily, you can
-    start it with the CLI:
-
-    .. code-block:: bash
-
-        pip install chancy[cli,web]
-        chancy --app worker.chancy worker web
-
-    This will run the API and dashboard on port 8000 by default (you can change
-    this with the ``--port`` and ``--host`` flags).
 
     :param port: The port to listen on.
     :param host: The host to listen on.

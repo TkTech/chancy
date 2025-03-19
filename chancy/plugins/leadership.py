@@ -165,7 +165,7 @@ class ImmediateLeadership(Plugin):
 
     async def run(self, worker: Worker, chancy: Chancy):
         worker.is_leader.set()
-        chancy.log.info(
+        chancy.log.warning(
             "Worker has been set as leader without going through election."
             " This plugin should only be used for testing & debugging."
         )

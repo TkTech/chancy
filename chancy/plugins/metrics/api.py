@@ -45,28 +45,12 @@ class MetricsApiPlugin(ApiPlugin):
             },
         ]
 
-    def get_metrics_plugin(self, chancy) -> Optional[Metrics]:
-        """
-        Get the metrics plugin instance.
-        """
-        for plugin in chancy.plugins:
-            if isinstance(plugin, Metrics):
-                return plugin
-        return None
-
     @staticmethod
     async def get_metrics(request: Request, *, chancy, worker):
         """
         Get a list of all available metrics.
         """
-        metrics_plugin = MetricsApiPlugin().get_metrics_plugin(chancy)
-        if not metrics_plugin:
-            return Response(
-                json_dumps({"error": "Metrics plugin not enabled"}),
-                status_code=404,
-                media_type="application/json",
-            )
-
+        metrics_plugin = chancy.plugins["chancy.metrics"]
         # Get a list of all available metrics and their types
         metrics = metrics_plugin.get_metrics()
         metric_type_map = metrics_plugin.get_metric_types()
@@ -101,14 +85,7 @@ class MetricsApiPlugin(ApiPlugin):
         """
         Get metrics of a specific type (e.g., 'job', 'queue').
         """
-        metrics_plugin = MetricsApiPlugin().get_metrics_plugin(chancy)
-        if not metrics_plugin:
-            return Response(
-                json_dumps({"error": "Metrics plugin not enabled"}),
-                status_code=404,
-                media_type="application/json",
-            )
-
+        metrics_plugin = chancy.plugins["chancy.metrics"]
         metric_type = request.path_params.get("type", "")
         resolution = request.query_params.get("resolution", "5min")
         limit = int(request.query_params.get("limit", "60"))
@@ -148,14 +125,7 @@ class MetricsApiPlugin(ApiPlugin):
 
         Can be filtered by worker_id with the worker_id query parameter.
         """
-        metrics_plugin = MetricsApiPlugin().get_metrics_plugin(chancy)
-        if not metrics_plugin:
-            return Response(
-                json_dumps({"error": "Metrics plugin not enabled"}),
-                status_code=404,
-                media_type="application/json",
-            )
-
+        metrics_plugin = chancy.plugins["chancy.metrics"]
         metric_type = request.path_params.get("type", "")
         metric_name = request.path_params.get("name", "")
         resolution = request.query_params.get("resolution", "5min")
@@ -228,7 +198,8 @@ class MetricsApiPlugin(ApiPlugin):
                             "type": metric_type,
                         }
         else:
-            # Get all metrics matching this pattern (could include multiple submetrics)
+            # Get all metrics matching this pattern (could include multiple
+            # submetrics)
             metrics = metrics_plugin.get_metrics(
                 metric_prefix=metric_key, resolution=resolution, limit=limit
             )
