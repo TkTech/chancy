@@ -82,7 +82,7 @@ class Queue:
     #: The options to pass to the executor's constructor.
     executor_options: dict = dataclasses.field(default_factory=dict)
     #: The number of seconds to wait between polling the queue for new jobs.
-    polling_interval: int = 1
+    polling_interval: int = 5
     #: An optional global rate limit to apply to this queue. All workers
     #: processing jobs from this queue will be subject to this limit.
     rate_limit: int | None = None
