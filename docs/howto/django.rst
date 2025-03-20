@@ -24,18 +24,8 @@ app:
   from django.conf import settings
 
   from chancy import Chancy
-  from chancy.plugins.leadership import Leadership
-  from chancy.plugins.pruner import Pruner
-  from chancy.plugins.recovery import Recovery
 
-  chancy_app = Chancy(
-      settings.my_database_dsn,
-      plugins=[
-          Pruner(Pruner.Rules.Age() > 60 * 60 * 48),
-          Recovery(),
-          Leadership(),
-      ],
-  )
+  chancy_app = Chancy(settings.my_database_dsn)
 
 
 And then use the CLI to migrate the database and start a worker process:
