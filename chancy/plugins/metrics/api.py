@@ -3,7 +3,6 @@ API endpoints for the metrics plugin.
 """
 
 import json
-from typing import Optional
 
 from psycopg import sql
 from psycopg.rows import dict_row
@@ -11,7 +10,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from chancy.plugins.api.plugin import ApiPlugin
-from chancy.plugins.metrics.metrics import Metrics
 from chancy.utils import json_dumps
 
 

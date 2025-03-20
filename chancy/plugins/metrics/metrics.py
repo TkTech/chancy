@@ -8,7 +8,7 @@ import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from itertools import groupby
-from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union, cast
+from typing import Dict, List, Literal, Optional, Set, Tuple, Union, cast
 
 from psycopg import sql
 from psycopg.rows import dict_row
