@@ -136,7 +136,7 @@ class Metrics(Plugin):
         self.maximum_metric_age = maximum_metric_age
 
         # The interval at which to collect table size metrics
-        self.collection_interval = 30
+        self.collection_interval = collection_interval
 
     async def run(self, worker: Worker, chancy: Chancy):
         """
