@@ -172,23 +172,7 @@ class Metrics(Plugin):
         """
         return "metrics"
 
-    async def on_job_completed(
-        self,
-        *,
-        worker: Worker,
-        job: QueuedJob,
-        exc: Exception = None,
-        result: Any = None,
-    ) -> QueuedJob:
-        """
-        Track job completion metrics.
-
-        Updates several metrics:
-        1. Job success/failure count by function
-        2. Queue throughput
-        3. Job execution time
-        4. Global job status counts
-        """
+    async def on_job_updated(self, *, worker: "Worker", job: QueuedJob):
         if job.started_at and job.completed_at:
             execution_time = (job.completed_at - job.started_at).total_seconds()
             await self.record_histogram_value(
@@ -200,15 +184,11 @@ class Metrics(Plugin):
                 execution_time,
             )
 
-        await self.increment_counter(
-            f"job:{job.func}:{'success' if exc is None else 'failure'}",
-            1,
-        )
-
-        await self.increment_counter(f"global:status:{job.state.value}", 1)
+        state = job.state.value
+        await self.increment_counter(f"job:{job.func}:{state}", 1)
+        await self.increment_counter(f"global:status:{state}", 1)
         await self.increment_counter(f"queue:{job.queue}:throughput", 1)
-
-        return job
+        await self.increment_counter(f"queue:{job.queue}:{state}", 1)
 
     async def cleanup(self, chancy: Chancy) -> Optional[int]:
         """
@@ -262,14 +242,15 @@ class Metrics(Plugin):
             metric = self.local_metrics_cache[metric_key]
 
             for resolution in self.max_points.keys():
-                if resolution == "1min":
-                    points = metric.values_1min
-                elif resolution == "5min":
-                    points = metric.values_5min
-                elif resolution == "1hour":
-                    points = metric.values_1hour
-                elif resolution == "1day":
-                    points = metric.values_1day
+                match resolution:
+                    case "1min":
+                        points = metric.values_1min
+                    case "5min":
+                        points = metric.values_5min
+                    case "1hour":
+                        points = metric.values_1hour
+                    case "1day":
+                        points = metric.values_1day
 
                 bucket_time = self._get_bucket_time(now, resolution)
 
