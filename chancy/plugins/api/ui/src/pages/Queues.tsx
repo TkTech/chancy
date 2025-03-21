@@ -18,7 +18,7 @@ function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl
     enabled: !!apiUrl
   })
 
-  if (isLoading || !data) {
+  if (isLoading || !data || !data[key]) {
     return <div style={{ width: 80, height: 30 }} />;
   }
 
