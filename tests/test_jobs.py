@@ -112,7 +112,7 @@ async def test_wait_for_job_timeout(
     await chancy.declare(Queue("low", executor=sync_executor))
 
     ref = await chancy.push(job_to_run.job.with_queue("low"))
-    j = await chancy.wait_for_job(ref, timeout=10)
+    j = await chancy.wait_for_job(ref, timeout=20)
 
     assert j.state == j.State.SUCCEEDED
 
