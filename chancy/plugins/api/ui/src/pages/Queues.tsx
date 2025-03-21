@@ -72,6 +72,11 @@ export function Queue() {
           <th>State</th>
           <td>
             <span className={`badge bg-${queue.state === 'active' ? 'success' : 'danger'}`}>{queue.state}</span>
+            {(queue.state === 'paused' && queue.resume_at) && (
+              <span className={"text-info ms-2"}>
+                Automatically resuming at <code>{queue.resume_at}</code>
+              </span>
+            )}
           </td>
         </tr>
         <tr>
