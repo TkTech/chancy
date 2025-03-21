@@ -239,7 +239,7 @@ class Chancy:
             for identifier, plugin in defaults.items():
                 if identifier not in self.plugins:
                     self.plugins[identifier] = p = plugin()
-                    self.log.info(
+                    self.log.debug(
                         f"Enabled default plugin {p.__class__.__name__!r},"
                         f" providing {identifier!r}."
                     )
@@ -782,9 +782,7 @@ class Chancy:
                     sql.SQL(
                         """
                         UPDATE {queues}
-                        SET
-                            state = 'paused',
-                            resume_at = %(resume_at)s
+                        SET state = 'paused', resume_at = %(resume_at)s
                         WHERE name = %(name)s
                         """
                     ).format(queues=sql.Identifier(f"{self.prefix}queues")),
