@@ -13,7 +13,7 @@ import './index.scss'
 import * as bootstrap from 'bootstrap'; // eslint-disable-line
 import {ServerConfigurationProvider} from './hooks/useServerConfiguration.tsx';
 import {Queue, Queues} from './pages/Queues.tsx';
-import {Worker, Workers} from './pages/Workers.tsx';
+import {WorkerDetails, Workers} from './pages/Workers.tsx';
 import {Job, Jobs} from './pages/Jobs.tsx';
 import {Cron, Crons} from './pages/Crons.tsx';
 import {Workflow, Workflows} from './pages/Workflows.tsx';
@@ -30,7 +30,7 @@ const router = createBrowserRouter([
       { path: "/queues", element: <Queues /> },
       { path: "/queues/:name", element: <Queue /> },
       { path: "/workers",  element: <Workers /> },
-      { path: "/workers/:worker_id",  element: <Worker /> },
+      { path: "/workers/:worker_id",  element: <WorkerDetails /> },
       { path: "/jobs", element: <Jobs />, loader: () => redirect("/jobs/pending") },
       { path: "/jobs/pending", element: <Jobs />},
       { path: "/jobs/running", element: <Jobs />},

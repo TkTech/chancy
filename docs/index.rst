@@ -140,9 +140,9 @@ Quick Start
 
 
 Congratulations! You've just run your first Chancy job. Next, explore the
-:doc:`How To <howto/index>` and :doc:`plugins <chancy.plugins>`. The
-Leadership, Pruner, Recovery, Metrics, and Workflow plugins are enabled
-by default and provide a lot of powerful features out of the box.
+:doc:`How To <howto/index>` and :doc:`plugins <chancy.plugins>`. Almost all
+features of Chancy are built as plugins for easy customization, so make sure
+to check them out to see what else Chancy can do.
 
 Dashboard
 ---------

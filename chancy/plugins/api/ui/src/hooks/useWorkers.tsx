@@ -1,6 +1,6 @@
 import {useQuery} from '@tanstack/react-query';
 
-interface Worker {
+export interface Worker {
   worker_id: string;
   tags: string[];
   queues: string[];
@@ -16,6 +16,7 @@ export function useWorkers(url: string | null) {
       const response = await fetch(`${url}/api/v1/workers`);
       return await response.json();
     },
+    refetchInterval: 10000,
     enabled: url !== null
   });
 }

@@ -15,6 +15,12 @@ class Leadership(Plugin):
     every 60 seconds, as that would be immensely wasteful. Most other plugins
     require a Leadership plugin to be enabled.
 
+    .. note::
+
+        This plugin is enabled by default, you only need to provide it in the
+        list of plugins to customize its arguments or if ``no_default_plugins``
+        is set to ``True``.
+
     .. code-block:: python
 
         from chancy.plugins.leadership import Leadership
@@ -23,6 +29,24 @@ class Leadership(Plugin):
             Leadership()
         ]) as chancy:
             ...
+
+    Implementation
+    --------------
+    The plugin implements a simple database-backed leader election system
+    through a 'leader' table with the following characteristics:
+
+    - Uses a single row with ID=1 to track the current leader worker.
+    - Workers attempt to insert/update this row with their worker_id and an
+      expiration timestamp.
+    - Leadership is acquired when a worker successfully inserts the row (when
+      no leader exists) or when the previous leader's entry has expired.
+    - The leader renews its leadership by updating its expiration timestamp
+      during each poll cycle.
+    - If leadership renewal fails, the worker loses its leader status.
+    - When a worker gains or loses leadership, appropriate notifications are
+      sent via ``leadership.gained``, ``leadership.lost``, and
+      ``leadership.renewed`` events.
+    - Worker leadership status is tracked via a worker.is_leader event flag.
 
     :param poll_interval: The number of seconds between leadership poll
                           intervals.
