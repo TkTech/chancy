@@ -1,7 +1,7 @@
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.rule import JobRules
 
 
@@ -45,9 +45,13 @@ class Reprioritize(Plugin):
         self.priority_increase = priority_increase
         self.batch_size = batch_size
 
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.reprioritize"
+
+    @staticmethod
+    def get_dependencies() -> list[str]:
+        return ["chancy.leadership"]
 
     async def run(self, worker, chancy):
         while await self.sleep(self.check_interval):

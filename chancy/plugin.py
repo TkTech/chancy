@@ -201,5 +201,26 @@ class Plugin(abc.ABC):
         """
         return []
 
+    @staticmethod
+    @abc.abstractmethod
+    def get_identifier() -> str:
+        """
+        Returns a unique identifier for this plugin.
+
+        This identifier should be unique across all active plugins. If a
+        custom plugin provides compatible functionality to a built-in plugin,
+        it may use the same identifier as the built-in plugin.
+        """
+
+    @staticmethod
+    def get_dependencies() -> list[str]:
+        """
+        Get the identifiers of all plugins this plugin depends on, if any.
+
+        Plugins that depend on the presence of other plugins will refuse to
+        start if those dependencies are not met.
+        """
+        return []
+
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"

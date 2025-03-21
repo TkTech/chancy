@@ -69,7 +69,8 @@ class CoreApiPlugin(ApiPlugin):
             json_dumps(
                 {
                     "plugins": [
-                        plugin.__class__.__name__ for plugin in chancy.plugins
+                        plugin.__class__.__name__
+                        for plugin in chancy.plugins.values()
                     ]
                 }
             ),

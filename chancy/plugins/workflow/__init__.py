@@ -807,6 +807,14 @@ class WorkflowPlugin(Plugin):
         """Get the names of all tables this plugin is responsible for."""
         return ["workflows", "workflow_steps"]
 
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.workflow_plugin"
+
+    @staticmethod
+    def get_dependencies() -> list[str]:
+        return ["chancy.leadership"]
+
 
 class Sequence:
     """

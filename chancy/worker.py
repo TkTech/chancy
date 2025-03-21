@@ -1,3 +1,5 @@
+import dataclasses
+import datetime
 import re
 import asyncio
 import json
@@ -19,6 +21,7 @@ from chancy.app import Chancy
 from chancy.errors import MigrationsNeededError
 from chancy.executors.base import Executor
 from chancy.hub import Hub, Event
+from chancy.plugin import PluginScope
 from chancy.queue import Queue
 from chancy.utils import TaskManager, import_string
 from chancy.job import QueuedJob, Reference
@@ -206,7 +209,16 @@ class Worker:
 
         self.hub.on("job.cancelled", self._handle_cancellation)
 
-        for plugin in self.chancy.plugins:
+        for plugin in self.chancy.plugins.values():
+            if plugin.get_scope() != PluginScope.WORKER:
+                continue
+
+            if set(plugin.get_dependencies()) - self.chancy.plugins.keys():
+                raise ValueError(
+                    f"Plugin {plugin.get_identifier()!r} has unsatisfied "
+                    f"dependencies: {plugin.get_dependencies()}"
+                )
+
             self.manager.add(
                 plugin.__class__.__name__,
                 plugin.run(self, self.chancy),
@@ -278,7 +290,8 @@ class Worker:
                                 executor_options,
                                 polling_interval,
                                 rate_limit,
-                                rate_limit_window
+                                rate_limit_window,
+                                resume_at
                             FROM {queues}
                         """
                         ).format(
@@ -321,7 +334,7 @@ class Worker:
 
             try:
                 await self.hub.wait_for(
-                    "queue.declared",
+                    ["queue.declared", "queue.paused", "queue.resumed"],
                     timeout=self.queue_change_poll_interval,
                 )
             except asyncio.TimeoutError:
@@ -390,8 +403,21 @@ class Worker:
                             break
 
                         if queue.state == Queue.State.PAUSED:
-                            await asyncio.sleep(queue.polling_interval)
-                            continue
+                            if (
+                                queue.resume_at is not None
+                                and queue.resume_at
+                                < datetime.datetime.now(
+                                    tz=queue.resume_at.tzinfo
+                                )
+                            ):
+                                await self.chancy.resume_queue(queue.name)
+                                queue = dataclasses.replace(
+                                    queue, state=Queue.State.ACTIVE
+                                )
+                                continue
+                            else:
+                                await asyncio.sleep(queue.polling_interval)
+                                continue
 
                         maximum_jobs_to_poll = concurrency - len(executor)
                         if maximum_jobs_to_poll <= 0:
@@ -532,7 +558,7 @@ class Worker:
                             raise
 
             for update in pending_updates:
-                for plugin in self.chancy.plugins:
+                for plugin in self.chancy.plugins.values():
                     await plugin.on_job_updated(job=update, worker=self)
 
             await asyncio.sleep(self.send_outgoing_interval)

@@ -19,7 +19,8 @@ def job_to_run():
         {
             "plugins": [
                 ImmediateLeadership(),
-            ]
+            ],
+            "no_default_plugins": True,
         }
     ],
     indirect=True,

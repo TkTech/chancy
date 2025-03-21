@@ -1,4 +1,5 @@
 import pytest
+import datetime
 
 from chancy import Worker, Chancy, Queue, QueuedJob, job
 
@@ -126,3 +127,70 @@ async def test_default_concurrency_async(
 
     for j in jobs:
         assert j.state == QueuedJob.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_queue_resume_time_tracking(chancy: Chancy):
+    """
+    Ensure that paused queues with resume_at set correctly track the time
+    when they should automatically resume.
+    """
+    resume_time = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    paused_queue = Queue(
+        "tracking_queue",
+        concurrency=1,
+        state=Queue.State.PAUSED,
+        resume_at=resume_time,
+    )
+
+    await chancy.declare(paused_queue)
+    queue = await chancy.get_queue("tracking_queue")
+    assert queue.state == Queue.State.PAUSED
+    assert queue.resume_at == resume_time
+
+    await chancy.resume_queue("tracking_queue")
+    queue = await chancy.get_queue("tracking_queue")
+    assert queue.state == Queue.State.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_queue_auto_resume(chancy: Chancy, worker: Worker):
+    """
+    Ensure that paused queues with resume_at set in the past will automatically
+    resume when processed by a worker.
+    """
+    paused_queue = Queue(
+        "auto_resume_queue",
+        concurrency=1,
+        state=Queue.State.PAUSED,
+        polling_interval=1,
+    )
+
+    await chancy.declare(paused_queue)
+
+    # This job should never get processed since the queue is paused.
+    ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
+    with pytest.raises(TimeoutError):
+        await chancy.wait_for_job(ref, timeout=10)
+
+    await chancy.pause_queue(
+        "auto_resume_queue",
+        resume_at=(
+            datetime.datetime.now(tz=datetime.timezone.utc)
+            + datetime.timedelta(seconds=10)
+        ),
+    )
+
+    ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == QueuedJob.State.SUCCEEDED
+
+    # Same thing, but with a timedelta
+    await chancy.pause_queue(
+        "auto_resume_queue",
+        resume_at=datetime.timedelta(seconds=10),
+    )
+
+    ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == QueuedJob.State.SUCCEEDED

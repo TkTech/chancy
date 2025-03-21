@@ -31,7 +31,15 @@ async def async_failure():
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [
+        {
+            "plugins": [
+                ImmediateLeadership(),
+                WorkflowPlugin(),
+            ],
+            "no_default_plugins": True,
+        },
+    ],
     indirect=True,
 )
 async def test_sequential_workflow(chancy: Chancy, worker):
@@ -61,7 +69,12 @@ async def test_sequential_workflow(chancy: Chancy, worker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        },
+    ],
     indirect=True,
 )
 async def test_parallel_workflow(chancy: Chancy, worker):
@@ -98,7 +111,12 @@ async def test_parallel_workflow(chancy: Chancy, worker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        }
+    ],
     indirect=True,
 )
 async def test_workflow_failure(chancy: Chancy, worker):
@@ -129,7 +147,12 @@ async def test_workflow_failure(chancy: Chancy, worker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        }
+    ],
     indirect=True,
 )
 async def test_sequence(chancy: Chancy, worker):
@@ -161,7 +184,12 @@ async def test_sequence(chancy: Chancy, worker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        }
+    ],
     indirect=True,
 )
 async def test_workflow_timeout(chancy: Chancy, worker):
@@ -185,7 +213,12 @@ async def test_workflow_timeout(chancy: Chancy, worker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        }
+    ],
     indirect=True,
 )
 async def test_missing_workflow(chancy: Chancy, worker):
@@ -228,7 +261,12 @@ async def test_async_workflow(chancy: Chancy, worker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        }
+    ],
     indirect=True,
 )
 async def test_workflow_with_modified_jobs(chancy: Chancy, worker):

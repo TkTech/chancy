@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import enum
 from dataclasses import KW_ONLY
 
@@ -32,7 +33,8 @@ class Queue:
     .. code-block:: python
 
         async with Chancy("postgresql://localhost/postgres") as chancy:
-            await Worker(chancy, tags={"reporting"}).start()
+            async with Worker(chancy, tags={"reporting"}) as worker:
+                await worker.wait_for_shutdown()
 
     Queues can have a global rate limit applied to them, which will be enforced
     across all workers processing jobs from the queue:
@@ -80,12 +82,16 @@ class Queue:
     #: The options to pass to the executor's constructor.
     executor_options: dict = dataclasses.field(default_factory=dict)
     #: The number of seconds to wait between polling the queue for new jobs.
-    polling_interval: int = 1
+    polling_interval: int = 5
     #: An optional global rate limit to apply to this queue. All workers
     #: processing jobs from this queue will be subject to this limit.
     rate_limit: int | None = None
     #: The period of time over which the rate limit applies (in seconds).
     rate_limit_window: int | None = None
+    #: If set, the time at which the queue should automatically reset to the
+    #: active state. This can be used to implement a "pause for X seconds"
+    #: feature for circuit breakers and such.
+    resume_at: datetime.datetime | None = None
 
     @classmethod
     def unpack(cls, data: dict) -> "Queue":
@@ -102,6 +108,7 @@ class Queue:
             polling_interval=data["polling_interval"],
             rate_limit=data.get("rate_limit"),
             rate_limit_window=data.get("rate_limit_window"),
+            resume_at=data.get("resume_at"),
         )
 
     def pack(self) -> dict:
@@ -119,4 +126,5 @@ class Queue:
             "polling_interval": self.polling_interval,
             "rate_limit": self.rate_limit,
             "rate_limit_window": self.rate_limit_window,
+            "resume_at": self.resume_at,
         }

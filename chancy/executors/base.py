@@ -43,7 +43,7 @@ class Executor(abc.ABC):
         Called when a job has been retrieved from the queue and is about to
         start.
         """
-        for plugin in self.worker.chancy.plugins:
+        for plugin in self.worker.chancy.plugins.values():
             try:
                 job = await plugin.on_job_starting(job=job, worker=self.worker)
             except NotImplementedError:
@@ -114,7 +114,7 @@ class Executor(abc.ABC):
 
         # Each plugin has a chance to modify the job instance after it's
         # completed.
-        for plugin in self.worker.chancy.plugins:
+        for plugin in self.worker.chancy.plugins.values():
             try:
                 new_instance = await plugin.on_job_completed(
                     job=new_instance,

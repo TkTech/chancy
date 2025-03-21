@@ -155,6 +155,10 @@ class Cron(Plugin):
         """Get the names of all tables this plugin is responsible for."""
         return ["cron"]
 
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.cron"
+
     @classmethod
     async def get_schedules(
         cls, chancy: Chancy, *, unique_keys: list[str] = None

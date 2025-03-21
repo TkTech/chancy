@@ -1,12 +1,60 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
-import {useWorkers} from '../hooks/useWorkers.tsx';
-import {CountdownTimer, UpdatingTime} from '../components/UpdatingTime.tsx';
+import {useWorkers, Worker} from '../hooks/useWorkers.tsx';
+import {UpdatingTime} from '../components/UpdatingTime.tsx';
 import {QueueMetrics, ResolutionSelector} from '../components/MetricCharts.tsx';
 import {useState} from 'react';
 
-export function Worker () {
+function WorkerInfoTable({ worker } : { worker: Worker }) {
+  return (
+    <table className={"table table-hover border mb-4"}>
+      <tbody>
+      <tr>
+        <th className={"text-nowrap"}>Worker ID</th>
+        <td>
+          {worker.worker_id}
+        </td>
+      </tr>
+      <tr>
+        <th>Tags</th>
+        <td>
+          {worker.is_leader && (
+            <span className={'badge bg-success me-1'}>Leader Node</span>
+          )}
+          {worker.tags.map((tag) => (
+            <span key={tag} className={'badge bg-secondary me-1'}>{tag}</span>
+          ))}
+        </td>
+      </tr>
+      <tr>
+        <th>Queues</th>
+        <td>
+          <div>
+            {worker.queues.map((queue) => (
+              <span key={queue} className={'badge bg-primary me-1'}>
+                <a href={`/queues/${queue}`} className={'text-white'}>
+                  {queue}
+                </a>
+              </span>
+            ))}
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <th className={"text-nowrap"}>Last Seen</th>
+        <td><UpdatingTime date={worker.last_seen} /></td>
+      </tr>
+      <tr>
+        <th className={"text-nowrap"}>Expires At</th>
+        <td><UpdatingTime date={worker.expires_at} /></td>
+      </tr>
+      </tbody>
+    </table>
+  );
+}
+
+export function WorkerDetails () {
   const { worker_id } = useParams<{worker_id: string}>();
   const { url } = useServerConfiguration();
   const { data: workers, isLoading } = useWorkers(url);
@@ -29,50 +77,7 @@ export function Worker () {
     <div className={"container-fluid"}>
       <h2 className={"mb-4"}>Worker - {worker.worker_id}</h2>
       <h3 className="mb-3">Details</h3>
-      <table className={"table table-hover border mb-4"}>
-        <tbody>
-        <tr>
-          <th className={"text-nowrap"}>Worker ID</th>
-          <td>
-            {worker.worker_id}
-            {worker.is_leader && (
-              <span className={'badge bg-success ms-2'}>Leader Node</span>
-            )}
-          </td>
-        </tr>
-        <tr>
-          <th>Tags</th>
-          <td>
-            {worker.tags.map((tag) => (
-              <span key={tag} className={'badge bg-secondary me-1'}>{tag}</span>
-            ))}
-          </td>
-        </tr>
-        <tr>
-          <th>Queues</th>
-          <td>
-            <div>
-              {worker.queues.map((queue) => (
-                <span key={queue} className={'badge bg-primary me-1'}>
-                  <a href={`/queues/${queue}`} className={'text-white'}>
-                    {queue}
-                  </a>
-                </span>
-              ))}
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <th className={"text-nowrap"}>Last Seen</th>
-          <td><UpdatingTime date={worker.last_seen} /></td>
-        </tr>
-        <tr>
-          <th className={"text-nowrap"}>Expires At</th>
-          <td><UpdatingTime date={worker.expires_at} /></td>
-        </tr>
-        </tbody>
-      </table>
-      
+      <WorkerInfoTable worker={worker} />
       {worker.queues.length > 0 && (
         <>
           <h3 className="mb-3">Queue Metrics</h3>
@@ -112,45 +117,14 @@ export function Workers() {
   return (
     <div className={'container-fluid'}>
       <h2 className={'mb-4'}>Workers</h2>
-      <table className={'table mb-0'}>
-        <thead>
-        <tr>
-          <th className={"text-nowrap"}>Worker ID</th>
-          <th>Active Queues</th>
-          <th>Tags</th>
-          <th className={"text-nowrap text-center"}>Last Seen</th>
-        </tr>
-        </thead>
-        <tbody>
-        {workers.map((worker) => (
-          <tr key={worker.worker_id}>
-            <td className={'text-nowrap'}>
-              <Link to={`/workers/${worker.worker_id}`}>{worker.worker_id}</Link>
-              {worker.is_leader && (
-                <span className={'badge bg-success ms-2'}>Leader Node</span>
-              )}
-            </td>
-            <td>
-              {worker.queues.map((queue) => (
-                <span key={queue} className={'badge bg-primary me-1'}>
-                  <a href={`/queues/${queue}`} className={"text-white"}>
-                    {queue}
-                  </a>
-                </span>
-              ))}
-            </td>
-            <td>
-              {worker.tags.map((tag) => (
-                <span key={tag} className={'badge bg-secondary me-1'}>{tag}</span>
-              ))}
-            </td>
-            <td className={"text-center"}>
-              <CountdownTimer date={worker.last_seen}/>
-            </td>
-          </tr>
-        ))}
-        </tbody>
-      </table>
+      {workers.sort((a, b) => a.worker_id.localeCompare(b.worker_id)).map(worker => (
+        <div key={worker.worker_id}>
+          <h3>
+            <Link to={`/workers/${worker.worker_id}`}>{worker.worker_id}</Link>
+          </h3>
+          <WorkerInfoTable worker={worker} />
+        </div>
+      ))}
     </div>
   );
 }

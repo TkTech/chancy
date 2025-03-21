@@ -11,7 +11,9 @@ def test_job():
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [Cron(poll_interval=1)]}], indirect=True
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_schedule_job(chancy, worker):
@@ -32,7 +34,9 @@ async def test_schedule_job(chancy, worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [Cron(poll_interval=1)]}], indirect=True
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_unschedule_job(chancy, worker):
@@ -52,7 +56,9 @@ async def test_unschedule_job(chancy, worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [Cron(poll_interval=1)]}], indirect=True
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_update_existing_job_schedule(chancy, worker):
@@ -70,7 +76,9 @@ async def test_update_existing_job_schedule(chancy, worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [Cron(poll_interval=1)]}], indirect=True
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_fail_scheduling_without_unique_key(chancy, worker):
@@ -84,7 +92,9 @@ async def test_fail_scheduling_without_unique_key(chancy, worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [Cron(poll_interval=1)]}], indirect=True
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_job_execution(chancy, worker):
@@ -102,7 +112,9 @@ async def test_job_execution(chancy, worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [Cron(poll_interval=1)]}], indirect=True
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_get_schedules_all(chancy, worker):
@@ -127,7 +139,9 @@ async def test_get_schedules_all(chancy, worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [Cron(poll_interval=1)]}], indirect=True
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_get_schedules_filtered(chancy, worker):

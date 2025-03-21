@@ -24,7 +24,8 @@ def simple_job():
                     check_interval=1,
                     priority_increase=5,
                 ),
-            ]
+            ],
+            "no_default_plugins": True,
         }
     ],
     indirect=True,

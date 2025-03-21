@@ -5,8 +5,11 @@ Design
 
    This section is a work in progress.
 
-Chancy is designed to fit the vast majority of use cases, and to do so
-in a way that requires just the availability of a Postgres database.
+Chancy is designed to fit the vast majority of use cases, and to do so in a way
+that requires just the availability of a Postgres database. It's not meant to
+handle millions of jobs per second, but it should be able to handle thousands
+of jobs per second on a cheap VPS and handle workloads typical for 99% of
+applications.
 
 The Application
 ---------------
@@ -14,7 +17,8 @@ The Application
 A Chancy application is made when you define a :class:`~chancy.app.Chancy`
 instance. This object is responsible for managing the database connection,
 and exposes common functionality like pushing jobs to the queue or
-running migrations.
+running migrations. The Chancy app itself has no running tasks associated
+with it.
 
 .. code-block:: python
 

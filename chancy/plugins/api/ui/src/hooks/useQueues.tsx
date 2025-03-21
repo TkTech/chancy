@@ -10,6 +10,7 @@ interface Queue {
   polling_interval: number;
   rate_limit: number | null;
   rate_limit_window: number | null;
+  resume_at: string | null;
 }
 
 export function useQueues(url: string | null) {

@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import enum
 import functools
 import logging
@@ -103,6 +104,8 @@ class Chancy:
         postgres's NOTIFY/LISTEN feature.
     :param log: The logger to use for all application logging. If not provided,
         a default logger will be set up.
+    :param no_default_plugins: If `True`, the default plugins will not be
+        enabled. Defaults to `False`.
     """
 
     class Executor(enum.StrEnum):
@@ -183,11 +186,12 @@ class Chancy:
         poll_reconnect_timeout: int = 60 * 5,
         notifications: bool = True,
         log: logging.Logger | None = None,
+        no_default_plugins: bool = False,
     ):
         #: The DSN to connect to the database.
         self.dsn = dsn
         #: The plugins to use with the application.
-        self.plugins = plugins or []
+        self.plugins = {}
         #: A prefix appended to all table names, which can be used to
         #: namespace the tables for multiple applications or tenants.
         self.prefix = prefix
@@ -203,6 +207,42 @@ class Chancy:
         self.notifications = notifications
         #: The logger to use for all application logging.
         self.log = log or setup_default_logger()
+
+        for plugin in plugins or []:
+            if (identifier := plugin.get_identifier()) in self.plugins:
+                other_type = type(self.plugins[identifier])
+                if isinstance(plugin, other_type):
+                    raise ValueError(
+                        f"Duplicate plugin of type {type(plugin)!r} with"
+                        f" identifier {identifier!r}."
+                    )
+                else:
+                    raise ValueError(
+                        f"The plugin of type {type(plugin)!r} has the same"
+                        f" identifier {identifier!r} which conflicts with"
+                        f" another plugin of type {other_type}."
+                    )
+
+            self.plugins[identifier] = plugin
+
+        if not no_default_plugins:
+            # If the user hasn't specified otherwise, well enable some common
+            # default plugins with reasonable defaults.
+            defaults = {
+                Leadership.get_identifier(): lambda: Leadership(),
+                Pruner.get_identifier(): lambda: Pruner(),
+                Recovery.get_identifier(): lambda: Recovery(),
+                Metrics.get_identifier(): lambda: Metrics(),
+                WorkflowPlugin.get_identifier(): lambda: WorkflowPlugin(),
+            }
+
+            for identifier, plugin in defaults.items():
+                if identifier not in self.plugins:
+                    self.plugins[identifier] = p = plugin()
+                    self.log.debug(
+                        f"Enabled default plugin {p.__class__.__name__!r},"
+                        f" providing {identifier!r}."
+                    )
 
     async def __aenter__(self):
         await self.pool.open()
@@ -280,7 +320,7 @@ class Chancy:
         async with self.pool.connection() as conn:
             await migrator.migrate(conn, to_version=to_version)
 
-        for plugin in self.plugins:
+        for plugin in self.plugins.values():
             await plugin.migrate(self, to_version=to_version)
 
     @_ensure_pool_is_open
@@ -297,7 +337,7 @@ class Chancy:
                 if await migrator.is_migration_required(cursor):
                     return False
 
-                for plugin in self.plugins:
+                for plugin in self.plugins.values():
                     migrator = plugin.migrator(self)
                     if migrator is None:
                         continue
@@ -372,6 +412,7 @@ class Chancy:
                 "polling_interval": queue.polling_interval,
                 "rate_limit": queue.rate_limit,
                 "rate_limit_window": queue.rate_limit_window,
+                "resume_at": queue.resume_at,
             },
         )
 
@@ -709,6 +750,74 @@ class Chancy:
                         [name],
                     )
 
+    async def pause_queue(
+        self,
+        name: str,
+        *,
+        resume_at: datetime.datetime | datetime.timedelta | None = None,
+    ):
+        """
+        Pause a queue by name.
+
+        This will prevent workers from picking up new jobs from the queue,
+        but will not affect jobs that are already running.
+
+        .. note::
+
+            It may take a few seconds for all workers to notice the change.
+
+        :param name: The name of the queue to pause.
+        :param resume_at: A datetime at which the queue should automatically
+                          resume, or a timedelta from the current time.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                if isinstance(resume_at, datetime.timedelta):
+                    resume_at = (
+                        datetime.datetime.now(tz=datetime.timezone.utc)
+                        + resume_at
+                    )
+
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        UPDATE {queues}
+                        SET state = 'paused', resume_at = %(resume_at)s
+                        WHERE name = %(name)s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    {"name": name, "resume_at": resume_at},
+                )
+                await self.notify(cursor, "queue.paused", {"q": name})
+
+    async def resume_queue(self, name: str):
+        """
+        Resume a queue by name.
+
+        This will allow workers to pick up new jobs from the queue.
+
+        .. note::
+
+            It may take a few seconds for all workers to notice the change.
+
+        :param name: The name of the queue to resume.
+        """
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        UPDATE {queues}
+                        SET
+                            state = 'active',
+                            resume_at = NULL
+                        WHERE name = %(name)s
+                        """
+                    ).format(queues=sql.Identifier(f"{self.prefix}queues")),
+                    {"name": name},
+                )
+                await self.notify(cursor, "queue.resumed", {"q": name})
+
     @_ensure_pool_is_open
     async def get_all_workers(self) -> list[dict[str, Any]]:
         """
@@ -903,7 +1012,8 @@ class Chancy:
                     executor_options = EXCLUDED.executor_options,
                     polling_interval = EXCLUDED.polling_interval,
                     rate_limit = EXCLUDED.rate_limit,
-                    rate_limit_window = EXCLUDED.rate_limit_window
+                    rate_limit_window = EXCLUDED.rate_limit_window,
+                    resume_at = EXCLUDED.resume_at
                 """
             )
 
@@ -918,7 +1028,8 @@ class Chancy:
                 executor_options,
                 polling_interval,
                 rate_limit,
-                rate_limit_window
+                rate_limit_window,
+                resume_at
             ) VALUES (
                 %(name)s,
                 %(state)s,
@@ -928,7 +1039,8 @@ class Chancy:
                 %(executor_options)s,
                 %(polling_interval)s,
                 %(rate_limit)s,
-                %(rate_limit_window)s
+                %(rate_limit_window)s,
+                %(resume_at)s
             )
             ON CONFLICT (name) DO
                 {action}
@@ -940,7 +1052,8 @@ class Chancy:
                 executor,
                 executor_options,
                 rate_limit,
-                rate_limit_window;
+                rate_limit_window,
+                resume_at
             """
         ).format(
             queues=sql.Identifier(f"{self.prefix}queues"),
@@ -970,3 +1083,10 @@ class Chancy:
             "scheduled_at": job.scheduled_at,
             "unique_key": job.unique_key,
         }
+
+
+from chancy.plugins.pruner import Pruner  # noqa: E402
+from chancy.plugins.recovery import Recovery  # noqa: E402
+from chancy.plugins.leadership import Leadership  # noqa: E402
+from chancy.plugins.metrics import Metrics  # noqa: E402
+from chancy.plugins.workflow import WorkflowPlugin  # noqa: E402
