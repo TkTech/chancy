@@ -770,7 +770,13 @@ class Metrics(Plugin):
         :param metric_prefix: Optional prefix to filter metrics by
         :param worker_id: Optional worker_id to filter metrics by
         """
-        if worker_id:
+        if worker_id and worker_id == self.worker_id:
+            return {
+                key: metric
+                for key, metric in self.local_metrics_cache.items()
+                if not metric_prefix or self.matches_prefix(metric_prefix, key)
+            }
+        elif worker_id:
             return await self._get_raw_metrics(
                 chancy,
                 metric_prefix=metric_prefix,

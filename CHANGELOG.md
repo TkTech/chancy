@@ -13,14 +13,21 @@ Changelog
 - Added the convenience functions `Chancy.pause_queue()` and
   `Chancy.resume_queue()`. Calling this functions will emit `queue.paused` and
   `queue.resumed` events.
-- Every plugin now requires a `get_identifier()` method, which should return a
+- Plugins *must* now provide a `get_identifier()` method, which should return a
   unique identifier for the plugin.
-- Plugins can now implement `get_depdenencies()` to return a list of other
+- Plugins *may* now implement `get_depdenencies()` to return a list of other
   plugins that they depend on.
-- Internal implementation of the Metrics plugin has been significantly
-  simplified.
 - The default queue polling interval for new queues has been increased from
   1 to 5 seconds.
+
+**Metrics Plugin**
+
+- Internal implementation of the Metrics plugin has been significantly
+  simplified.
+- Metrics plugin now tracks job completion status on a per-queue basis as well
+  as globally, which allows for the implementation of global, per-queue circuit
+  breaker logic.
+
 
 0.21.0
 ------
