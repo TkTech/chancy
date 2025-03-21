@@ -168,9 +168,8 @@ async def test_queue_auto_resume(chancy: Chancy, worker: Worker):
 
     await chancy.declare(paused_queue)
 
-    ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
-
     # This job should never get processed since the queue is paused.
+    ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
     with pytest.raises(TimeoutError):
         await chancy.wait_for_job(ref, timeout=10)
 
@@ -180,6 +179,16 @@ async def test_queue_auto_resume(chancy: Chancy, worker: Worker):
             datetime.datetime.now(tz=datetime.timezone.utc)
             + datetime.timedelta(seconds=10)
         ),
+    )
+
+    ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == QueuedJob.State.SUCCEEDED
+
+    # Same thing, but with a timedelta
+    await chancy.pause_queue(
+        "auto_resume_queue",
+        resume_at=datetime.timedelta(seconds=10),
     )
 
     ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))

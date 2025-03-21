@@ -751,7 +751,10 @@ class Chancy:
                     )
 
     async def pause_queue(
-        self, name: str, *, resume_at: datetime.datetime | None = None
+        self,
+        name: str,
+        *,
+        resume_at: datetime.datetime | datetime.timedelta | None = None,
     ):
         """
         Pause a queue by name.
@@ -765,10 +768,16 @@ class Chancy:
 
         :param name: The name of the queue to pause.
         :param resume_at: A datetime at which the queue should automatically
-                          resume.
+                          resume, or a timedelta from the current time.
         """
         async with self.pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
+                if isinstance(resume_at, datetime.timedelta):
+                    resume_at = (
+                        datetime.datetime.now(tz=datetime.timezone.utc)
+                        + resume_at
+                    )
+
                 await cursor.execute(
                     sql.SQL(
                         """
