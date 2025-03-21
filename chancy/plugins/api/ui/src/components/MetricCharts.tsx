@@ -331,26 +331,26 @@ export function QueueMetrics({
   resolution: string;
   workerId?: string;
 }) {
+  const throughputKey = `queue:${queueName}:throughput`;
   const { data: throughputData, isLoading: throughputLoading } = useMetricDetail({
     url: apiUrl,
-    type: 'queue',
-    name: `${queueName}:throughput`,
+    key: throughputKey,
     resolution,
     enabled: !!apiUrl,
     worker_id: workerId,
   });
-  
+
+  const executionTimeKey = `queue:${queueName}:execution_time`;
   const { data: executionTimeData, isLoading: executionTimeLoading } = useMetricDetail({
     url: apiUrl,
-    type: 'queue',
-    name: `${queueName}:execution_time`,
+    key: executionTimeKey,
     resolution,
     enabled: !!apiUrl,
     worker_id: workerId,
   });
   
-  const hasThroughputData = throughputData && throughputData?.default?.data;
-  const hasExecutionTimeData = executionTimeData && executionTimeData?.default?.data;
+  const hasThroughputData = throughputData && throughputData[throughputKey]?.data;
+  const hasExecutionTimeData = executionTimeData && executionTimeData[executionTimeKey]?.data;
   
   return (
     <div className={"mb-4"}>
@@ -376,8 +376,8 @@ export function QueueMetrics({
                 <div className="alert alert-secondary">No throughput data available</div>
               ) : (
                 <MetricChart 
-                  points={throughputData.default.data}
-                  metricType={throughputData.default.type}
+                  points={throughputData[throughputKey].data}
+                  metricType={throughputData[throughputKey].type}
                   height={200}
                   resolution={resolution}
                 />
@@ -397,8 +397,8 @@ export function QueueMetrics({
                 <div className="alert alert-secondary">No execution time data available</div>
               ) : (
                 <MetricChart 
-                  points={executionTimeData.default.data}
-                  metricType={executionTimeData.default.type}
+                  points={executionTimeData[executionTimeKey].data}
+                  metricType={executionTimeData[executionTimeKey].type}
                   height={200}
                   resolution={resolution}
                 />

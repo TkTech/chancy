@@ -4,16 +4,23 @@ Changelog
 0.22.0
 ------
 
+- Chancy now starts some default plugins with reasonable defaults if they are
+  not configured. This includes the `Metrics`, `Leadership`, `Pruner`,
+  `Recovery` and `WorkflowPlugin`.
 - Queue's now support a `resume_at` option, which allows them to automatically
   go active after the specified time. This can be used to implement circuit
   breakers.
-- Added `queue.resumed` and `queue.paused` events.
 - Added the convenience functions `Chancy.pause_queue()` and
-  `Chancy.resume_queue()`.
+  `Chancy.resume_queue()`. Calling this functions will emit `queue.paused` and
+  `queue.resumed` events.
 - Every plugin now requires a `get_identifier()` method, which should return a
   unique identifier for the plugin.
 - Plugins can now implement `get_depdenencies()` to return a list of other
   plugins that they depend on.
+- Internal implementation of the Metrics plugin has been significantly
+  simplified.
+- The default queue polling interval for new queues has been increased from
+  1 to 5 seconds.
 
 0.21.0
 ------

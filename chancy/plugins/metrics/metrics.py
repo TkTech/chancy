@@ -148,8 +148,9 @@ class Metrics(Plugin):
         # Store the worker_id for use in metrics storage/retrieval
         self.worker_id = worker.worker_id
 
-        # Initial load of metrics from the database
-        await self._load_metrics_from_db(chancy)
+        self.aggregated_metrics_cache.update(
+            await self._get_raw_metrics(chancy)
+        )
 
         # Start a task to collect table size metrics
         worker.manager.add(
@@ -394,7 +395,9 @@ class Metrics(Plugin):
         if self.modified_metrics:
             await self._push_metrics_to_db(chancy)
 
-        await self._load_metrics_from_db(chancy)
+        self.aggregated_metrics_cache.update(
+            await self._get_raw_metrics(chancy)
+        )
         self.last_sync_time = datetime.datetime.now(datetime.timezone.utc)
         self.modified_metrics.clear()
 
@@ -403,7 +406,7 @@ class Metrics(Plugin):
         Push modified metrics to the database.
 
         Only pushes metrics from the local_metrics_cache, not the aggregated
-        cache. Uses a bulk insert approach for better performance.
+        cache.
         """
         if not self.modified_metrics:
             return
@@ -486,118 +489,6 @@ class Metrics(Plugin):
                     ),
                     metrics_to_insert,
                 )
-
-    async def _load_metrics_from_db(self, chancy: Chancy) -> None:
-        """
-        Load metrics from the database.
-
-        This method retrieves metrics from all workers and merges them together
-        into the aggregated_metrics_cache.
-
-        :param chancy: The Chancy application instance
-        """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                query = sql.SQL(
-                    """
-                    SELECT 
-                        metric_key,
-                        resolution,
-                        metric_type,
-                        json_agg(timestamps ORDER BY worker_id, updated_at) as all_timestamps,
-                        json_agg(values ORDER BY worker_id, updated_at) as all_values
-                    FROM 
-                        {metrics_table}
-                    GROUP BY 
-                        metric_key, resolution, metric_type
-                    ORDER BY 
-                        metric_key, resolution
-                    """
-                ).format(
-                    metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
-                )
-                await cursor.execute(query)
-
-                for metric_key, group in groupby(
-                    [r async for r in cursor],
-                    key=lambda r: r["metric_key"],
-                ):
-                    group_list = list(group)
-                    metric = self.aggregated_metrics_cache.setdefault(
-                        metric_key,
-                        Metric(metric_type=group_list[0]["metric_type"]),
-                    )
-
-                    for row in group_list:
-                        resolution = cast(Resolution, row["resolution"])
-                        merged_points = defaultdict(list)
-
-                        for worker_idx, timestamps_array in enumerate(
-                            row["all_timestamps"]
-                        ):
-                            values_array = row["all_values"][worker_idx]
-
-                            for i in range(len(timestamps_array)):
-                                timestamp = timestamps_array[i]
-                                merged_points[timestamp].append(values_array[i])
-
-                        result_points = []
-                        for timestamp, values_list in merged_points.items():
-                            if metric.metric_type == "counter":
-                                merged_value = sum(values_list)
-                            elif metric.metric_type == "gauge":
-                                merged_value = values_list[0]
-                            elif metric.metric_type == "histogram":
-                                total_count = sum(
-                                    v.get("count", 0) for v in values_list
-                                )
-                                total_sum = sum(
-                                    v.get("sum", 0) for v in values_list
-                                )
-
-                                all_mins = [
-                                    v.get("min")
-                                    for v in values_list
-                                    if "min" in v
-                                ]
-                                all_maxs = [
-                                    v.get("max")
-                                    for v in values_list
-                                    if "max" in v
-                                ]
-
-                                merged_value = {
-                                    "count": total_count,
-                                    "sum": total_sum,
-                                    "avg": (
-                                        total_sum / total_count
-                                        if total_count > 0
-                                        else 0
-                                    ),
-                                    "min": min(all_mins) if all_mins else 0,
-                                    "max": max(all_maxs) if all_maxs else 0,
-                                }
-
-                            result_points.append((timestamp, merged_value))
-
-                        result_points.sort(key=lambda p: p[0], reverse=True)
-
-                        if resolution == "1min":
-                            metric.values_1min = result_points[
-                                : self.max_points[resolution]
-                            ]
-                        elif resolution == "5min":
-                            metric.values_5min = result_points[
-                                : self.max_points[resolution]
-                            ]
-                        elif resolution == "1hour":
-                            metric.values_1hour = result_points[
-                                : self.max_points[resolution]
-                            ]
-                        elif resolution == "1day":
-                            metric.values_1day = result_points[
-                                : self.max_points[resolution]
-                            ]
 
     @staticmethod
     def _get_bucket_time(
@@ -731,56 +622,175 @@ class Metrics(Plugin):
                             result["index_size_bytes"],
                         )
 
-    def get_metrics(
+    async def _get_raw_metrics(
         self,
-        metric_prefix: Optional[str] = None,
-        resolution: Optional[Resolution] = None,
-        limit: Optional[int] = None,
-    ) -> Dict[str, Dict[Resolution, List[MetricPoint]]]:
+        chancy: Chancy,
+        *,
+        metric_prefix: str | None = None,
+        worker_id: str | None = None,
+    ) -> Dict[str, Metric]:
+        results = {}
+
+        async with chancy.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT 
+                            metric_key,
+                            resolution,
+                            metric_type,
+                            json_agg(timestamps ORDER BY worker_id, updated_at) as all_timestamps,
+                            json_agg(values ORDER BY worker_id, updated_at) as all_values
+                        FROM 
+                            {metrics_table}
+                        WHERE
+                            (
+                                %(worker_id)s::text IS NULL OR
+                                    worker_id = %(worker_id)s
+                            )
+                        AND
+                            (
+                                %(metric_prefix)s::text IS NULL OR
+                                    metric_key LIKE %(metric_prefix)s
+                            )
+                        GROUP BY 
+                            metric_key, resolution, metric_type
+                        ORDER BY 
+                            metric_key, resolution
+                        """
+                    ).format(
+                        metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
+                    ),
+                    {
+                        "worker_id": worker_id,
+                        "metric_prefix": (
+                            f"{metric_prefix}%" if metric_prefix else None
+                        ),
+                    },
+                )
+
+                for metric_key, group in groupby(
+                    [r async for r in cursor],
+                    key=lambda r: r["metric_key"],
+                ):
+                    if metric_prefix and not self.matches_prefix(
+                        metric_prefix, metric_key
+                    ):
+                        continue
+
+                    group_list = list(group)
+
+                    metric = results.setdefault(
+                        metric_key,
+                        Metric(metric_type=group_list[0]["metric_type"]),
+                    )
+
+                    for row in group_list:
+                        resolution = cast(Resolution, row["resolution"])
+                        merged_points = defaultdict(list)
+
+                        for worker_idx, timestamps_array in enumerate(
+                            row["all_timestamps"]
+                        ):
+                            values_array = row["all_values"][worker_idx]
+
+                            for i in range(len(timestamps_array)):
+                                timestamp = timestamps_array[i]
+                                merged_points[timestamp].append(values_array[i])
+
+                        result_points = []
+                        for timestamp, values_list in merged_points.items():
+                            if metric.metric_type == "counter":
+                                merged_value = sum(values_list)
+                            elif metric.metric_type == "gauge":
+                                merged_value = values_list[0]
+                            elif metric.metric_type == "histogram":
+                                total_count = sum(
+                                    v.get("count", 0) for v in values_list
+                                )
+                                total_sum = sum(
+                                    v.get("sum", 0) for v in values_list
+                                )
+
+                                all_mins = [
+                                    v.get("min")
+                                    for v in values_list
+                                    if "min" in v
+                                ]
+                                all_maxs = [
+                                    v.get("max")
+                                    for v in values_list
+                                    if "max" in v
+                                ]
+
+                                merged_value = {
+                                    "count": total_count,
+                                    "sum": total_sum,
+                                    "avg": (
+                                        total_sum / total_count
+                                        if total_count > 0
+                                        else 0
+                                    ),
+                                    "min": min(all_mins) if all_mins else 0,
+                                    "max": max(all_maxs) if all_maxs else 0,
+                                }
+
+                            result_points.append((timestamp, merged_value))
+
+                        result_points.sort(key=lambda p: p[0], reverse=True)
+
+                        max_points = self.max_points[resolution]
+                        match resolution:
+                            case "1min":
+                                metric.values_1min = result_points[:max_points]
+                            case "5min":
+                                metric.values_5min = result_points[:max_points]
+                            case "1hour":
+                                metric.values_1hour = result_points[:max_points]
+                            case "1day":
+                                metric.values_1day = result_points[:max_points]
+
+        return results
+
+    async def get_metrics(
+        self,
+        chancy: Chancy,
+        metric_prefix: str | None = None,
+        worker_id: str | None = None,
+    ) -> Dict[str, Metric]:
         """
         Get metrics matching the given prefix.
 
+        If a worker_id is provided, only metrics for that worker are returned
+        and are queried directly from the database. Otherwise, aggregated
+        metrics are returned from the metrics cache.
+
+        :param chancy: The Chancy application instance
         :param metric_prefix: Optional prefix to filter metrics by
-        :param resolution: Optional resolution to filter by
-        :param limit: Optional limit on the number of points to return per
-                      metric
+        :param worker_id: Optional worker_id to filter metrics by
         """
-        result = {}
+        if worker_id:
+            return await self._get_raw_metrics(
+                chancy,
+                metric_prefix=metric_prefix,
+                worker_id=worker_id,
+            )
+        else:
+            return {
+                key: metric
+                for key, metric in self.aggregated_metrics_cache.items()
+                if not metric_prefix or self.matches_prefix(metric_prefix, key)
+            }
 
-        # Use the aggregated metrics cache for queries
-        for key, metric in self.aggregated_metrics_cache.items():
-            if metric_prefix and not key.startswith(metric_prefix):
-                continue
-
-            result[key] = {}
-
-            resolutions = metric.values
-            for res, points in resolutions.items():
-                if resolution and res != resolution:
-                    continue
-
-                if limit:
-                    result[key][res] = points[:limit]
-                else:
-                    result[key][res] = points
-
-        return result
-
-    def get_metric_types(
-        self, metric_prefix: Optional[str] = None
-    ) -> Dict[str, MetricType]:
+    @staticmethod
+    def matches_prefix(prefix: str, key: str) -> bool:
         """
-        Get the type of each metric.
+        Check if the given key matches the given complete prefix.
 
-        :param metric_prefix: Optional prefix to filter metrics by
-        :return: Dictionary mapping metric keys to their types
+        :param prefix: The prefix to match
+        :param key: The key to check
         """
-        result = {}
-
-        for key, metric in self.aggregated_metrics_cache.items():
-            if metric_prefix and not key.startswith(metric_prefix):
-                continue
-
-            result[key] = metric.metric_type
-
-        return result
+        key = key.split(":")
+        prefix = prefix.split(":")
+        return key[: len(prefix)] == prefix

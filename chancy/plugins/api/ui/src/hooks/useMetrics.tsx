@@ -16,45 +16,9 @@ export interface MetricsOverview {
   categories: {
     [category: string]: string[];
   };
-  types: {
-    [metricKey: string]: MetricType;
-  };
   count: number;
 }
 
-export function useStatusMetric({ 
-  url,
-  status, 
-  resolution = '5min',
-  limit = 20,
-  enabled = true
-}: { 
-  url: string | null;
-  status: string;
-  resolution?: string;
-  limit?: number;
-  enabled?: boolean;
-}) {
-  return useQuery<MetricPoint[]>({
-    queryKey: ['status-metric', url, status, resolution, limit],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        resolution,
-        limit: limit.toString()
-      });
-      
-      const response = await fetch(`${url}/api/v1/metrics/global/status:${status}?${params.toString()}`);
-      const data = await response.json();
-      if (!data.default) {
-        return [];
-      }
-      return data.default.data;
-    },
-    enabled: enabled && url !== null && status !== '',
-    refetchInterval: 30000,
-    staleTime: 20000
-  });
-}
 
 export function useMetricsOverview({ url }: { url: string | null }) {
   return useQuery<MetricsOverview>({
@@ -70,23 +34,21 @@ export function useMetricsOverview({ url }: { url: string | null }) {
 
 export function useMetricDetail({ 
   url, 
-  type,
-  name,
+  key,
   resolution = '5min',
   limit = 60,
   enabled = true,
   worker_id = undefined
 }: { 
   url: string | null;
-  type: string;
-  name: string;
+  key: string;
   resolution?: string;
   limit?: number;
   enabled?: boolean;
   worker_id?: string;
 }) {
   return useQuery<Record<string, MetricData>>({
-    queryKey: ['metric-detail', url, type, name, resolution, limit, worker_id],
+    queryKey: ['metric-detail', url, key, resolution, limit, worker_id],
     queryFn: async () => {
       const params = new URLSearchParams({
         resolution,
@@ -97,46 +59,11 @@ export function useMetricDetail({
         params.append('worker_id', worker_id);
       }
       
-      const response = await fetch(`${url}/api/v1/metrics/${type}/${name}?${params.toString()}`);
+      const response = await fetch(`${url}/api/v1/metrics/${key}?${params.toString()}`);
       return response.json();
     },
-    enabled: enabled && url !== null && type !== '' && name !== '',
+    enabled: enabled,
     refetchInterval: 10000,
-  });
-}
-
-// Hook to get throughput metrics for a queue (used for sparklines in queue list)
-export function useQueueThroughput({ 
-  url, 
-  queueName,
-  resolution = '5min',
-  limit = 20,
-  enabled = true
-}: { 
-  url: string | null;
-  queueName: string;
-  resolution?: string;
-  limit?: number;
-  enabled?: boolean;
-}) {
-  return useQuery<MetricPoint[]>({
-    queryKey: ['queue-throughput', url, queueName, resolution, limit],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        resolution,
-        limit: limit.toString()
-      });
-      
-      const response = await fetch(`${url}/api/v1/metrics/queue/${queueName}:throughput?${params.toString()}`);
-      const data = await response.json();
-      if (!data.default) {
-        throw new Error("Metric data not available");
-      }
-      return data.default.data;
-    },
-    enabled: enabled && url !== null && queueName !== '',
-    refetchInterval: 30000,
-    staleTime: 20000
   });
 }
 

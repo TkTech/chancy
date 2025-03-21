@@ -5,7 +5,25 @@ import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
 import {useWorkers} from '../hooks/useWorkers.tsx';
 import {QueueMetrics, ResolutionSelector, SparklineChart} from '../components/MetricCharts';
-import {useQueueThroughput} from '../hooks/useMetrics';
+import {useMetricDetail} from '../hooks/useMetrics.tsx';
+
+function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl: string | null }) {
+
+  const key = `queue:${queueName}:throughput`;
+  const { data, isLoading } = useMetricDetail({
+    url: apiUrl,
+    key: key,
+    resolution: '5min',
+    limit: 20,
+    enabled: !!apiUrl
+  })
+
+  if (isLoading || !data) {
+    return <div style={{ width: 80, height: 30 }} />;
+  }
+
+  return <SparklineChart points={data[key].data} resolution="5min" />;
+}
 
 export function Queue() {
   const { name } = useParams<{name: string}>();
@@ -124,20 +142,6 @@ export function Queue() {
   );
 }
 
-// QueueThroughputSpark component for displaying throughput sparkline in the queue list
-function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl: string | null }) {
-  const { data: throughputPoints, isLoading } = useQueueThroughput({
-    url: apiUrl,
-    queueName,
-    enabled: !!apiUrl,
-  });
-  
-  if (isLoading || !throughputPoints) {
-    return <div style={{ width: 80, height: 30 }} />;
-  }
-  
-  return <SparklineChart points={throughputPoints} resolution="5min" />;
-}
 
 export function Queues() {
   const { url } = useServerConfiguration();

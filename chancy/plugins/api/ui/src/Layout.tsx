@@ -3,24 +3,25 @@ import {useServerConfiguration} from './hooks/useServerConfiguration.tsx';
 import {useQueryClient} from '@tanstack/react-query';
 import {Loading} from './components/Loading.tsx';
 import {SparklineChart} from './components/MetricCharts.tsx';
-import {useStatusMetric} from './hooks/useMetrics.tsx';
 import {useCallback, useState, ReactNode} from 'react';
+import {useMetricDetail} from './hooks/useMetrics.tsx';
 
 function StatusLink({ status, text }: { status: string, text: string }) {
   const { url } = useServerConfiguration();
 
-  const { data: metricData } = useStatusMetric({
+  const key = `global:status:${status}`;
+  const { data } = useMetricDetail({
     url: url,
-    status,
+    key: key,
     enabled: !!url && !!status
   });
-  
+
   return (
     <div className="d-flex align-items-center w-100">
       <span className="flex-grow-1">{text}</span>
-      {metricData && metricData.length > 0 && (
+      {data && data[key] && (
         <div className="ms-2">
-          <SparklineChart points={metricData} height={20} width={60} />
+          <SparklineChart points={data[key].data} height={20} width={60} />
         </div>
       )}
     </div>
