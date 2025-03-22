@@ -8,7 +8,7 @@ Install chancy:
 
 .. code-block:: bash
 
-    $ pip install chancy[cli]
+    $ pip install chancy[cli,django]
 
 
 Next to your Django ``settings.py`` module, create a new file called
