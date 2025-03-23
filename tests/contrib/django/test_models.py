@@ -35,9 +35,9 @@ async def test_chancy_worker_django_query(chancy, worker):
     """
     Test that we can query the Worker table.
     """
-    from chancy.contrib.django.models import Workers
+    from chancy.contrib.django.models import Worker
 
-    orm_worker = await Workers.objects.aget(worker_id=worker.worker_id)
+    orm_worker = await Worker.objects.aget(worker_id=worker.worker_id)
 
     assert orm_worker.worker_id == worker.worker_id
     assert len(orm_worker.tags) > 1 and "*" in orm_worker.tags

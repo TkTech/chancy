@@ -103,6 +103,14 @@ class ProcessExecutor(ConcurrentExecutor):
         if hasattr(signal, "SIGUSR1"):
             signal.signal(signal.SIGUSR1, cls.job_signal_handler)
 
+        if os.environ.get("DJANGO_SETTINGS_MODULE"):
+            try:
+                import django
+            except ImportError:
+                return
+
+            django.setup()
+
     async def push(self, job: QueuedJob) -> Future:
         job = await self.on_job_starting(job)
 
