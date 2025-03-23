@@ -8,7 +8,6 @@ class WorkflowStepInline(admin.TabularInline):
     readonly_fields = (
         "id",
         "step_id",
-        "job_data",
         "dependencies",
         "job_id",
         "created_at",
@@ -43,4 +42,5 @@ class WorkflowStepAdmin(admin.ModelAdmin):
         "step_id",
         "job_id",
     )
+    raw_id_fields = ("workflow",)
     readonly_fields = ("id", "created_at", "updated_at")

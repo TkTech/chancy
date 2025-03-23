@@ -25,7 +25,6 @@ class JobAdmin(admin.ModelAdmin):
 class WorkerAdmin(ReadOnlyAdmin):
     list_display = ("worker_id", "tags", "queues")
     search_fields = ("worker_id",)
-    list_filter = ("tags", "queues")
 
 
 @admin.register(Queue)

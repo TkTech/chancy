@@ -61,8 +61,8 @@ need to add the following to your Django settings:
     ]
 
 
-This gives you access to the Jobs and Workers models. Some plugins, like the
-Cron and Workflow plugins, also provide their own django extensions:
+This gives you access to the Jobs, Queues, and Workers models. Some plugins,
+like the Cron and Workflow plugins, also provide their own django extensions:
 
 .. code-block:: python
 
