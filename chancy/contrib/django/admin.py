@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from chancy.contrib.django.models import Job, Worker
+from chancy.contrib.django.models import Job, Worker, Queue
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
@@ -26,3 +26,10 @@ class WorkerAdmin(ReadOnlyAdmin):
     list_display = ("worker_id", "tags", "queues")
     search_fields = ("worker_id",)
     list_filter = ("tags", "queues")
+
+
+@admin.register(Queue)
+class QueueAdmin(ReadOnlyAdmin):
+    list_display = ("name", "state", "executor")
+    search_fields = ("name",)
+    list_filter = ("state",)

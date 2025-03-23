@@ -5,7 +5,7 @@ Makes the assumption that the Django default database is the same as the Chancy
 database.
 """
 
-__all__ = ("Job", "Worker")
+__all__ = ("Job", "Worker", "Queue")
 
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
@@ -51,3 +51,22 @@ class Worker(models.Model):
     class Meta:
         managed = False
         db_table = f"{PREFIX}workers"
+
+
+class Queue(models.Model):
+    name = models.TextField(primary_key=True)
+    state = models.TextField(default="active")
+    concurrency = models.IntegerField(null=True)
+    tags = ArrayField(models.TextField(), default=list)
+    executor = models.TextField(
+        default="chancy.executors.process.ProcessExecutor"
+    )
+    executor_options = models.JSONField(db_default="{}")
+    polling_interval = models.IntegerField(default=5)
+    rate_limit = models.IntegerField(null=True)
+    rate_limit_window = models.IntegerField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = f"{PREFIX}queues"

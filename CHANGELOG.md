@@ -43,6 +43,7 @@ chancy --app <your app> misc migrate
 - Chancy now comes with a Django app that gives you ORM and Admin access to
   Chancy's data. To install it, add `chancy.contrib.django` to your
   `INSTALLED_APPS`.
+- The ProcessExecutor now has a django shim by default, simplifying setup.
 
 
 0.21.0
