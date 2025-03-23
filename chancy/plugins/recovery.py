@@ -4,7 +4,7 @@ from psycopg.rows import DictRow, dict_row
 from chancy.app import Chancy
 from chancy.worker import Worker
 from chancy.utils import timed_block
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 
 
 class Recovery(Plugin):
@@ -25,9 +25,13 @@ class Recovery(Plugin):
         super().__init__()
         self.poll_interval = poll_interval
 
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.recovery"
+
+    @staticmethod
+    def get_dependencies() -> list[str]:
+        return ["chancy.leadership"]
 
     async def run(self, worker: Worker, chancy: Chancy):
         while await self.sleep(self.poll_interval):

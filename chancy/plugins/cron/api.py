@@ -28,7 +28,7 @@ class CronApiPlugin(ApiPlugin):
         """
         Get all known cron jobs.
         """
-        plugin = next((p for p in chancy.plugins if isinstance(p, Cron)), None)
+        plugin: Cron = chancy.plugins["chancy.cron"]
 
         return Response(
             json_dumps(list((await plugin.get_schedules(chancy)).values())),

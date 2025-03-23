@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useServerConfiguration } from '../hooks/useServerConfiguration';
 import { Loading } from '../components/Loading';
 import { useMetricsOverview, useMetricDetail } from '../hooks/useMetrics';
@@ -86,22 +86,10 @@ export function MetricDetail() {
   const { url } = useServerConfiguration();
   const { metricKey } = useParams<{ metricKey: string }>();
   const [resolution, setResolution] = useState<string>('5min');
-  
-  // Split the metric key into parts to use with useMetricDetail hook
-  const getParts = () => {
-    if (!metricKey) return { type: '', name: '' };
-    const parts = metricKey.split(':');
-    if (parts.length < 2) return { type: parts[0] || '', name: '' };
-    return { type: parts[0], name: parts[1] };
-  };
-  
-  const { type, name } = getParts();
-  
-  // Get aggregated metrics across all workers
-  const { data: metrics, isLoading } = useMetricDetail({ 
-    url, 
-    type,
-    name,
+
+  const { data: metrics, isLoading } = useMetricDetail({
+    url,
+    key: metricKey as string,
     resolution
   });
 
@@ -112,7 +100,7 @@ export function MetricDetail() {
       errorMessage={`No metrics data available for ${metricKey}`}
     >
       <div className="container-fluid">
-        <h2 className="mb-4">
+        <h2 className="mb-4 text-break">
           {metricKey}
         </h2>
         
@@ -120,16 +108,11 @@ export function MetricDetail() {
 
         <div className="row">
           {metrics && Object.entries(metrics).map(([subtype, metricData]) => {
-            // Format subtitle label
-            const subtitleLabel = subtype === 'default'
-              ? `${metricKey}` 
-              : `${metricKey}:${subtype}`;
-            
             return (
               <div key={subtype} className="col-12 mb-4">
                 <div className="card">
                   <div className="card-header">
-                    <h5 className="mb-0">{subtitleLabel}</h5>
+                    <h5 className="mb-0">{subtype}</h5>
                   </div>
                   <div className="card-body">
                     <MetricChart 

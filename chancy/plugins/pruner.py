@@ -91,6 +91,14 @@ class Pruner(Plugin):
         self.maximum_to_prune = maximum_to_prune
         self.poll_interval = poll_interval
 
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.pruner"
+
+    @staticmethod
+    def get_dependencies() -> list[str]:
+        return ["chancy.leadership"]
+
     @classmethod
     def get_scope(cls) -> PluginScope:
         return PluginScope.WORKER
@@ -117,7 +125,7 @@ class Pruner(Plugin):
                             },
                         )
 
-            for plugin in chancy.plugins:
+            for plugin in chancy.plugins.values():
                 rows = await plugin.cleanup(chancy)
                 if rows is None:
                     continue

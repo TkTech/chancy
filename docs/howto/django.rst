@@ -8,8 +8,11 @@ Install chancy:
 
 .. code-block:: bash
 
-    $ pip install chancy[cli]
+    $ pip install chancy[cli,django]
 
+
+Using Django models and features in Chancy
+------------------------------------------
 
 Next to your Django ``settings.py`` module, create a new file called
 ``worker.py``. This file will contain the code that defines your chancy
@@ -24,18 +27,8 @@ app:
   from django.conf import settings
 
   from chancy import Chancy
-  from chancy.plugins.leadership import Leadership
-  from chancy.plugins.pruner import Pruner
-  from chancy.plugins.recovery import Recovery
 
-  chancy_app = Chancy(
-      settings.my_database_dsn,
-      plugins=[
-          Pruner(Pruner.Rules.Age() > 60 * 60 * 48),
-          Recovery(),
-          Leadership(),
-      ],
-  )
+  chancy_app = Chancy(settings.my_database_dsn)
 
 
 And then use the CLI to migrate the database and start a worker process:
@@ -46,48 +39,53 @@ And then use the CLI to migrate the database and start a worker process:
     chancy --app my_application.worker.chancy_app worker start
 
 
-If you're just using the :class:`~chancy.executors.asyncex.AsyncExecutor` or the
-:class:`~chancy.executors.thread.ThreadedExecutor`, you're probably done here.
-If you're using the :class:`~chancy.executors.process.ProcessExecutor`, you'll
-want to add a little stub to ensure that django gets setup when the process
-starts. Make a file next to your settings.py called ``utils.py``:
+This ensures django is fully setup before processing any jobs.
+
+
+Using Chancy from the django ORM and Admin
+------------------------------------------
+
+.. note::
+
+    This feature is new in version 0.22.0 and seeking feedback on desired
+    functionality and use cases.
+
+Chancy can be used from the Django ORM and Admin interface. To do this, you
+need to add the following to your Django settings:
 
 .. code-block:: python
 
-  import os
-
-  from chancy.executors.process import ProcessExecutor
-
-
-  class DjangoExecutor(ProcessExecutor):
-      """
-      A process-based executor that ensures django is fully setup before
-      processing any jobs.
-      """
-
-      @staticmethod
-      def on_initialize_worker():
-          os.environ.setdefault(
-              "DJANGO_SETTINGS_MODULE",
-              "my_application.settings",
-          )
-          import django
-
-          django.setup()
+    INSTALLED_APPS = [
+        ...
+        "chancy.contrib.django",
+    ]
 
 
-When you declare a queue using the ``ProcessExecutor``, you'll want to tell it to use the
-executor you just defined instead:
+This gives you access to the Jobs, Queues, and Workers models. Some plugins,
+like the Cron and Workflow plugins, also provide their own django extensions:
 
 .. code-block:: python
 
-    await chancy_app.declare(
-        Queue(
-            "default",
-            concurrency=5,
-            executor="my_application.utils.DjangoExecutor",
-        ),
-    )
+    INSTALLED_APPS = [
+        ...
+        "chancy.contrib.django",
+        "chancy.plugins.cron.django",
+        "chancy.plugins.workflow.django",
+    ]
 
-And that's it! You can now use all your ORM models, plugins, and other Django
-goodies in your chancy tasks.
+Now you can create new cron jobs in the admin, query the status of your jobs,
+workers and workflows from the comfort of the Django ORM.
+
+.. code-block:: python
+
+    from chancy.contrib.django.models import Job
+
+    j = await chancy.push(test_job)
+
+    orm_job = await Job.objects.aget(id=j.identifier)
+
+
+.. important::
+
+  The current implementation assumes that the chancy tables live in the same
+  database as your Django "default" database.

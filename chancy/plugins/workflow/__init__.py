@@ -221,6 +221,37 @@ class WorkflowPlugin(Plugin):
     of jobs in a specific order. In that case, you can use the
     :class:`Sequence` class to create a workflow from a list of jobs.
 
+    Django Integration
+    ------------------
+
+    This plugin can be made available to the Django ORM and Admin interface.
+
+    To enable this, you need to add the following to your Django settings:
+
+    .. code-block:: python
+
+        INSTALLED_APPS = [
+            ...,
+            "chancy.plugins.workflow.django",
+        ]
+
+    You can then query the workflows and steps using the Django ORM:
+
+    .. code-block:: python
+
+        from chancy.plugins.workflow.django.models import (
+            Workflow,
+            WorkflowStep
+        )
+
+        workflow = Workflow.objects.get(id="...")
+
+        completed_steps = WorkflowStep.objects.filter(
+            workflow=workflow,
+            state=QueuedJob.State.SUCCEEDED
+        )
+
+
     :param polling_interval: The interval at which to poll for new workflows.
     :param max_workflows_per_run: The maximum number of workflows to process
                                   in a single run of the plugin.
@@ -806,6 +837,14 @@ class WorkflowPlugin(Plugin):
     def get_tables(self) -> list[str]:
         """Get the names of all tables this plugin is responsible for."""
         return ["workflows", "workflow_steps"]
+
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.workflow_plugin"
+
+    @staticmethod
+    def get_dependencies() -> list[str]:
+        return ["chancy.leadership"]
 
 
 class Sequence:

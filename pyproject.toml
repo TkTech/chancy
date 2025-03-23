@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.21.0"
+version = "0.22.0"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -37,6 +37,9 @@ cli = [
 sub = [
     "interpreters-pep-734>=0.4.1; python_version >= '3.13'",
 ]
+django = [
+    "django>=4.0.0",
+]
 
 [project.scripts]
 chancy = "chancy.cli.cli:main"
@@ -52,6 +55,7 @@ dev-dependencies = [
     "sentry-sdk>=2.3.1",
     "ghp-import>=2.1.0",
     "pytest-benchmark>=5.1.0",
+    "pytest-django>=4.8.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -70,6 +74,8 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
+DJANGO_SETTINGS_MODULE = "tests.contrib.django.settings"
+django_find_project = false
 
 [tool.ruff]
 line-length = 80

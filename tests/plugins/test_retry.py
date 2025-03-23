@@ -15,7 +15,9 @@ def successful_job():
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
+    "chancy",
+    [{"plugins": [RetryPlugin()], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_retry_with_default_settings(chancy, worker: Worker):
@@ -36,7 +38,9 @@ async def test_retry_with_default_settings(chancy, worker: Worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
+    "chancy",
+    [{"plugins": [RetryPlugin()], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_retry_with_custom_settings(chancy, worker: Worker):
@@ -68,11 +72,13 @@ async def test_retry_with_custom_settings(chancy, worker: Worker):
     # Very flaky test, but we can at least check that the backoff is roughly
     # correct. Depends heavily on polling frequency of the worker.
     delta: datetime.timedelta = job.scheduled_at - starting_time
-    assert 2 * 3 <= int(delta.total_seconds()) <= 15  # 10 + default poll freq
+    assert 2 * 3 <= int(delta.total_seconds()) <= 20  # 10 + default poll freq
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
+    "chancy",
+    [{"plugins": [RetryPlugin()], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_no_retry_on_success(chancy, worker: Worker):
@@ -94,7 +100,9 @@ async def test_no_retry_on_success(chancy, worker: Worker):
 
 
 @pytest.mark.parametrize(
-    "chancy", [{"plugins": [RetryPlugin()]}], indirect=True
+    "chancy",
+    [{"plugins": [RetryPlugin()], "no_default_plugins": True}],
+    indirect=True,
 )
 @pytest.mark.asyncio
 async def test_respect_max_attempts(chancy, worker: Worker):

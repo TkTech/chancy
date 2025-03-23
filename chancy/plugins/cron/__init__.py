@@ -73,6 +73,29 @@ class Cron(Plugin):
                 hello_world.job.with_unique_key("hello_world_cron")
             )
 
+    Django Integration
+    ------------------
+
+    This plugin can be made available to the Django ORM and Admin interface.
+
+    To enable this, you need to add the following to your Django settings:
+
+    .. code-block:: python
+
+        INSTALLED_APPS = [
+            ...,
+            "chancy.plugins.cron.django",
+        ]
+
+    You can then query the scheduled jobs using the Django ORM:
+
+    .. code-block:: python
+
+        from chancy.plugins.cron.django.models import Cron
+
+        # Get all scheduled jobs
+        all_schedules = Cron.objects.all()
+
     :param poll_interval: The number of seconds between cron poll intervals.
     """
 
@@ -154,6 +177,10 @@ class Cron(Plugin):
     def get_tables(self) -> list[str]:
         """Get the names of all tables this plugin is responsible for."""
         return ["cron"]
+
+    @staticmethod
+    def get_identifier() -> str:
+        return "chancy.cron"
 
     @classmethod
     async def get_schedules(

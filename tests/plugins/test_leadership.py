@@ -13,7 +13,8 @@ from chancy.plugins.leadership import ImmediateLeadership, Leadership
         {
             "plugins": [
                 ImmediateLeadership(),
-            ]
+            ],
+            "no_default_plugins": True,
         }
     ],
     indirect=True,
@@ -32,7 +33,8 @@ async def test_immediate_leadership(chancy: Chancy, worker: Worker):
         {
             "plugins": [
                 Leadership(poll_interval=5),
-            ]
+            ],
+            "no_default_plugins": True,
         }
     ],
     indirect=True,
@@ -52,7 +54,8 @@ async def test_leadership(chancy: Chancy, worker: Worker):
         {
             "plugins": [
                 Leadership(poll_interval=5, timeout=10),
-            ]
+            ],
+            "no_default_plugins": True,
         }
     ],
     indirect=True,
@@ -80,7 +83,8 @@ async def test_leadership_many_workers(chancy: Chancy):
         {
             "plugins": [
                 Leadership(poll_interval=5, timeout=10),
-            ]
+            ],
+            "no_default_plugins": True,
         }
     ],
     indirect=True,
