@@ -20,9 +20,9 @@ class Job(models.Model):
     id = models.UUIDField(primary_key=True, default=chancy_uuid, editable=False)
     queue = models.TextField()
     func = models.TextField()
-    kwargs = models.JSONField(db_default="{}")
-    limits = models.JSONField(db_default="[]")
-    meta = models.JSONField(db_default="{}")
+    kwargs = models.JSONField(db_default="{}", blank=True)
+    limits = models.JSONField(db_default="[]", blank=True)
+    meta = models.JSONField(db_default="{}", blank=True)
     state = models.CharField(max_length=25, default="pending")
     priority = models.IntegerField(default=0)
     attempts = models.IntegerField(default=0)
@@ -33,7 +33,7 @@ class Job(models.Model):
     completed_at = models.DateTimeField(null=True)
     scheduled_at = models.DateTimeField(auto_now_add=True)
     unique_key = models.TextField(null=True)
-    errors = models.JSONField(db_default="[]")
+    errors = models.JSONField(db_default="[]", blank=True)
 
     class Meta:
         managed = False
@@ -42,8 +42,8 @@ class Job(models.Model):
 
 class Worker(models.Model):
     worker_id = models.TextField(primary_key=True)
-    tags = ArrayField(models.TextField(), default=list)
-    queues = ArrayField(models.TextField(), default=list)
+    tags = ArrayField(models.TextField(), default=list, blank=True)
+    queues = ArrayField(models.TextField(), default=list, blank=True)
 
     last_seen = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField()
@@ -61,10 +61,10 @@ class Queue(models.Model):
     executor = models.TextField(
         default="chancy.executors.process.ProcessExecutor"
     )
-    executor_options = models.JSONField(db_default="{}")
+    executor_options = models.JSONField(db_default="{}", blank=True)
     polling_interval = models.IntegerField(default=5)
-    rate_limit = models.IntegerField(null=True)
-    rate_limit_window = models.IntegerField(null=True)
+    rate_limit = models.IntegerField(null=True, blank=True)
+    rate_limit_window = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

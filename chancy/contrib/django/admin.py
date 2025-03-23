@@ -29,7 +29,7 @@ class WorkerAdmin(ReadOnlyAdmin):
 
 
 @admin.register(Queue)
-class QueueAdmin(ReadOnlyAdmin):
+class QueueAdmin(admin.ModelAdmin):
     list_display = ("name", "state", "executor")
     search_fields = ("name",)
     list_filter = ("state",)
