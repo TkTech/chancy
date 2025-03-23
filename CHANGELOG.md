@@ -4,6 +4,14 @@ Changelog
 0.22.0
 ------
 
+This release requires that you run migrations, as it converts all JSON columns
+to JSONB. Call `chancy.migrate()` or use the CLI:
+
+```bash
+chancy --app <your app> misc migrate
+```
+
+
 - Chancy now starts some default plugins with reasonable defaults if they are
   not configured. This includes the `Metrics`, `Leadership`, `Pruner`,
   `Recovery` and `WorkflowPlugin`.
@@ -19,6 +27,8 @@ Changelog
   plugins that they depend on.
 - The default queue polling interval for new queues has been increased from
   1 to 5 seconds.
+- All JSON columns have been converted to JSONB, which is more efficient and
+  allows for indexing, and is supported by Django's JSONField type.
 
 **Metrics Plugin**
 
@@ -27,6 +37,12 @@ Changelog
 - Metrics plugin now tracks job completion status on a per-queue basis as well
   as globally, which allows for the implementation of global, per-queue circuit
   breaker logic.
+
+**Django**
+
+- Chancy now comes with a Django app that gives you ORM and Admin access to
+  Chancy's data. To install it, add `chancy.contrib.django` to your
+  `INSTALLED_APPS`.
 
 
 0.21.0
