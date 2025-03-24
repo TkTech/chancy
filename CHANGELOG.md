@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.23.0
+------
+
+- Support for django-style database settings as the first argument to the
+  `Chancy` constructor to ease integration with Django projects.
+
 0.22.0
 ------
 
