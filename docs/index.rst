@@ -74,7 +74,7 @@ Quick Start
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
-     chancy = Chancy("postgresql://localhost/postgres")
+     chancy = Chancy("postgresql://<username>:<password>@<host>/<database_name>")
 
      async def main():
          async with chancy:
@@ -90,6 +90,12 @@ Quick Start
 
      if __name__ == "__main__":
          asyncio.run(main())
+
+  And now run the worker (ctrl+c to exit):
+
+  .. code-block:: bash
+
+     python worker.py
 
 
 .. tab:: CLI
