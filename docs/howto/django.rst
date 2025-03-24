@@ -28,7 +28,7 @@ app:
 
   from chancy import Chancy
 
-  chancy_app = Chancy(settings.my_database_dsn)
+  chancy_app = Chancy(settings.DATABASES["default"])
 
 
 And then use the CLI to migrate the database and start a worker process:

@@ -15,7 +15,13 @@ from chancy.migrate import Migrator
 from chancy.queue import Queue
 from chancy.job import Reference, Job, QueuedJob, IsAJob
 from chancy.plugin import Plugin
-from chancy.utils import chancy_uuid, chunked, json_dumps
+from chancy.utils import (
+    chancy_uuid,
+    chunked,
+    json_dumps,
+    DatabaseConnection,
+    get_database_dsn,
+)
 
 
 @cache
@@ -177,7 +183,7 @@ class Chancy:
 
     def __init__(
         self,
-        dsn: str,
+        dsn: str | DatabaseConnection,
         *,
         plugins: list[Plugin] = None,
         prefix: str = "chancy_",
@@ -189,7 +195,7 @@ class Chancy:
         no_default_plugins: bool = False,
     ):
         #: The DSN to connect to the database.
-        self.dsn = dsn
+        self.dsn = dsn if isinstance(dsn, str) else get_database_dsn(dsn)
         #: The plugins to use with the application.
         self.plugins = {}
         #: A prefix appended to all table names, which can be used to
