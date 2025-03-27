@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from starlette.requests import Request
+from starlette.authentication import AuthCredentials, BaseUser, SimpleUser
+from starlette.requests import Request, HTTPConnection
 
 from chancy.plugins.api import AuthBackend
 
@@ -17,3 +18,11 @@ class DjangoAuthBackend(AuthBackend):
 
     async def logout(self, request: Request) -> None:
         request.session.pop("username", None)
+
+    async def authenticate(
+        self, conn: HTTPConnection
+    ) -> tuple[AuthCredentials, BaseUser] | None:
+        username = conn.session.get("username")
+        if username is not None:
+            return AuthCredentials(["authenticated"]), SimpleUser(username)
+        return None
