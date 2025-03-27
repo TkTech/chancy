@@ -12,14 +12,13 @@ export function useServerConfiguration() {
   const [host, setHost] = useSessionStorage<string>('settings.host', "http://localhost");
   const [port, setPort] = useSessionStorage<number>('settings.port', 8000);
 
-  const { data, isLoading } = useQuery<ServerConfiguration>({
+  const { data, isLoading, refetch } = useQuery<ServerConfiguration>({
     queryKey: ['configuration', host, port],
     queryFn: async () => {
       const response = await fetch(`${host}:${port}/api/v1/configuration`);
       return await response.json();
     },
-    enabled: host !== null,
-    retry: false
+    enabled: false
   });
 
   const url = useMemo(() => {
@@ -37,7 +36,8 @@ export function useServerConfiguration() {
     setPort,
     host,
     port,
-    url
+    url,
+    refetch,
   }
 }
 

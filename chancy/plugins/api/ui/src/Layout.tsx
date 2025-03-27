@@ -29,7 +29,7 @@ function StatusLink({ status, text }: { status: string, text: string }) {
 }
 
 function Layout() {
-  const {configuration, isLoading, setHost, setPort, host, port, url} = useServerConfiguration();
+  const {configuration, isLoading, setHost, setPort, host, port, url, refetch} = useServerConfiguration();
   const [formUsername, setFormUsername] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const queryClient = useQueryClient();
@@ -43,16 +43,15 @@ function Layout() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({username, password})
+        body: JSON.stringify({username, password}),
       });
 
-      if (!response.ok) {
+      if (!response.ok || response.status !== 200) {
         throw new Error("Invalid credentials");
       }
 
-      await queryClient.invalidateQueries({
-
-      });
+      await queryClient.invalidateQueries();
+      await refetch();
       return await response.json();
     }
   });
@@ -79,6 +78,9 @@ function Layout() {
             </div>
             <hr className={"flex-grow-1"} />
           </div>
+          {loginMutation.isError && (
+            <div className={"alert alert-danger"}>{loginMutation.error.message}</div>
+          )}
           <div className={"form-floating"}>
             <input
               className={"form-control"}
