@@ -4,7 +4,6 @@ on:
   release:
     types:
       - published
-      - created
   pull_request:
   push:
     branches:
@@ -62,60 +61,7 @@ jobs:
     name: "${{ matrix.os }} - Py${{ matrix.python-version }} - PG${{ matrix.pg }}"
     needs: [build]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
     if: github.event_name == 'pull_request'
-    strategy:
-      fail-fast: true
-      matrix:
-        python-version: ["3.13"]
-        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
-        pg: ["17"]
-    env:
-      OS: ${{ matrix.os }}
-      PYTHON: ${{ matrix.python-version }}
-
-    steps:
-      - uses: actions/checkout@v4.1.6
-
-      - uses: ikalnytskyi/action-setup-postgres@v7
-        with:
-          username: postgres
-          password: localtest
-          database: postgres
-          port: 8190
-          postgres-version: ${{ matrix.pg }}
-        id: postgres
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5.1.0
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Installing uv
-        run: pip install uv
-
-      - name: Installing dependencies (Python)
-        run: uv sync --all-extras
-
-      - name: Running tests
-        run: |
-          uv run pytest -s -vvvvv --cov=chancy --cov-report=xml
-
-      - name: Uploading coverage
-        uses: codecov/codecov-action@v4
-        with:
-          env_vars: OS,PYTHON
-          fail_ci_if_error: true
-          flags: unittests
-          token: ${{ secrets.CODECOV_TOKEN }}
-          verbose: true
-          slug: TkTech/chancy
-
-  full_test:
-    name: "${{ matrix.os }} - Py${{ matrix.python-version }} - PG${{ matrix.pg }}"
-    needs: [build]
-    runs-on: ${{ matrix.os }}
-    if: github.event_name == 'release' && github.event.action == 'created'
     timeout-minutes: 30
     strategy:
       fail-fast: true
@@ -197,7 +143,7 @@ jobs:
 
   release:
     name: Release to PyPI
-    needs: [full_test, docs]
+    needs: [test, docs]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     permissions:
