@@ -1,8 +1,11 @@
+import secrets
+
 import click
 
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
 from chancy.errors import MigrationsNeededError
+from chancy.plugins.api import BasicAuthBackend
 
 
 @click.group(name="worker")
@@ -79,13 +82,6 @@ async def web_command(
     chancy: Chancy = ctx.obj["app"]
 
     async with chancy:
-        api = Api(
-            host=host,
-            port=port,
-            allow_origins=allow_origin,
-            debug=debug,
-        )
-
         worker = Worker(chancy, tags=set())
 
         # The metrics plugin needs to be running to pull in cluster-wide
@@ -93,12 +89,23 @@ async def web_command(
         if metrics := chancy.plugins.get("chancy.metrics"):
             worker.manager.add("metrics", metrics.run(worker, chancy))
 
-        # Enable notifications processing to power the /events feed.
-        if chancy.notifications:
-            worker.manager.add(
-                "notifications", worker._maintain_notifications()
+        if not (api := chancy.plugins.get("chancy.api")):
+            chancy.log.info(
+                "No API plugin was configured on the Chancy application,"
+                " falling back to the default API."
+            )
+            auth = BasicAuthBackend({"admin": secrets.token_urlsafe(32)})
+            api = Api(
+                host=host,
+                port=port,
+                allow_origins=allow_origin,
+                debug=debug,
+                authentication_backend=auth,
+            )
+            chancy.log.warning(
+                f"No username or password was provided for the API, defaulting"
+                f" to 'admin' with a random password: {auth.users['admin']}"
             )
 
         worker.manager.add("api", api.run(worker, chancy))
-
         await worker.wait_for_shutdown()

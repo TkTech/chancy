@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+from starlette.authentication import requires
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -32,6 +33,7 @@ class MetricsApiPlugin(ApiPlugin):
         ]
 
     @staticmethod
+    @requires(["authenticated"])
     async def get_metrics(request: Request, *, chancy, worker):
         """
         Get a list of all available metrics.
@@ -58,6 +60,7 @@ class MetricsApiPlugin(ApiPlugin):
         )
 
     @staticmethod
+    @requires(["authenticated"])
     async def get_metric_detail(request: Request, *, chancy, worker):
         """
         Get detailed data for a specific metric.

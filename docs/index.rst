@@ -47,6 +47,8 @@ Key Features:
   codebases.
 - **Transactional enqueueing** - Atomically enqueue jobs and the data they
   depend on in a single transaction.
+- **Performant** - Used in production environments to process millions of
+  jobs per day.
 - **Portable** - Supports Linux, OS X, and Windows.
 - **100% open & free** - no enterprise tiers or paid features. Checkout
   the repo on `GitHub <https://github.com/tktech/chancy>`_.

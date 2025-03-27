@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.22.0"
+version = "0.23.0"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,10 +26,11 @@ Repository = "https://github.com/tktech/chancy"
 Documentation = "https://tkte.ch/chancy/"
 
 [project.optional-dependencies]
-cron = ["croniter>=2.0.5"]
+cron = ["croniter"]
 web = [
-    "starlette>=0.37.2",
-    "uvicorn[standard]>=0.32.0"
+    "starlette",
+    "uvicorn[standard]",
+    "itsdangerous",
 ]
 cli = [
     "click"
