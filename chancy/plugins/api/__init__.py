@@ -1,4 +1,4 @@
-__all__ = ("Api", "AuthBackend")
+__all__ = ("Api", "AuthBackend", "SimpleAuthBackend")
 import os
 import secrets
 from pathlib import Path
@@ -15,7 +15,7 @@ from starlette.staticfiles import StaticFiles
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin
-from chancy.plugins.api.auth import AuthBackend
+from chancy.plugins.api.auth import AuthBackend, SimpleAuthBackend
 from chancy.plugins.api.core import CoreApiPlugin
 from chancy.plugins.api.plugin import ApiPlugin
 from chancy.utils import import_string

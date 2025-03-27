@@ -5,7 +5,7 @@ import click
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
 from chancy.errors import MigrationsNeededError
-from chancy.plugins.api import BasicAuthBackend
+from chancy.plugins.api.auth import SimpleAuthBackend
 
 
 @click.group(name="worker")
@@ -94,7 +94,7 @@ async def web_command(
                 "No API plugin was configured on the Chancy application,"
                 " falling back to the default API."
             )
-            auth = BasicAuthBackend({"admin": secrets.token_urlsafe(32)})
+            auth = SimpleAuthBackend({"admin": secrets.token_urlsafe(32)})
             api = Api(
                 host=host,
                 port=port,
