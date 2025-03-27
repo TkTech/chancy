@@ -6,6 +6,13 @@ Changelog
 
 - Support for django-style database settings as the first argument to the
   `Chancy` constructor to ease integration with Django projects.
+- Chancy's dashboard and API now require a login by default. If the CLI is
+  used to start the dashboard without an API configured, a random temporary
+  password will be generated. Authentication backends are pluggable, and Chancy
+  comes with an optional DjangoAuthBackend.
+- The dashboard's live event stream is temporarily removed due to Websocket
+  routes not properly supporting authentication.
+- Many documentation tweaks.
 
 0.22.0
 ------
