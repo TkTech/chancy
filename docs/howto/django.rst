@@ -89,3 +89,31 @@ workers and workflows from the comfort of the Django ORM.
 
   The current implementation assumes that the chancy tables live in the same
   database as your Django "default" database.
+
+
+Login to Chancy with Django's superusers
+----------------------------------------
+
+To use Django's authentication system with Chancy's API and dashboard,
+you can use the included ``DjangoAuthBackend`` authentication backend. This
+backend supports lets you login to chancy using the username and password
+of a Django superuser.
+
+.. code-block:: python
+
+    import os
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "my_application.settings")
+    import django
+    django.setup()
+    from django.conf import settings
+    from chancy.contrib.django.auth import DjangoAuthBackend
+
+    app = Chancy(
+        dsn=settings.DATABASES["default"],
+        plugins=[
+            Api(
+                authentication_backend=DjangoAuthBackend(),
+                secret_key=settings.SECRET_KEY,
+            ),
+        ],
+    )
