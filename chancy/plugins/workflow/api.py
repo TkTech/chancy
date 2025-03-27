@@ -2,6 +2,7 @@ from dataclasses import asdict
 
 from psycopg import sql
 from psycopg.rows import dict_row
+from starlette.authentication import requires
 from starlette.responses import Response
 
 from chancy.plugins.api import ApiPlugin
@@ -34,6 +35,7 @@ class WorkflowApiPlugin(ApiPlugin):
         ]
 
     @staticmethod
+    @requires(["authenticated"])
     async def get_workflows(request, *, chancy, worker):
         """
         Get all known workflows.
@@ -65,6 +67,7 @@ class WorkflowApiPlugin(ApiPlugin):
                 )
 
     @staticmethod
+    @requires(["authenticated"])
     async def get_workflow(request, *, chancy, worker):
         """
         Get a single workflow by ID.

@@ -1,4 +1,6 @@
+__all__ = ("Api", "AuthBackend", "SimpleAuthBackend")
 import os
+import secrets
 from pathlib import Path
 from functools import partial
 from typing import Type
@@ -6,11 +8,14 @@ from typing import Type
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
+from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
 from chancy import Worker, Chancy
 from chancy.plugin import Plugin
+from chancy.plugins.api.auth import AuthBackend, SimpleAuthBackend
 from chancy.plugins.api.core import CoreApiPlugin
 from chancy.plugins.api.plugin import ApiPlugin
 from chancy.utils import import_string
@@ -40,14 +45,19 @@ class Api(Plugin):
 
         pip install chancy[web]
 
-    Then add the API plugin to your Chancy instance:
+    To have the API run permanently on each Worker, you can add it to the
+    plugins list when creating the Chancy instance:
 
     .. code-block:: python
 
         from chancy.plugins.api import Api
+        from chancy.plugins.api.auth import SimpleAuthBackend
 
         async with Chancy(..., plugins=[
-            Api(),
+            Api(
+                authentication_backend=SimpleAuthBackend({"admin": "password"}),
+                secret_key="<a strong, random secret key>",
+            ),
         ]) as chancy:
             ...
 
@@ -56,12 +66,6 @@ class Api(Plugin):
         The API is still mostly undocumented, as its development is driven by
         the needs of the dashboard and may change significantly before it
         becomes stable.
-
-    .. warning::
-
-        The api interface is not secure and should not be exposed to the
-        public internet. It is intended for use in a secure environment, such
-        as a private network or a VPN where only trusted users have access.
 
     Since it's very common to only want the dashboard temporarily, you can
     start it with the CLI. This can also be used to connect to a remote Chancy
@@ -73,7 +77,8 @@ class Api(Plugin):
         chancy --app worker.chancy worker web
 
     This will run the API and dashboard on port 8000 by default (you can change
-    this with the ``--port`` and ``--host`` flags).
+    this with the ``--port`` and ``--host`` flags), and generate a temporary
+    random password for the admin user.
 
     Screenshots
     -----------
@@ -104,6 +109,8 @@ class Api(Plugin):
         host: str = "127.0.0.1",
         debug: bool = False,
         allow_origins: list[str] | None = None,
+        secret_key: str | None = None,
+        authentication_backend: AuthBackend,
     ):
         super().__init__()
         self.port = port
@@ -112,6 +119,8 @@ class Api(Plugin):
         self.root = Path(__file__).parent
         self.allow_origins = allow_origins or []
         self.plugins: set[Type[ApiPlugin]] = {CoreApiPlugin}
+        self.authentication_backend = authentication_backend
+        self.secret_key = secret_key or secrets.token_urlsafe(32)
 
     @staticmethod
     def get_identifier() -> str:
@@ -141,7 +150,12 @@ class Api(Plugin):
                 Middleware(
                     CORSMiddleware,
                     allow_origins=self.allow_origins,
-                )
+                ),
+                Middleware(SessionMiddleware, secret_key=self.secret_key),
+                Middleware(
+                    AuthenticationMiddleware,
+                    backend=self.authentication_backend,
+                ),
             ],
         )
 
@@ -150,7 +164,7 @@ class Api(Plugin):
         # ApiPlugin interface. If they do, we merge them into our Starlette
         # app.
         for api_plugin in self.plugins:
-            wp = api_plugin()
+            wp = api_plugin(self)
             web_plugins.append(wp)
             chancy.log.info(f"Loading API sub-plugin {wp.name()}")
 

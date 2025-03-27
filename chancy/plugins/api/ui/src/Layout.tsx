@@ -1,9 +1,9 @@
 import {NavLink, Outlet} from 'react-router-dom';
 import {useServerConfiguration} from './hooks/useServerConfiguration.tsx';
-import {useQueryClient} from '@tanstack/react-query';
+import {useMutation, useQueryClient} from '@tanstack/react-query';
 import {Loading} from './components/Loading.tsx';
 import {SparklineChart} from './components/MetricCharts.tsx';
-import {useCallback, useState, ReactNode} from 'react';
+import {useState, ReactNode} from 'react';
 import {useMetricDetail} from './hooks/useMetrics.tsx';
 
 function StatusLink({ status, text }: { status: string, text: string }) {
@@ -29,16 +29,33 @@ function StatusLink({ status, text }: { status: string, text: string }) {
 }
 
 function Layout() {
-  const {configuration, isLoading, setHost, setPort, host, port} = useServerConfiguration();
-  const [formHost, setFormHost] = useState(host);
-  const [formPort, setFormPort] = useState(port);
+  const {configuration, isLoading, setHost, setPort, host, port, url} = useServerConfiguration();
+  const [formUsername, setFormUsername] = useState("");
+  const [formPassword, setFormPassword] = useState("");
   const queryClient = useQueryClient();
 
-  const connect = useCallback(() => {
-    setHost(formHost);
-    setPort(formPort);
-    queryClient.invalidateQueries();
-  }, [formHost, formPort, setHost, setPort, queryClient]);
+  const loginMutation = useMutation({
+    mutationFn: async (
+      {username, password}: { username: string, password: string }
+    ) => {
+      const response = await fetch(`${url}/api/v1/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({username, password})
+      });
+
+      if (!response.ok) {
+        throw new Error("Invalid credentials");
+      }
+
+      await queryClient.invalidateQueries({
+
+      });
+      return await response.json();
+    }
+  });
 
   if (isLoading) {
     return (
@@ -51,34 +68,76 @@ function Layout() {
   if (!configuration) {
     return (
       <div className={"h-100 w-100 d-flex align-items-center justify-content-center"}>
-        <div>
-          <h1 className={"text-center mb-4"}>Chancy</h1>
-          <p></p>
-          <div className={"mb-3"}>
-            <label htmlFor={"host"} className={"form-label"}>Host</label>
+        <div className={"w-100"} style={{maxWidth: "400px"}}>
+          <div className="text-center mb-4">
+            <img src="/logo_small.png" alt="Chancy Logo" width={"128"} />
+            <h1 className="ms-2 mb-0">Chancy</h1>
+          </div>
+          <div className={"d-flex align-items-center my-2"}>
+            <div className={"me-2"}>
+              User
+            </div>
+            <hr className={"flex-grow-1"} />
+          </div>
+          <div className={"form-floating"}>
+            <input
+              className={"form-control"}
+              type={"text"}
+              id={"username"}
+              value={formUsername}
+              onChange={(e) => setFormUsername(e.target.value)}
+              autoFocus={true}
+            />
+            <label htmlFor={"username"}>Username</label>
+          </div>
+          <div className={"form-floating"}>
+            <input
+              className={"form-control"}
+              type={"password"}
+              id={"password"}
+              value={formPassword}
+              onChange={(e) => setFormPassword(e.target.value)}
+            />
+            <label htmlFor={"password"}>Password</label>
+          </div>
+          <div className={"d-flex align-items-center my-2"}>
+            <div className={"me-2"}>
+              Connection
+            </div>
+            <hr className={"flex-grow-1"} />
+          </div>
+          <div className={"form-floating"}>
             <input
               className={"form-control"}
               type={"text"}
               id={"host"}
               placeholder={"http://localhost"}
-              value={formHost}
-              onChange={(e) => setFormHost(e.target.value)}
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
             />
-            <small className={"form-text text-muted"}>The host of the Chancy API to connect to.</small>
+            <label htmlFor={"host"}>Host</label>
           </div>
-          <div className={"mb-3"}>
-            <label htmlFor={"port"} className={"form-label"}>Port</label>
+          <div className={"form-floating"}>
             <input
               className={"form-control"}
               type={"number"}
               id={"port"}
               placeholder={"8000"}
-              value={formPort}
-              onChange={(e) => setFormPort(parseInt(e.target.value))}/>
-            <small className={"form-text text-muted"}>The port of the Chancy API to connect to.</small>
+              value={port}
+              onChange={(e) => setPort(parseInt(e.target.value))}/>
+            <label htmlFor={"port"}>Port</label>
           </div>
-          <button className={"btn btn-primary w-100"} onClick={connect}>
-            Connect
+          <button
+            className={"btn btn-primary w-100 mt-4"}
+            onClick={() => {
+              loginMutation.mutate({
+                username: formUsername,
+                password: formPassword
+              })
+            }}
+            disabled={loginMutation.isPending}
+          >
+            {loginMutation.isPending ? <Loading /> : "Connect"}
           </button>
         </div>
       </div>
@@ -141,7 +200,6 @@ function Layout() {
           {navLink({to: "/crons", text: "Cron", needs: ["Cron"]})}
           {navLink({to: "/workflows", text: "Workflows", needs: ["WorkflowPlugin"]})}
           {navLink({to: "/metrics", text: "Metrics", needs: ["Metrics"]})}
-          {navLink({to: "/events", text: "Events"})}
         </ul>
       </div>
       <div className="flex-grow-1 overflow-x-scroll vh-100 p-3">

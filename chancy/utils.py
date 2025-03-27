@@ -9,7 +9,22 @@ import secrets
 import itertools
 import contextlib
 from dataclasses import is_dataclass, asdict
-from typing import Iterable, Coroutine
+from typing import Iterable, Coroutine, NotRequired, Any, TypedDict
+from urllib.parse import quote_plus, urlencode, urlunparse
+
+
+class DatabaseConnection(TypedDict):
+    """
+    Django-style database connection configuration.
+    """
+
+    ENGINE: str
+    NAME: NotRequired[str]
+    USER: NotRequired[str]
+    PASSWORD: NotRequired[str]
+    HOST: NotRequired[str]
+    PORT: NotRequired[str]
+    OPTIONS: NotRequired[dict[str, Any]]
 
 
 async def sleep(
@@ -256,3 +271,38 @@ class TaskManager:
 
     def __repr__(self):
         return f"<{self.__class__.__name__} tasks={len(self._tasks)!r}>"
+
+
+def get_database_dsn(db_settings: DatabaseConnection) -> str:
+    """
+    Convert a django-style database connection configuration to a DSN.
+    """
+    user = db_settings.get("USER", "")
+    password = db_settings.get("PASSWORD", "")
+    host = db_settings.get("HOST", "")
+    port = db_settings.get("PORT", "5432")
+    name = db_settings.get("NAME", "")
+    options = db_settings.get("OPTIONS", {})
+
+    netloc = ""
+    if user:
+        netloc = quote_plus(user)
+        if password:
+            netloc += f":{quote_plus(password)}"
+        netloc += "@"
+
+    if host:
+        netloc += host
+        if port:
+            netloc += f":{port}"
+
+    return urlunparse(
+        (
+            "postgresql",
+            netloc,
+            f"/{name}" if name else "/",
+            "",
+            urlencode(options) if options else "",
+            "",
+        )
+    )

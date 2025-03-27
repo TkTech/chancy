@@ -1,3 +1,4 @@
+from starlette.authentication import requires
 from starlette.responses import Response
 
 from chancy.plugins.api import ApiPlugin
@@ -24,6 +25,7 @@ class CronApiPlugin(ApiPlugin):
         ]
 
     @staticmethod
+    @requires(["authenticated"])
     async def get_cron(request, *, chancy, worker):
         """
         Get all known cron jobs.

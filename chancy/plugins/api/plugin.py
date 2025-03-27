@@ -20,6 +20,9 @@ class ApiPlugin(abc.ABC):
     A plugin that provides additional API endpoints.
     """
 
+    def __init__(self, api):
+        self.api = api
+
     @abc.abstractmethod
     def name(self) -> str:
         """

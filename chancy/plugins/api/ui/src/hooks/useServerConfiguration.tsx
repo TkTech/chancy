@@ -18,7 +18,8 @@ export function useServerConfiguration() {
       const response = await fetch(`${host}:${port}/api/v1/configuration`);
       return await response.json();
     },
-    enabled: host !== null
+    enabled: host !== null,
+    retry: false
   });
 
   const url = useMemo(() => {
@@ -52,8 +53,4 @@ export function ServerConfigurationProvider({children}: {children: React.ReactNo
 
 export function useServer() {
   return React.useContext(ServerContext);
-}
-
-export function getWebSocketUrl(url: string): string {
-  return url.replace(/^http/, 'ws');
 }

@@ -47,6 +47,8 @@ Key Features:
   codebases.
 - **Transactional enqueueing** - Atomically enqueue jobs and the data they
   depend on in a single transaction.
+- **Performant** - Used in production environments to process millions of
+  jobs per day.
 - **Portable** - Supports Linux, OS X, and Windows.
 - **100% open & free** - no enterprise tiers or paid features. Checkout
   the repo on `GitHub <https://github.com/tktech/chancy>`_.
@@ -74,7 +76,7 @@ Quick Start
      def hello_world(*, name: str):
          print(f"Hello, {name}!")
 
-     chancy = Chancy("postgresql://localhost/postgres")
+     chancy = Chancy("postgresql://<username>:<password>@<host>/<database_name>")
 
      async def main():
          async with chancy:
@@ -90,6 +92,12 @@ Quick Start
 
      if __name__ == "__main__":
          asyncio.run(main())
+
+  And now run the worker (ctrl+c to exit):
+
+  .. code-block:: bash
+
+     python worker.py
 
 
 .. tab:: CLI
