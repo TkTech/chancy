@@ -1,4 +1,4 @@
-__all__ = ("Api",)
+__all__ = ("Api", "AuthBackend")
 import os
 import secrets
 from pathlib import Path
