@@ -49,14 +49,15 @@ class Metric:
 
 class Metrics(Plugin):
     """
-    A plugin that collects and aggregates various metrics from jobs and queues.
+    A plugin that collects and aggregates various metrics from jobs, queues
+    workers, table sizes, and more.
 
     The plugin maintains time-series data for various metrics, with automatic
     aggregation and pruning to keep storage requirements low while providing
     useful historical data.
 
-    Metrics are synchronized across workers, so each worker has access to the
-    full set of metrics.
+    Metrics are periodically synchronized across workers, so each worker has
+    access to the full set of metrics, based on the ``sync_interval`` setting.
 
     Example:
 
@@ -76,7 +77,7 @@ class Metrics(Plugin):
         While you can use this plugin to record your own arbitrary metrics,
         it's not designed as a general-purpose monitoring solution. For more
         advanced monitoring and visualization, consider using a dedicated
-        monitoring tool like Prometheus or Grafana.
+        monitoring tool like Prometheus or statsd.
     """
 
     def __init__(

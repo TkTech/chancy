@@ -222,5 +222,14 @@ class Plugin(abc.ABC):
         """
         return []
 
+    def should_autostart(self) -> bool:
+        """
+        Should this plugin be started automatically when its respective
+        scope starts?
+
+        By default, this is True.
+        """
+        return True
+
     def __repr__(self):
         return f"<{self.__class__.__name__}()>"
