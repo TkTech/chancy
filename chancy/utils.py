@@ -192,6 +192,9 @@ class TaskManager:
         """
         Add a task to the manager.
         """
+        if name in self:
+            raise ValueError(f"Task with name {name!r} already exists")
+
         task = asyncio.create_task(task)
         task.add_done_callback(self._tasks.remove)
         task.set_name(name)
@@ -266,8 +269,27 @@ class TaskManager:
     def __iter__(self):
         return iter(self._tasks)
 
-    def __contains__(self, task: asyncio.Task):
-        return task in self._tasks
+    def __contains__(self, name: str):
+        """
+        Check if a task is in the manager.
+        """
+        for task in self._tasks:
+            if task.get_name() == name:
+                return True
+
+        return False
+
+    def __getitem__(self, name: str):
+        """
+        Get a task by name.
+
+        If the task is not found, a KeyError is raised.
+        """
+        for task in self._tasks:
+            if task.get_name() == name:
+                return task
+
+        raise KeyError(f"No task with name {name!r}")
 
     def __repr__(self):
         return f"<{self.__class__.__name__} tasks={len(self._tasks)!r}>"
