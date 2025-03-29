@@ -219,6 +219,9 @@ class Worker:
                     f"dependencies: {plugin.get_dependencies()}"
                 )
 
+            if not plugin.should_autostart():
+                continue
+
             self.manager.add(
                 plugin.__class__.__name__,
                 plugin.run(self, self.chancy),
