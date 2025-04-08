@@ -36,6 +36,7 @@ const router = createBrowserRouter([
       { path: "/jobs/succeeded", element: <Jobs />},
       { path: "/jobs/failed", element: <Jobs />},
       { path: "/jobs/retrying", element: <Jobs />},
+      { path: "/jobs/expired", element: <Jobs />},
       { path: "/jobs/:job_id", element: <Job />},
       { path: "/crons", element: <Crons />},
       { path: "/crons/:cron_id", element: <Cron />},

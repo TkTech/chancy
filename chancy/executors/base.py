@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from functools import cached_property
 from typing import Callable, Any
 
-from chancy.job import QueuedJob, Reference
+from chancy.job import QueuedJob, Reference, COMPLETED_STATES
 from chancy.queue import Queue
 
 if typing.TYPE_CHECKING:
@@ -32,17 +32,71 @@ class Executor(abc.ABC):
         self.worker = worker
         self.queue = queue
 
-    @abc.abstractmethod
     async def push(self, job: QueuedJob):
         """
         Push a job onto the job pool.
+
+        This method is called when a job is retrieved from the queue and is
+        about to be started. It will perform any necessary preflight checks
+        before starting the job, such as checking job deadlines and calling
+        registered plugins.
         """
+        now = datetime.now(tz=timezone.utc)
+
+        # If the job was picked up after its deadline, we give plugins a chance
+        # to transition/modify it.
+        if job.deadline and job.deadline < now:
+            job = await self.on_job_expired(job)
+
+        job = await self.on_job_starting(job)
+
+        # Plugins may modify the job before it starts, so we need to check if
+        # the job has transitioned into a terminal state and short-circuit the
+        # push if it has.
+        if job.state in COMPLETED_STATES:
+            await self.worker.queue_update(job)
+            return
+
+        await self.submit_to_pool(job)
+
+    @abc.abstractmethod
+    async def submit_to_pool(self, job: QueuedJob):
+        """
+        Submit a job to the executor's pool, skipping any preflight checks.
+
+        Generally, end users should not call this method directly, as it will
+        not perform any preflight checks or plugin calls. It is intended for
+        use by the executor itself when it is ready to start a job. See
+        :meth:`~chancy.executors.base.Executor.push` for the intended usage.
+        """
+
+    async def on_job_expired(self, job: QueuedJob) -> QueuedJob:
+        """
+        Hook for plugins to modify the job when it has expired.
+
+        Called when a job is pulled from the queue that didn't run before its
+        deadline was reached. The job may be modified and returned to handle
+        custom logic, like moving it to a different queue or logging the
+        expiration.
+        """
+        job = dataclasses.replace(job, state=job.State.EXPIRED)
+        for plugin in self.chancy.plugins.values():
+            try:
+                job = await plugin.on_job_expired(job=job, worker=self)
+            except NotImplementedError:
+                continue
+        return job
 
     async def on_job_starting(self, job: QueuedJob) -> QueuedJob:
         """
-        Called when a job has been retrieved from the queue and is about to
-        start.
+        Hook for plugins to modify the job before it starts.
+
+        Called when a job has been retrieved from the queue, passed its
+        preflight checks, and is about to be submitted to the underlying
+        task pool for execution.
         """
+        # Each plugin has a chance to modify the job instance before it's
+        # started.
         for plugin in self.worker.chancy.plugins.values():
             try:
                 job = await plugin.on_job_starting(job=job, worker=self.worker)
@@ -206,6 +260,10 @@ class Executor(abc.ABC):
     @property
     def free_slots(self) -> int:
         return self.concurrency - len(self)
+
+    @property
+    def chancy(self):
+        return self.worker.chancy
 
     @abc.abstractmethod
     def __len__(self):

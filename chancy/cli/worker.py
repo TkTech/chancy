@@ -65,6 +65,13 @@ async def worker_command(
     multiple=True,
     default=lambda: ["*"],
 )
+@click.option(
+    "--allow-credentials",
+    "-c",
+    help="Whether to allow credentials across origins.",
+    is_flag=True,
+    default=True,
+)
 @click.pass_context
 @run_async_command
 async def web_command(
@@ -73,6 +80,7 @@ async def web_command(
     port: int,
     debug: bool,
     allow_origin: list[str],
+    allow_credentials: bool = True,
 ):
     """
     Start the Chancy dashboard.
@@ -99,6 +107,7 @@ async def web_command(
                 host=host,
                 port=port,
                 allow_origins=allow_origin,
+                allow_credentials=allow_credentials,
                 debug=debug,
                 authentication_backend=auth,
             )

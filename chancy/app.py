@@ -13,7 +13,7 @@ from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
 from chancy.migrate import Migrator
 from chancy.queue import Queue
-from chancy.job import Reference, Job, QueuedJob, IsAJob
+from chancy.job import Reference, Job, QueuedJob, IsAJob, COMPLETED_STATES
 from chancy.plugin import Plugin
 from chancy.utils import (
     chancy_uuid,
@@ -689,10 +689,7 @@ class Chancy:
         async with asyncio.timeout(timeout):
             while True:
                 job = await self.get_job(ref)
-                if job is None or job.state in {
-                    QueuedJob.State.SUCCEEDED,
-                    QueuedJob.State.FAILED,
-                }:
+                if job is None or job.state in COMPLETED_STATES:
                     return job
                 await asyncio.sleep(interval)
 
@@ -963,7 +960,8 @@ class Chancy:
                     priority,
                     max_attempts,
                     scheduled_at,
-                    unique_key
+                    unique_key,
+                    deadline
                 )
             VALUES (
                 %(id)s,
@@ -975,18 +973,22 @@ class Chancy:
                 %(priority)s,
                 %(max_attempts)s,
                 %(scheduled_at)s,
-                %(unique_key)s
+                %(unique_key)s,
+                %(deadline)s
             )
             ON CONFLICT (unique_key)
             WHERE
                 unique_key IS NOT NULL
-                    AND state NOT IN ('succeeded', 'failed')
+                    AND state != ANY({terminal_states})
             DO UPDATE
                SET
                    state = EXCLUDED.state
             RETURNING id;
             """
-        ).format(jobs=sql.Identifier(f"{self.prefix}jobs"))
+        ).format(
+            jobs=sql.Identifier(f"{self.prefix}jobs"),
+            terminal_states=sql.Literal(list(COMPLETED_STATES)),
+        )
 
     def _get_job_sql(self):
         return sql.SQL(
@@ -1088,6 +1090,7 @@ class Chancy:
             "max_attempts": job.max_attempts,
             "scheduled_at": job.scheduled_at,
             "unique_key": job.unique_key,
+            "deadline": job.deadline,
         }
 
 

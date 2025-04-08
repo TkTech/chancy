@@ -11,7 +11,7 @@ from chancy.hub import Event
 from chancy.plugin import Plugin
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.job import Job, QueuedJob, IsAJob
+from chancy.job import Job, QueuedJob, IsAJob, COMPLETED_STATES
 from chancy.utils import json_dumps, chancy_uuid
 from chancy.rule import Rule
 
@@ -566,10 +566,7 @@ class WorkflowPlugin(Plugin):
         # If all dependencies are met, we can execute the job.
         for step_id, step in workflow.steps.items():
             # If the step is already in a terminal state, we can skip it.
-            if step.state in [
-                QueuedJob.State.SUCCEEDED,
-                QueuedJob.State.FAILED,
-            ]:
+            if step.state in COMPLETED_STATES:
                 continue
 
             dependencies = [workflow.steps[dep] for dep in step.dependencies]
@@ -596,6 +593,8 @@ class WorkflowPlugin(Plugin):
         if len(states.get(QueuedJob.State.SUCCEEDED, [])) == len(workflow):
             workflow.state = Workflow.State.COMPLETED
         elif states.get(QueuedJob.State.FAILED):
+            workflow.state = Workflow.State.FAILED
+        elif states.get(QueuedJob.State.EXPIRED):
             workflow.state = Workflow.State.FAILED
 
         return starting_state != workflow.state or has_change

@@ -195,6 +195,7 @@ function Layout() {
               { to: "/jobs/succeeded", text: <StatusLink status="succeeded" text="Succeeded" /> },
               { to: "/jobs/failed", text: <StatusLink status="failed" text="Failed" /> },
               { to: "/jobs/retrying", text: <StatusLink status="retrying" text="Retrying" /> },
+              { to: "/jobs/expired", text: <StatusLink status="expired" text="Expired" /> },
             ]
           })}
           {navLink({to: "/queues", text: "Queues"})}

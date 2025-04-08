@@ -33,6 +33,7 @@ export function statusToColor (status: string) {
     succeeded: 'success',
     completed: 'success',
     failed: 'danger',
+    expired: 'danger',
     retrying: 'warning'
   }[status] || 'secondary';
 }

@@ -111,9 +111,7 @@ class ProcessExecutor(ConcurrentExecutor):
 
             django.setup()
 
-    async def push(self, job: QueuedJob) -> Future:
-        job = await self.on_job_starting(job)
-
+    async def submit_to_pool(self, job: QueuedJob) -> Future:
         future: Future = self.pool.submit(
             self.job_wrapper, job, self.pids_for_job
         )

@@ -1,7 +1,7 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {useJob, useJobs} from '../hooks/useJobs.tsx';
-import {Link, useParams, useSearchParams} from 'react-router-dom';
+import {Link, useLocation, useParams, useSearchParams} from 'react-router-dom';
 import {statusToColor} from '../utils.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import React from 'react';
@@ -162,12 +162,10 @@ export function Job() {
 export function Jobs() {
   const {url} = useServerConfiguration();
   const [searchParams, setSearchParams] = useSearchParams();
-  const location = window.location.pathname;
-  const pathParts = location.split('/');
-  const state = pathParts.length > 2 && ['pending', 'running', 'succeeded', 'failed', 'retrying'].includes(pathParts[2])
-    ? pathParts[2]
-    : 'pending';
-    
+  const location = useLocation();
+  const { pathname } = location;
+  const state = pathname.split("/")[2];
+
   const func = searchParams.get('func') || undefined;
   const [funcInput, setFuncInput] = React.useState(func || '');
 
@@ -235,6 +233,7 @@ export function Jobs() {
               "running": "Started",
               "succeeded": "Completed",
               "failed": "Completed",
+              "expired": "Completed",
               "retrying": "Started",
             }[state]}
           </th>
@@ -270,6 +269,7 @@ export function Jobs() {
                 "running": job.started_at,
                 "succeeded": job.completed_at,
                 "failed": job.completed_at,
+                "expired": job.completed_at,
                 "retrying": job.started_at,
               }[job.state]} />
             </td>

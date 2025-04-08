@@ -1,10 +1,15 @@
+import datetime
 import time
 import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job, Job
-from test_worker import job_that_fails
+from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job
+
+
+@job()
+def job_that_fails():
+    raise ValueError("This job should fail.")
 
 
 @job()
@@ -222,6 +227,31 @@ async def test_failing_job(chancy: Chancy, worker: Worker):
         ),
         upsert=True,
     )
-    ref = await chancy.push(Job.from_func(job_that_fails))
+    ref = await chancy.push(job_that_fails)
     j = await chancy.wait_for_job(ref, timeout=30)
     assert j.state == QueuedJob.State.FAILED
+
+
+@pytest.mark.asyncio
+async def test_expired_job(chancy: Chancy, worker: Worker):
+    """
+    Test that a job that doesn't start within its deadline will be marked as
+    expired.
+    """
+    await chancy.declare(Queue("default"))
+
+    # Test that an initial deadline already in the past works as expected.
+    ref = await chancy.push(
+        job_that_fails.job.with_deadline(datetime.datetime.min)
+    )
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == QueuedJob.State.EXPIRED
+
+    # Test that a deadline in the near future works as expected.
+    ref = await chancy.push(
+        job_that_fails.job.with_deadline(
+            datetime.datetime.now() + datetime.timedelta(seconds=5)
+        )
+    )
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == QueuedJob.State.EXPIRED

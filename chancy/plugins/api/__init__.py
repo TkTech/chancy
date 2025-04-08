@@ -109,6 +109,8 @@ class Api(Plugin):
     :param host: The host to listen on.
     :param debug: Whether to run the server in debug mode.
     :param allow_origins: A list of origins that are allowed to access the API.
+    :param allow_credentials: Whether to allow credentials to be sent with
+                              requests. This is required for cookies to work.
     :param secret_key: A secret key used to sign cookies. This should be a
                        strong, random key. If not provided, a random key will
                        be generated each time the server is started.
@@ -126,6 +128,7 @@ class Api(Plugin):
         host: str = "127.0.0.1",
         debug: bool = False,
         allow_origins: list[str] | None = None,
+        allow_credentials: bool = True,
         secret_key: str | None = None,
         authentication_backend: AuthBackend,
         autostart: bool = False,
@@ -136,6 +139,7 @@ class Api(Plugin):
         self.debug = debug
         self.root = Path(__file__).parent
         self.allow_origins = allow_origins or []
+        self.allow_credentials = allow_credentials
         self.plugins: set[Type[ApiPlugin]] = {CoreApiPlugin}
         self.authentication_backend = authentication_backend
         self.secret_key = secret_key or secrets.token_urlsafe(32)
@@ -172,6 +176,8 @@ class Api(Plugin):
                 Middleware(
                     CORSMiddleware,
                     allow_origins=self.allow_origins,
+                    allow_credentials=self.allow_credentials,
+                    allow_methods=["*"],
                 ),
                 Middleware(SessionMiddleware, secret_key=self.secret_key),
                 Middleware(

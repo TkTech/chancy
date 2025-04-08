@@ -193,6 +193,26 @@ class Plugin(abc.ABC):
         :param job: The job that was completed.
         """
 
+    async def on_job_expired(
+        self,
+        *,
+        worker: "Worker",
+        job: QueuedJob,
+    ) -> QueuedJob:
+        """
+        Called when a job has expired.
+
+        Called when a job is pulled from the queue that didn't run before its
+        deadline was reached. The passed job is immutable - to modify it,
+        return a new QueuedJob with the desired changes. This is useful for
+        implementing custom logic like moving to a dead-letter queue or
+        logging the expiration.
+
+        :param worker: The worker that is running the job.
+        :param job: The job that has expired.
+        """
+        raise NotImplementedError()
+
     def get_tables(self) -> list[str]:
         """
         Get the names of all tables this plugin is responsible for.

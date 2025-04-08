@@ -35,8 +35,7 @@ class AsyncExecutor(Executor):
         super().__init__(worker, queue)
         self.jobs: dict[asyncio.Task, QueuedJob] = {}
 
-    async def push(self, job: QueuedJob):
-        job = await self.on_job_starting(job)
+    async def submit_to_pool(self, job: QueuedJob):
         task = asyncio.create_task(self._job_wrapper(job))
         self.jobs[task] = job
         task.add_done_callback(self.jobs.pop)
