@@ -53,16 +53,13 @@ class Cron(Plugin):
 
         import asyncio
         from chancy import Chancy, Worker, Queue, job
-        from chancy.plugins.pruner import Cron
+        from chancy.plugins.cron import Cron
 
         @job(queue="default")
         def hello_world():
             print("hello_world")
 
         async with Chancy("postgresql://localhost/postgres", plugins=[Cron()]) as chancy:
-                Cron(),
-            ],
-        ) as chancy:
             await Cron.schedule(
                 chancy,
                 "*/2 * * * *",
