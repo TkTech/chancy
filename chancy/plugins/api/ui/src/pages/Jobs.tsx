@@ -5,10 +5,18 @@ import {Link, useLocation, useParams, useSearchParams} from 'react-router-dom';
 import {statusToColor} from '../utils.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import React from 'react';
+import {SlidePanel} from '../components/SlidePanel.tsx';
+import {CopyText} from '../components/Copy.jsx';
 
-export function Job() {
+interface JobProps {
+  jobId?: string;
+  inPanel?: boolean;
+}
+
+export function Job({ jobId, inPanel = false }: JobProps) {
   const { url } = useServerConfiguration();
-  const { job_id } = useParams<{job_id: string}>();
+  const params = useParams<{job_id: string}>();
+  const job_id = jobId || params.job_id;
 
   const { data: job, isLoading } = useJob({
     url: url,
@@ -19,22 +27,32 @@ export function Job() {
 
   if (!job || job.id === undefined) {
     return (
-      <div className={"container-fluid"}>
-        <h2 className={"mb-4"}>Job - {job_id}</h2>
+      <div className={inPanel ? "" : "container-fluid"}>
+        {!inPanel && <h2 className={"mb-4"}>Job - {job_id}</h2>}
         <div className={"alert alert-danger"}>Job not found.</div>
       </div>
     );
   }
 
   return (
-    <div className={"container-fluid"}>
-      <h2 className={"mb-4"}>Job - {job_id}</h2>
+    <div className={inPanel ? "" : "container-fluid"}>
+      {!inPanel && <h2 className={"mb-4"}>Job - {job_id}</h2>}
       <table className={"table table-hover border mb-0"}>
         <tbody>
         <tr>
+          <th>UUID</th>
+          <td>
+            <CopyText text={job.id}>
+              <code className={"text-break"}>{job.id}</code>
+            </CopyText>
+          </td>
+        </tr>
+        <tr>
           <th>Function</th>
           <td>
-            <code>{job.func}</code>
+            <CopyText text={job.func}>
+              <code className={"text-break"}>{job.func}</code>
+            </CopyText>
           </td>
         </tr>
         <tr>
@@ -87,7 +105,7 @@ export function Job() {
           <tr>
             <th>Unique Key</th>
             <td>
-              <code>{job.unique_key}</code>
+              <code className={"text-break"}>{job.unique_key}</code>
             </td>
           </tr>
         )}
@@ -144,12 +162,16 @@ export function Job() {
             The job encountered the following errors during execution.
           </p>
           {job.errors.map((error) => (
-            <div className={'card mt-4 border-danger-subtle'}>
+            <div className={'card mt-4 border-danger-subtle'} key={error.attempt}>
               <div className={'card-header bg-danger-subtle'}>
-                <strong>Attempt #{error.attempt}</strong>
+                <strong>Error on attempt #{error.attempt}</strong>
               </div>
               <div className={'card-body'}>
-                <pre><code>{error.traceback}</code></pre>
+                <pre
+                  style={{
+                    maxHeight: '300px',
+                  }}
+                ><code>{error.traceback}</code></pre>
               </div>
             </div>
           ))}
@@ -158,6 +180,7 @@ export function Job() {
     </div>
   );
 }
+
 
 export function Jobs() {
   const {url} = useServerConfiguration();
@@ -168,6 +191,9 @@ export function Jobs() {
 
   const func = searchParams.get('func') || undefined;
   const [funcInput, setFuncInput] = React.useState(func || '');
+  
+  const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
 
   const { data: jobs, isLoading, dataUpdatedAt } = useJobs({
     url: url,
@@ -185,6 +211,16 @@ export function Jobs() {
     }
     setSearchParams(newParams);
   }
+  
+  const handleJobClick = (jobId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    setSelectedJobId(jobId);
+    setIsPanelOpen(true);
+  };
+
+  const handleClosePanel = () => {
+    setIsPanelOpen(false);
+  };
 
   if (isLoading) return <Loading />;
 
@@ -250,15 +286,19 @@ export function Jobs() {
         {jobs?.map((job) => (
           <tr key={job.id}>
             <td className={"text-break"}>
-              <span className={`text-${statusToColor(job.state)} me-2`} title={job.state}>⬤</span>
-              <Link to={`/jobs/${job.id}`}>
+              <Link 
+                to={`/jobs/${job.id}`} 
+                onClick={(e) => handleJobClick(job.id, e)}
+              >
                 {job.func}
               </Link>
             </td>
             <td className={"text-center"}>
-              <Link to={`/queues/${job.queue}`}>
-                {job.queue}
-              </Link>
+              <span onClick={(e) => { e.stopPropagation(); }}>
+                <Link to={`/queues/${job.queue}`}>
+                  {job.queue}
+                </Link>
+              </span>
             </td>
             <td className={"text-center"}>
               {job.attempts} / {job.max_attempts}
@@ -277,6 +317,14 @@ export function Jobs() {
         ))}
         </tbody>
       </table>
+      
+      <SlidePanel
+        isOpen={isPanelOpen} 
+        onClose={handleClosePanel}
+        title={"Job Details"}
+      >
+        {selectedJobId && <Job jobId={selectedJobId} inPanel={true} />}
+      </SlidePanel>
     </div>
   )
 }

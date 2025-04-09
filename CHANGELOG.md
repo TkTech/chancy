@@ -11,9 +11,10 @@ job state.
 - ✨ Added support for job deadlines, after which the job will refuse to execute
   and be marked as expired. Plugins can now implement `on_job_expired` to handle
   job expiration with custom logic.
-- ✨ `chancy worker web` CLI now accepts --allow-credentials to allow credentials
-  to be sent with CORS requests. This is useful for local development of the
-  dashboard itself, but should not be used in production.
+- ✨ `chancy worker web` CLI now accepts `--allow-credentials` to allow
+  credentials to be sent with CORS requests. This is useful for local
+  development of the dashboard itself, but should not be used in production.
+- 📝 Documentation fix to the cron plugin example (Thanks @PaulM5406)
 
 0.23.0
 ------
