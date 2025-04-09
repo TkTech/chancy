@@ -363,7 +363,7 @@ export function QueueMetrics({
         </Link>
       </div>
       
-      <div className="row row-cols-4 row-cols-lg-2 row-cols-md-1 g-4">
+      <div className="row row-cols-4 row-cols-lg-1 g-4">
         <div className="col">
           <div className="card h-100">
             <div className="card-header">
