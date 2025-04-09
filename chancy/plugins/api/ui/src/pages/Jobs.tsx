@@ -2,7 +2,7 @@ import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {useJob, useJobs} from '../hooks/useJobs.tsx';
 import {Link, useLocation, useParams, useSearchParams} from 'react-router-dom';
-import {statusToColor} from '../utils.tsx';
+import {formattedTimeDelta, relativeTime, statusToColor} from '../utils.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import React from 'react';
 import {SlidePanel} from '../components/SlidePanel.tsx';
@@ -20,7 +20,8 @@ export function Job({ jobId, inPanel = false }: JobProps) {
 
   const { data: job, isLoading } = useJob({
     url: url,
-    job_id: job_id
+    job_id: job_id,
+    refetchInterval: 5000
   });
 
   if (isLoading) return <Loading />;
@@ -37,6 +38,41 @@ export function Job({ jobId, inPanel = false }: JobProps) {
   return (
     <div className={inPanel ? "" : "container-fluid"}>
       {!inPanel && <h2 className={"mb-4"}>Job - {job_id}</h2>}
+      <div className={"row row-cols-5 text-center mb-4"}>
+        <div className={"col"}>
+          <strong>Created</strong>
+          <div>
+            {relativeTime(job.created_at)}
+          </div>
+        </div>
+        <div className={"col"}>
+          <strong>Scheduled</strong>
+          <div>
+            {relativeTime(job.scheduled_at)}
+          </div>
+        </div>
+        <div className={"col"}>
+          <strong>Wait</strong>
+          <div>
+            {formattedTimeDelta(
+              job.created_at,
+              job.started_at ? job.started_at : new Date().toISOString()
+            )}
+          </div>
+        </div>
+        <div className={"col"}>
+          <strong>Running</strong>
+          <div>
+            {job.started_at === null ? "-" : relativeTime(job.started_at)}
+          </div>
+        </div>
+        <div className={"col"}>
+          <strong>Completed</strong>
+          <div>
+            {job.completed_at === null ? "-" : relativeTime(job.completed_at)}
+          </div>
+        </div>
+      </div>
       <table className={"table table-hover border mb-0"}>
         <tbody>
         <tr>
