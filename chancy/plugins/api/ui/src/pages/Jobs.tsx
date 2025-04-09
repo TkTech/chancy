@@ -6,7 +6,7 @@ import {formattedTimeDelta, relativeTime, statusToColor} from '../utils.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import React from 'react';
 import {SlidePanel} from '../components/SlidePanel.tsx';
-import {CopyText} from '../components/Copy.jsx';
+import {CopyText} from '../components/Copy.tsx';
 
 interface JobProps {
   jobId?: string;
@@ -40,19 +40,61 @@ export function Job({ jobId, inPanel = false }: JobProps) {
       {!inPanel && <h2 className={"mb-4"}>Job - {job_id}</h2>}
       <div className={"row row-cols-5 text-center mb-4"}>
         <div className={"col"}>
+          <div className="mb-1">
+            {job.created_at ? (
+              <span className="position-relative d-inline-block text-success">
+                ✓
+              </span>
+            ) : (
+              <span className="position-relative d-inline-block">
+                <div className="spinner-border spinner-border-sm" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+              </span>
+            )}
+          </div>
           <strong>Created</strong>
           <div>
             {relativeTime(job.created_at)}
           </div>
         </div>
         <div className={"col"}>
+          <div className="mb-1">
+            {job.scheduled_at ? (
+              <span className="position-relative d-inline-block text-success">
+                ✓
+              </span>
+            ) : (
+              <span className="position-relative d-inline-block">
+                <div className="spinner-border spinner-border-sm" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+              </span>
+            )}
+          </div>
           <strong>Scheduled</strong>
           <div>
             {relativeTime(job.scheduled_at)}
           </div>
         </div>
         <div className={"col"}>
-          <strong>Wait</strong>
+          <div className="mb-1">
+            {job.started_at ? (
+              <span className="position-relative d-inline-block text-success">
+                ✓
+              </span>
+            ) : (
+              <span className="position-relative d-inline-block">
+                {job.state === "pending" && (
+                  <div className="spinner-border spinner-border-sm" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                )}
+                {job.state !== "pending" && "-"}
+              </span>
+            )}
+          </div>
+          <strong>Waiting</strong>
           <div>
             {formattedTimeDelta(
               job.created_at,
@@ -61,13 +103,48 @@ export function Job({ jobId, inPanel = false }: JobProps) {
           </div>
         </div>
         <div className={"col"}>
+          <div className="mb-1">
+            {job.started_at ? (
+              <span className="position-relative d-inline-block">
+                {job.completed_at ? (
+                  <span className="text-success">✓</span>
+                ) : (
+                  <div className="spinner-border spinner-border-sm" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                )}
+              </span>
+            ) : (
+              <span className="position-relative d-inline-block">-</span>
+            )}
+          </div>
           <strong>Running</strong>
           <div>
             {job.started_at === null ? "-" : relativeTime(job.started_at)}
           </div>
         </div>
         <div className={"col"}>
-          <strong>Completed</strong>
+          <div className="mb-1">
+            {job.completed_at ? (
+              <span className="position-relative d-inline-block">
+                {job.state === "succeeded" && (
+                  <span className="text-success">✓</span>
+                )}
+                {(job.state === "failed" || job.state === "expired") && (
+                  <span className="text-danger">✗</span>
+                )}
+              </span>
+            ) : (
+              <span className="position-relative d-inline-block">-</span>
+            )}
+          </div>
+          <strong>
+            {{
+              "succeeded": "Completed",
+              "failed": "Failed",
+              "expired": "Expired",
+            }[job.state] || "Completed"}
+          </strong>
           <div>
             {job.completed_at === null ? "-" : relativeTime(job.completed_at)}
           </div>
@@ -149,18 +226,16 @@ export function Job({ jobId, inPanel = false }: JobProps) {
           <th>Priority</th>
           <td>
             {job.priority}
-            <small className={'text-muted d-block'}>
-              Higher values run first.
-            </small>
+            <span className={'text-muted ms-2'}>
+              - Higher values run first.
+            </span>
           </td>
         </tr>
         <tr>
           <th>Limits</th>
           <td>
             {job.limits.length === 0 ? (
-              <div className={'alert alert-info mb-0'}>
-                No resource limits defined.
-              </div>
+              <span className={'text-muted'}>No limits set.</span>
             ) : (
               <table className={'table table-sm mb-0'}>
                 <thead>
@@ -178,6 +253,18 @@ export function Job({ jobId, inPanel = false }: JobProps) {
                 ))}
                 </tbody>
               </table>
+            )}
+          </td>
+        </tr>
+        <tr>
+          <th>Taken By</th>
+          <td>
+            {job.taken_by ? (
+              <Link to={`/workers/${job.taken_by}`}>
+                {job.taken_by}
+              </Link>
+            ) : (
+              <span className={'text-muted'}>Not yet claimed by a worker</span>
             )}
           </td>
         </tr>

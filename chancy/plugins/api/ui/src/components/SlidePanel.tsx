@@ -28,11 +28,8 @@ export function SlidePanel({ isOpen, onClose, children, title }: SlidePanelProps
           "shadow-lg",
           "overflow-auto",
           "transition-all",
-          "mw-100",
-          "w-75",
-          "w-md-60",
-          "w-lg-50",
-          "w-xl-40",
+          "col-md-8",
+          "col-12",
           "border-start",
         ].join(" ")}
         style={{
@@ -41,6 +38,7 @@ export function SlidePanel({ isOpen, onClose, children, title }: SlidePanelProps
           zIndex: 1050,
           backgroundColor: "var(--bs-body-bg)",
           borderColor: "var(--bs-border-color)",
+          maxWidth: "1024px",
         }}
       >
         <div className="d-flex justify-content-between align-items-center p-3 border-bottom">

@@ -1,15 +1,13 @@
-import { useCallback, useState } from "react";
+import { ReactNode, useCallback, useState } from "react";
 
 /**
  * Hook to copy text to the clipboard.
- *
- * @returns {(boolean|(function(*): void)|*)[]}
  */
-export function useCopy() {
+export function useCopy(): [boolean, (text: string) => void] {
   const [copied, setCopied] = useState(false);
 
   const onCopy = useCallback(
-    (text) => {
+    (text: string) => {
       navigator.clipboard.writeText(text).then(() => {
         setCopied(true);
         setTimeout(() => {
@@ -23,16 +21,16 @@ export function useCopy() {
   return [copied, onCopy];
 }
 
+interface CopyButtonProps {
+  className?: string;
+  onDoCopy: () => string;
+  children?: ReactNode;
+}
+
 /**
  * Component to copy text to the clipboard.
- *
- * @param className
- * @param onDoCopy
- * @param children
- * @returns {JSX.Element}
- * @constructor
  */
-export function CopyButton({ className, onDoCopy, children }) {
+export function CopyButton({ className, onDoCopy, children }: CopyButtonProps) {
   const [copied, onCopy] = useCopy();
 
   return (
@@ -42,19 +40,18 @@ export function CopyButton({ className, onDoCopy, children }) {
   );
 }
 
+interface CopyTextProps {
+  text: string;
+  children: ReactNode;
+}
 
 /**
  * Component to copy text to the clipboard.
- *
- * @param text
- * @param children
- * @returns {JSX.Element}
- * @constructor
  */
-export function CopyText({ text, children }) {
+export function CopyText({ text, children }: CopyTextProps) {
   const [copied, onCopy] = useCopy();
 
-  const onClick = useCallback((e) => {
+  const onClick = useCallback((e: React.MouseEvent) => {
     onCopy(text);
     e.stopPropagation();
   }, [onCopy, text]);
