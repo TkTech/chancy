@@ -14,6 +14,7 @@ job state.
 - ✨ `chancy worker web` CLI now accepts `--allow-credentials` to allow
   credentials to be sent with CORS requests. This is useful for local
   development of the dashboard itself, but should not be used in production.
+- ✨ Various UX improvements to the dashboard, including job progress timelines.
 - 📝 Documentation fix to the cron plugin example (Thanks @PaulM5406)
 
 0.23.0
