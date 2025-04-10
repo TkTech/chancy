@@ -240,6 +240,7 @@ class Chancy:
                 Recovery.get_identifier(): lambda: Recovery(),
                 Metrics.get_identifier(): lambda: Metrics(),
                 WorkflowPlugin.get_identifier(): lambda: WorkflowPlugin(),
+                Deadline.get_identifier(): lambda: Deadline(),
             }
 
             for identifier, plugin in defaults.items():
@@ -1099,3 +1100,4 @@ from chancy.plugins.recovery import Recovery  # noqa: E402
 from chancy.plugins.leadership import Leadership  # noqa: E402
 from chancy.plugins.metrics import Metrics  # noqa: E402
 from chancy.plugins.workflow import WorkflowPlugin  # noqa: E402
+from chancy.plugins.deadline import Deadline  # noqa: E402

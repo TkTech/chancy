@@ -739,6 +739,8 @@ class Worker:
                                 attempts < max_attempts
                             AND
                                 (scheduled_at IS NULL OR scheduled_at <= NOW())
+                            AND
+                                (deadline IS NULL OR deadline > NOW())
                             ORDER BY
                                 priority DESC,
                                 id DESC

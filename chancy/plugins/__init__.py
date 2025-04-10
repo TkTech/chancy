@@ -28,6 +28,9 @@ Default Plugins
 - :class:`chancy.plugins.recovery.Recovery`: This plugin is responsible for
   recovering jobs that were interrupted during execution, such as when a
   worker crashes or is restarted.
+- :class:`chancy.plugins.deadline.Deadline`: This plugin is responsible for
+  bulk-transitioning jobs to the expired state when they've passed their
+  deadline.
 
 Optional Plugins
 ----------------

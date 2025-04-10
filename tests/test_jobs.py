@@ -5,6 +5,7 @@ import asyncio
 import pytest
 
 from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job
+from chancy.plugins.deadline import Deadline
 
 
 @job()
@@ -233,6 +234,16 @@ async def test_failing_job(chancy: Chancy, worker: Worker):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [Deadline(poll_interval=5)],
+            "no_default_plugins": True,
+        }
+    ],
+    indirect=True,
+)
 async def test_expired_job(chancy: Chancy, worker: Worker):
     """
     Test that a job that doesn't start within its deadline will be marked as

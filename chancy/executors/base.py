@@ -38,16 +38,8 @@ class Executor(abc.ABC):
 
         This method is called when a job is retrieved from the queue and is
         about to be started. It will perform any necessary preflight checks
-        before starting the job, such as checking job deadlines and calling
-        registered plugins.
+        before starting the job.
         """
-        now = datetime.now(tz=timezone.utc)
-
-        # If the job was picked up after its deadline, we give plugins a chance
-        # to transition/modify it.
-        if job.deadline and job.deadline < now:
-            job = await self.on_job_expired(job)
-
         job = await self.on_job_starting(job)
 
         # Plugins may modify the job before it starts, so we need to check if
@@ -69,23 +61,6 @@ class Executor(abc.ABC):
         use by the executor itself when it is ready to start a job. See
         :meth:`~chancy.executors.base.Executor.push` for the intended usage.
         """
-
-    async def on_job_expired(self, job: QueuedJob) -> QueuedJob:
-        """
-        Hook for plugins to modify the job when it has expired.
-
-        Called when a job is pulled from the queue that didn't run before its
-        deadline was reached. The job may be modified and returned to handle
-        custom logic, like moving it to a different queue or logging the
-        expiration.
-        """
-        job = dataclasses.replace(job, state=job.State.EXPIRED)
-        for plugin in self.chancy.plugins.values():
-            try:
-                job = await plugin.on_job_expired(job=job, worker=self)
-            except NotImplementedError:
-                continue
-        return job
 
     async def on_job_starting(self, job: QueuedJob) -> QueuedJob:
         """

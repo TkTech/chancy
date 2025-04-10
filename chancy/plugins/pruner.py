@@ -3,7 +3,7 @@ from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.rule import SQLAble, JobRules
 from chancy.utils import timed_block
 
@@ -11,6 +11,12 @@ from chancy.utils import timed_block
 class Pruner(Plugin):
     """
     A plugin that prunes stale data from the database.
+
+    .. note::
+
+        This plugin is enabled by default, you only need to provide it in the
+        list of plugins to customize its arguments or if ``no_default_plugins``
+        is set to ``True``.
 
     .. code-block:: python
 
@@ -98,10 +104,6 @@ class Pruner(Plugin):
     @staticmethod
     def get_dependencies() -> list[str]:
         return ["chancy.leadership"]
-
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
 
     async def run(self, worker: Worker, chancy: Chancy):
         while await self.sleep(self.poll_interval):
