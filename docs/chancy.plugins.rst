@@ -15,6 +15,7 @@ Submodules
    chancy.plugins.leadership
    chancy.plugins.pruner
    chancy.plugins.recovery
+   chancy.plugins.deadline
    chancy.plugins.cron
    chancy.plugins.api
    chancy.plugins.workflow
