@@ -5,6 +5,7 @@ import {Loading} from './components/Loading.tsx';
 import {SparklineChart} from './components/MetricCharts.tsx';
 import {useState, ReactNode} from 'react';
 import {useMetricDetail} from './hooks/useMetrics.tsx';
+import {SlidePanelProvider} from './components/SlidePanelContext';
 
 function StatusLink({ status, text }: { status: string, text: string }) {
   const { url } = useServerConfiguration();
@@ -179,36 +180,38 @@ function Layout() {
   }
 
   return (
-    <div className="d-flex">
-      <div id="sidebar" className="flex-shrink-0 vh-100 border-end" style={{width: "280px"}}>
-        <div className="d-flex align-items-center px-3 pt-3">
-          <img src="/logo_small.png" alt="Chancy Logo" width="40" height="40" />
-          <h4 className="ms-2 mb-0">Chancy</h4>
+    <SlidePanelProvider>
+      <div className="d-flex">
+        <div id="sidebar" className="flex-shrink-0 vh-100 border-end" style={{width: "280px"}}>
+          <div className="d-flex align-items-center px-3 pt-3">
+            <img src="/logo_small.png" alt="Chancy Logo" width="40" height="40" />
+            <h4 className="ms-2 mb-0">Chancy</h4>
+          </div>
+          <ul className="nav nav-pills flex-column mb-auto px-3">
+            {navLink({
+              to: "/jobs",
+              text: "Jobs",
+              subLinks: [
+                { to: "/jobs/pending", text: <StatusLink status="pending" text="Pending" /> },
+                { to: "/jobs/running", text: <StatusLink status="running" text="Running" /> },
+                { to: "/jobs/succeeded", text: <StatusLink status="succeeded" text="Succeeded" /> },
+                { to: "/jobs/failed", text: <StatusLink status="failed" text="Failed" /> },
+                { to: "/jobs/retrying", text: <StatusLink status="retrying" text="Retrying" /> },
+                { to: "/jobs/expired", text: <StatusLink status="expired" text="Expired" /> },
+              ]
+            })}
+            {navLink({to: "/queues", text: "Queues"})}
+            {navLink({to: "/workers", text: "Workers"})}
+            {navLink({to: "/crons", text: "Cron", needs: ["Cron"]})}
+            {navLink({to: "/workflows", text: "Workflows", needs: ["WorkflowPlugin"]})}
+            {navLink({to: "/metrics", text: "Metrics", needs: ["Metrics"]})}
+          </ul>
         </div>
-        <ul className="nav nav-pills flex-column mb-auto px-3">
-          {navLink({
-            to: "/jobs",
-            text: "Jobs",
-            subLinks: [
-              { to: "/jobs/pending", text: <StatusLink status="pending" text="Pending" /> },
-              { to: "/jobs/running", text: <StatusLink status="running" text="Running" /> },
-              { to: "/jobs/succeeded", text: <StatusLink status="succeeded" text="Succeeded" /> },
-              { to: "/jobs/failed", text: <StatusLink status="failed" text="Failed" /> },
-              { to: "/jobs/retrying", text: <StatusLink status="retrying" text="Retrying" /> },
-              { to: "/jobs/expired", text: <StatusLink status="expired" text="Expired" /> },
-            ]
-          })}
-          {navLink({to: "/queues", text: "Queues"})}
-          {navLink({to: "/workers", text: "Workers"})}
-          {navLink({to: "/crons", text: "Cron", needs: ["Cron"]})}
-          {navLink({to: "/workflows", text: "Workflows", needs: ["WorkflowPlugin"]})}
-          {navLink({to: "/metrics", text: "Metrics", needs: ["Metrics"]})}
-        </ul>
+        <div className="flex-grow-1 overflow-x-scroll vh-100 p-3">
+            <Outlet/>
+        </div>
       </div>
-      <div className="flex-grow-1 overflow-x-scroll vh-100 p-3">
-          <Outlet/>
-      </div>
-    </div>
+    </SlidePanelProvider>
   );
 }
 

@@ -4,19 +4,63 @@ import {useJob, useJobs} from '../hooks/useJobs.tsx';
 import {Link, useLocation, useParams, useSearchParams} from 'react-router-dom';
 import {formattedTimeDelta, relativeTime, statusToColor} from '../utils.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
-import React from 'react';
-import {SlidePanel} from '../components/SlidePanel.tsx';
+import React, {useState} from 'react';
+import {useSlidePanels} from '../components/SlidePanelContext.tsx';
 import {CopyText} from '../components/Copy.tsx';
+import {Queue} from './Queues.tsx';
+import {WorkerDetails} from './Workers.tsx';
+import {useMetricDetail} from '../hooks/useMetrics.tsx';
+import {MetricChart, ResolutionSelector} from '../components/MetricCharts.tsx';
+import {MetricsWrapper} from './Metrics.tsx';
 
 interface JobProps {
   jobId?: string;
   inPanel?: boolean;
 }
 
+function JobMetrics({ func }: { func: string; }) {
+  const [resolution, setResolution] = useState<string>('5min');
+  const { url } = useServerConfiguration();
+  const { data: metrics, isLoading } = useMetricDetail({
+    url,
+    key: `job:${func}`,
+    resolution
+  });
+
+  return (
+    <MetricsWrapper
+      isLoading={isLoading}
+      data={metrics}
+      errorMessage={`No metrics data available for ${func}`}
+    >
+      <h3 className={"mt-4"}>Metrics</h3>
+      <p>Metrics for all executions of this function across all workers and queues.</p>
+      <ResolutionSelector resolution={resolution} setResolution={setResolution} />
+      {metrics && Object.entries(metrics).map(([subtype, metricData]) => {
+        return (
+          <div key={subtype} className="card mb-4">
+            <div className="card-header">
+              <h5 className="mb-0">{subtype}</h5>
+            </div>
+            <div className="card-body">
+              <MetricChart
+                points={metricData.data}
+                metricType={metricData.type}
+                resolution={resolution}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </MetricsWrapper>
+  );
+}
+
 export function Job({ jobId, inPanel = false }: JobProps) {
   const { url } = useServerConfiguration();
   const params = useParams<{job_id: string}>();
   const job_id = jobId || params.job_id;
+  const { openPanel } = useSlidePanels();
 
   const { data: job, isLoading } = useJob({
     url: url,
@@ -171,7 +215,13 @@ export function Job({ jobId, inPanel = false }: JobProps) {
         <tr>
           <th>Queue</th>
           <td>
-            <Link to={`/queues/${job.queue}`}>
+            <Link to={`/queues/${job.queue}`} onClick={(e) => {
+              e.preventDefault();
+              openPanel({
+                title: "Queue Details",
+                content: <Queue queueName={job.queue} inPanel={true} />
+              });
+            }}>
               {job.queue}
             </Link>
           </td>
@@ -235,7 +285,7 @@ export function Job({ jobId, inPanel = false }: JobProps) {
           <th>Limits</th>
           <td>
             {job.limits.length === 0 ? (
-              <span className={'text-muted'}>No limits set.</span>
+              <span className={'text-muted'}>No resource limits set.</span>
             ) : (
               <table className={'table table-sm mb-0'}>
                 <thead>
@@ -260,7 +310,13 @@ export function Job({ jobId, inPanel = false }: JobProps) {
           <th>Taken By</th>
           <td>
             {job.taken_by ? (
-              <Link to={`/workers/${job.taken_by}`}>
+              <Link to={`/workers/${job.taken_by}`} onClick={(e) => {
+                e.preventDefault();
+                openPanel({
+                  title: "Worker Details",
+                  content: <WorkerDetails workerId={job.taken_by} inPanel={true} />
+                });
+              }}>
                 {job.taken_by}
               </Link>
             ) : (
@@ -271,10 +327,12 @@ export function Job({ jobId, inPanel = false }: JobProps) {
         </tbody>
       </table>
       <h3 className={"mt-4"}>Arguments</h3>
+      <p>Arguments passed to the function. This is a JSON-encoded string.</p>
       <div className={"border p-4"}>
         <pre className={"mb-0"}><code>{JSON.stringify(job.kwargs, null, 2)}</code></pre>
       </div>
       <h3 className={"mt-4"}>Meta</h3>
+      <p>Arbitrary persistent metadata attached to the job by a user or plugin.</p>
       <div className={"border p-4"}>
         <pre className={"mb-0"}><code>{JSON.stringify(job.meta, null, 2)}</code></pre>
       </div>
@@ -300,6 +358,7 @@ export function Job({ jobId, inPanel = false }: JobProps) {
           ))}
         </>
       )}
+      <JobMetrics func={job.func} />
     </div>
   );
 }
@@ -315,8 +374,7 @@ export function Jobs() {
   const func = searchParams.get('func') || undefined;
   const [funcInput, setFuncInput] = React.useState(func || '');
   
-  const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null);
-  const [isPanelOpen, setIsPanelOpen] = React.useState(false);
+  const { openPanel } = useSlidePanels();
 
   const { data: jobs, isLoading, dataUpdatedAt } = useJobs({
     url: url,
@@ -337,12 +395,10 @@ export function Jobs() {
   
   const handleJobClick = (jobId: string, e: React.MouseEvent) => {
     e.preventDefault();
-    setSelectedJobId(jobId);
-    setIsPanelOpen(true);
-  };
-
-  const handleClosePanel = () => {
-    setIsPanelOpen(false);
+    openPanel({
+      title: "Job Details",
+      content: <Job jobId={jobId} inPanel={true} />
+    });
   };
 
   if (isLoading) return <Loading />;
@@ -418,7 +474,13 @@ export function Jobs() {
             </td>
             <td className={"text-center"}>
               <span onClick={(e) => { e.stopPropagation(); }}>
-                <Link to={`/queues/${job.queue}`}>
+                <Link to={`/queues/${job.queue}`} onClick={(e) => {
+                  e.preventDefault();
+                  openPanel({
+                    title: "Queue Details",
+                    content: <Queue queueName={job.queue} inPanel={true} />
+                  });
+                }}>
                   {job.queue}
                 </Link>
               </span>
@@ -440,14 +502,6 @@ export function Jobs() {
         ))}
         </tbody>
       </table>
-      
-      <SlidePanel
-        isOpen={isPanelOpen} 
-        onClose={handleClosePanel}
-        title={"Job Details"}
-      >
-        {selectedJobId && <Job jobId={selectedJobId} inPanel={true} />}
-      </SlidePanel>
     </div>
   )
 }

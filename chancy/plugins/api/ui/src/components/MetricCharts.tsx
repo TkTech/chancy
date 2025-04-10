@@ -5,6 +5,8 @@ import {
 import { MetricPoint, useMetricDetail, MetricType } from '../hooks/useMetrics';
 import { Loading } from './Loading';
 import { Link } from 'react-router-dom';
+import { useSlidePanels } from './SlidePanelContext';
+import { Queue } from '../pages/Queues';
 
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
@@ -351,16 +353,22 @@ export function QueueMetrics({
   
   const hasThroughputData = throughputData && throughputData[throughputKey]?.data;
   const hasExecutionTimeData = executionTimeData && executionTimeData[executionTimeKey]?.data;
+  const { openPanel } = useSlidePanels();
+  
+  const handleQueueClick = (queueName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    openPanel({
+      title: "Queue Details",
+      content: <Queue queueName={queueName} inPanel={true} />
+    });
+  };
   
   return (
     <div className={"mb-4"}>
       <div className={"d-flex mb-3 flex-wrap align-items-center"}>
         <h4 className="flex-grow-1 mb-0">
-          {queueName}
+          <Link to={`/queues/${queueName}`} onClick={(e) => handleQueueClick(queueName, e)}>{queueName}</Link>
         </h4>
-        <Link to={`/queues/${queueName}`} className="btn btn-sm btn-outline-primary ms-3">
-          View Queue Details
-        </Link>
       </div>
       
       <div className="row row-cols-4 row-cols-lg-1 g-4">
