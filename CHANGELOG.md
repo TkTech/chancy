@@ -9,8 +9,8 @@ to the jobs table and updates the unique_key index to include the expired
 job state.
 
 - ✨ Added support for job deadlines, after which the job will refuse to execute
-  and be marked as expired. Plugins can now implement `on_job_expired` to handle
-  job expiration with custom logic.
+  and be marked as expired. Implemented in the new default `Deadline` plugin.
+  No need to change anything if you haven't set `no_default_plugins`.
 - ✨ `chancy worker web` CLI now accepts `--allow-credentials` to allow
   credentials to be sent with CORS requests. This is useful for local
   development of the dashboard itself, but should not be used in production.

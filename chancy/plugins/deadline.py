@@ -69,7 +69,7 @@ class Deadline(Plugin):
                             {
                                 "elapsed": chancy_time.elapsed,
                                 "rows_expired": rows_expired,
-                            }
+                            },
                         )
 
     async def transition_expired(
