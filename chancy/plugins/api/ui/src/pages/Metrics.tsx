@@ -5,7 +5,7 @@ import { useMetricsOverview, useMetricDetail } from '../hooks/useMetrics';
 import { Link, useParams } from 'react-router-dom';
 import { MetricChart, ResolutionSelector } from '../components/MetricCharts';
 
-const MetricsWrapper = ({
+export const MetricsWrapper = ({
   isLoading, 
   data,
   errorMessage,

@@ -69,10 +69,12 @@ export function useJobs ({
 
 export function useJob ({
   url,
-  job_id
+  job_id,
+  refetchInterval = false
 }: {
   url: string | null,
-  job_id: string | undefined
+  job_id: string | undefined,
+  refetchInterval?: number | false
 }) {
   return useQuery<Job>({
     queryKey: ['job', url, job_id],
@@ -80,6 +82,7 @@ export function useJob ({
       const response = await fetch(`${url}/api/v1/jobs/${job_id}`);
       return response.json();
     },
-    enabled: url !== null && job_id !== undefined
+    enabled: url !== null && job_id !== undefined,
+    refetchInterval: refetchInterval,
   });
 }

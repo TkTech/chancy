@@ -43,8 +43,7 @@ class ThreadedExecutor(ConcurrentExecutor):
         super().__init__(worker, queue)
         self.pool = ThreadPoolExecutor(max_workers=queue.concurrency)
 
-    async def push(self, job: QueuedJob) -> Future:
-        job = await self.on_job_starting(job)
+    async def submit_to_pool(self, job: QueuedJob) -> Future:
         future: Future = self.pool.submit(self.job_wrapper, job)
         self.jobs[future] = job
         future.add_done_callback(

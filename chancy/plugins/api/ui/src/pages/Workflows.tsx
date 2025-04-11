@@ -6,12 +6,23 @@ import {UpdatingTime} from '../components/UpdatingTime.tsx';
 import {statusToColor} from '../utils.tsx';
 import WorkflowChart from './WorkflowChart.tsx';
 import {ReactFlowProvider} from '@xyflow/react';
+import {useSlidePanels} from '../components/SlidePanelContext.tsx';
+import {Job} from './Jobs.tsx';
 
 
 export function Workflow() {
   const { url } = useServerConfiguration();
   const { workflow_id } = useParams<{workflow_id: string}>();
   const { data: workflow, isLoading } = useWorkflow({ url, workflow_id, options: {refetchInterval: 5000 } });
+  const { openPanel } = useSlidePanels();
+  
+  const handleJobClick = (jobId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    openPanel({
+      title: "Job Details",
+      content: <Job jobId={jobId} inPanel={true} />
+    });
+  };
 
   if (isLoading) return <Loading />;
 
@@ -89,7 +100,7 @@ export function Workflow() {
                 </td>
                 <td>
                   {step.job_id ? (
-                    <Link to={`/jobs/${step.job_id}`}>
+                    <Link to={`/jobs/${step.job_id}`} onClick={(e) => handleJobClick(step.job_id, e)}>
                       {step.job_id}
                     </Link>
                   ) : (

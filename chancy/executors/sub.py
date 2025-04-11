@@ -87,8 +87,7 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         # parent process or tests will fail.
         sys.path = parent_sys_path
 
-    async def push(self, job: QueuedJob) -> Future:
-        job = await self.on_job_starting(job)
+    async def submit_to_pool(self, job: QueuedJob):
         future: Future = self.pool.submit(self.job_wrapper, job)
         self.jobs[future] = job
         future.add_done_callback(
@@ -96,7 +95,6 @@ class SubInterpreterExecutor(ConcurrentExecutor):
                 self._on_job_completed, loop=asyncio.get_running_loop()
             )
         )
-        return future
 
     @classmethod
     def job_wrapper(cls, job: QueuedJob) -> tuple[QueuedJob, Any]:

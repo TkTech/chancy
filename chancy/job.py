@@ -1,3 +1,14 @@
+__all__ = (
+    "Job",
+    "QueuedJob",
+    "Limit",
+    "Reference",
+    "COMPLETED_STATES",
+    "RUNNING_STATES",
+    "job",
+    "IsAJob",
+    "ErrorT",
+)
 import dataclasses
 import enum
 from datetime import datetime, timezone
@@ -112,6 +123,9 @@ class Job:
     #: Arbitrary metadata associated with this job instance. Plugins can use
     #: this to store additional information during the execution of a job.
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
+    #: The time at which this job should be considered expired. If a job is
+    #: picked up after the deadline, it will stop and be flagged as expired.
+    deadline: datetime | None = None
 
     @classmethod
     def from_func(cls, func, **kwargs):
@@ -152,6 +166,9 @@ class Job:
     def with_meta(self, meta: dict[str, Any]) -> "Job":
         return dataclasses.replace(self, meta=meta)
 
+    def with_deadline(self, deadline: datetime) -> "Job":
+        return dataclasses.replace(self, deadline=deadline)
+
     def pack(self) -> dict:
         """
         Pack the job into a dictionary that can be serialized and used to
@@ -167,6 +184,7 @@ class Job:
             "u": self.unique_key,
             "q": self.queue,
             "m": self.meta,
+            "d": self.deadline.timestamp() if self.deadline else None,
         }
 
     @classmethod
@@ -184,6 +202,11 @@ class Job:
             unique_key=data["u"],
             queue=data["q"],
             meta=data["m"],
+            deadline=(
+                datetime.fromtimestamp(data["d"], tz=timezone.utc)
+                if data.get("d")
+                else None
+            ),
         )
 
 
@@ -201,6 +224,7 @@ class QueuedJob(Job):
         FAILED = "failed"
         RETRYING = "retrying"
         SUCCEEDED = "succeeded"
+        EXPIRED = "expired"
 
     #: The unique identifier for this job instance.
     id: str
@@ -233,7 +257,25 @@ class QueuedJob(Job):
             errors=data["errors"],
             limits=[Limit.deserialize(limit) for limit in data["limits"]],
             meta=data["meta"],
+            deadline=data["deadline"],
         )
+
+
+#: A set of states that indicate a job is in a terminal state and should be
+#: considered complete.
+COMPLETED_STATES = {
+    QueuedJob.State.SUCCEEDED,
+    QueuedJob.State.FAILED,
+    QueuedJob.State.EXPIRED,
+}
+
+#: A set of states that indicate a job is not yet complete and should be
+#: processed.
+RUNNING_STATES = {
+    QueuedJob.State.PENDING,
+    QueuedJob.State.RUNNING,
+    QueuedJob.State.RETRYING,
+}
 
 
 P = ParamSpec("P")

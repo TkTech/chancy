@@ -5,8 +5,13 @@ import {useWorkers, Worker} from '../hooks/useWorkers.tsx';
 import {UpdatingTime} from '../components/UpdatingTime.tsx';
 import {QueueMetrics, ResolutionSelector} from '../components/MetricCharts.tsx';
 import {useState} from 'react';
+import React from 'react';
+import {useSlidePanels} from '../components/SlidePanelContext.tsx';
+import {Queue} from './Queues.tsx';
 
 function WorkerInfoTable({ worker } : { worker: Worker }) {
+  const { openPanel } = useSlidePanels();
+
   return (
     <table className={"table table-hover border mb-4"}>
       <tbody>
@@ -33,7 +38,13 @@ function WorkerInfoTable({ worker } : { worker: Worker }) {
           <div>
             {worker.queues.map((queue) => (
               <span key={queue} className={'badge bg-primary me-1'}>
-                <a href={`/queues/${queue}`} className={'text-white'}>
+                <a href={`/queues/${queue}`} className={'text-white'} onClick={(e) => {
+                  e.preventDefault();
+                  openPanel({
+                    title: "Queue Details",
+                    content: <Queue queueName={queue} inPanel={true} />
+                  });
+                }}>
                   {queue}
                 </a>
               </span>
@@ -54,8 +65,14 @@ function WorkerInfoTable({ worker } : { worker: Worker }) {
   );
 }
 
-export function WorkerDetails () {
-  const { worker_id } = useParams<{worker_id: string}>();
+interface WorkerDetailsProps {
+  workerId?: string;
+  inPanel?: boolean;
+}
+
+export function WorkerDetails ({ workerId, inPanel = false }: WorkerDetailsProps) {
+  const params = useParams<{worker_id: string}>();
+  const worker_id = workerId || params.worker_id;
   const { url } = useServerConfiguration();
   const { data: workers, isLoading } = useWorkers(url);
   const [resolution, setResolution] = useState<string>('5min');
@@ -66,22 +83,24 @@ export function WorkerDetails () {
 
   if (!worker) {
     return (
-      <div className={"container-fuid"}>
-        <h2 className={"mb-4"}>Worker - {worker_id}</h2>
+      <div className={inPanel ? "" : "container-fluid"}>
+        {!inPanel && <h2 className={"mb-4"}>Worker - {worker_id}</h2>}
         <div className={"alert alert-danger"}>Worker not found.</div>
       </div>
     );
   }
 
   return (
-    <div className={"container-fluid"}>
-      <h2 className={"mb-4"}>Worker - {worker.worker_id}</h2>
+    <div className={inPanel ? "" : "container-fluid"}>
+      {!inPanel && <h2 className={"mb-4"}>Worker - {worker.worker_id}</h2>}
       <h3 className="mb-3">Details</h3>
       <WorkerInfoTable worker={worker} />
       {worker.queues.length > 0 && (
         <>
           <h3 className="mb-3">Queue Metrics</h3>
-          <p>Per-queue metrics are for jobs processed by <strong>this</strong> worker only.</p>
+          <p>
+            Per-queue metrics are for jobs processed by <strong>this</strong> worker only.
+          </p>
           <ResolutionSelector resolution={resolution} setResolution={setResolution} />
           
           {worker.queues.map(queueName => (
@@ -102,6 +121,7 @@ export function WorkerDetails () {
 export function Workers() {
   const {url} = useServerConfiguration();
   const {data: workers, isLoading} = useWorkers(url);
+  const { openPanel } = useSlidePanels();
 
   if (isLoading) return <Loading/>;
 
@@ -113,6 +133,14 @@ export function Workers() {
       </div>
     );
   }
+  
+  const handleWorkerClick = (workerId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    openPanel({
+      title: "Worker Details",
+      content: <WorkerDetails workerId={workerId} inPanel={true} />
+    });
+  };
 
   return (
     <div className={'container-fluid'}>
@@ -120,7 +148,7 @@ export function Workers() {
       {workers.sort((a, b) => a.worker_id.localeCompare(b.worker_id)).map(worker => (
         <div key={worker.worker_id}>
           <h3>
-            <Link to={`/workers/${worker.worker_id}`}>{worker.worker_id}</Link>
+            <Link to={`/workers/${worker.worker_id}`} onClick={(e) => handleWorkerClick(worker.worker_id, e)}>{worker.worker_id}</Link>
           </h3>
           <WorkerInfoTable worker={worker} />
         </div>

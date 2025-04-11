@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {Link, useParams} from 'react-router-dom';
+import {Link, useParams } from 'react-router-dom';
 import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
 import {useWorkers} from '../hooks/useWorkers.tsx';
 import {QueueMetrics, ResolutionSelector, SparklineChart} from '../components/MetricCharts';
 import {useMetricDetail} from '../hooks/useMetrics.tsx';
+import React from 'react';
+import {useSlidePanels} from '../components/SlidePanelContext.tsx';
+import {WorkerDetails} from './Workers.tsx';
 
 function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl: string | null }) {
 
@@ -25,12 +28,19 @@ function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl
   return <SparklineChart points={data[key].data} resolution="5min" />;
 }
 
-export function Queue() {
-  const { name } = useParams<{name: string}>();
+interface QueueProps {
+  queueName?: string;
+  inPanel?: boolean;
+}
+
+export function Queue({ queueName, inPanel = false }: QueueProps) {
+  const params = useParams<{name: string}>();
+  const name = queueName || params.name;
   const { url } = useServerConfiguration();
   const { data: queues, isLoading } = useQueues(url);
   const { data: workers, isLoading: workersLoading } = useWorkers(url);
   const [resolution, setResolution] = useState<string>('5min');
+  const { openPanel } = useSlidePanels();
   
   // Check if metrics plugin is available
   const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
@@ -40,16 +50,16 @@ export function Queue() {
 
   if (!queue) {
     return (
-      <div className={"container-fluid"}>
-        <h2 className={"mb-4"}>Queue - {name}</h2>
+      <div className={inPanel ? "" : "container-fluid"}>
+        {!inPanel && <h2 className={"mb-4"}>Queue - {name}</h2>}
         <div className={"alert alert-danger"}>Queue not found.</div>
       </div>
     );
   }
 
   return (
-    <div className={"container-fluid"}>
-      <h2 className={"mb-4"}>Queue - {queue.name}</h2>
+    <div className={inPanel ? "" : "container-fluid"}>
+      {!inPanel && <h2 className={"mb-4"}>Queue - {queue.name}</h2>}
       <table className={"table table-hover mb-0 border"}>
         <tbody>
         <tr>
@@ -103,20 +113,7 @@ export function Queue() {
         </tr>
         </tbody>
       </table>
-      
-      {hasMetricsPlugin && (
-        <div className="mt-4">
-          <h3 className={"mb-3"}>Queue Metrics</h3>
-          <ResolutionSelector resolution={resolution} setResolution={setResolution} />
-          
-          <QueueMetrics
-            apiUrl={url}
-            queueName={queue.name}
-            resolution={resolution}
-          />
-        </div>
-      )}
-      
+
       <h3 className={"mt-4"}>Active Workers</h3>
       <p>
         These workers have announced that they are actively accepting jobs from the <code>{queue.name}</code> queue.
@@ -133,15 +130,37 @@ export function Queue() {
           </tr>
           </thead>
           <tbody>
-          {workers.filter(worker => worker.queues.includes(queue.name)).map(worker => (
-            <tr key={worker.worker_id}>
-              <td>
-                <Link to={`/workers/${worker.worker_id}`}>{worker.worker_id}</Link>
-              </td>
-            </tr>
-          ))}
+          {workers.filter(worker => worker.queues.includes(queue.name)).map(worker => {
+            const handleClick = (e: React.MouseEvent) => {
+              e.preventDefault();
+              openPanel({
+                title: "Worker Details",
+                content: <WorkerDetails workerId={worker.worker_id} inPanel={true} />
+              });
+            };
+            return (
+              <tr key={worker.worker_id}>
+                <td>
+                  <Link to={`/workers/${worker.worker_id}`} onClick={handleClick}>{worker.worker_id}</Link>
+                </td>
+              </tr>
+            );
+          })}
           </tbody>
         </table>
+      )}
+
+      {hasMetricsPlugin && (
+        <div className="mt-4">
+          <h3 className={"mb-3"}>Queue Metrics</h3>
+          <ResolutionSelector resolution={resolution} setResolution={setResolution} />
+
+          <QueueMetrics
+            apiUrl={url}
+            queueName={queue.name}
+            resolution={resolution}
+          />
+        </div>
       )}
     </div>
   );
@@ -152,8 +171,17 @@ export function Queues() {
   const { url } = useServerConfiguration();
   const { data: queues, isLoading } = useQueues(url);
   const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
+  const { openPanel } = useSlidePanels();
 
   if (isLoading) return <Loading />;
+
+  const handleQueueClick = (queueName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    openPanel({
+      title: "Queue Details",
+      content: <Queue queueName={queueName} inPanel={true} />
+    });
+  };
 
   return (
     <div className={"container-fluid"}>
@@ -171,7 +199,7 @@ export function Queues() {
         {queues?.map(queue => (
           <tr key={queue.name}>
             <td>
-              <Link to={`/queues/${queue.name}`}>{queue.name}</Link>
+              <Link to={`/queues/${queue.name}`} onClick={(e) => handleQueueClick(queue.name, e)}>{queue.name}</Link>
             </td>
             <td>
               {queue.tags.map(tag => (
