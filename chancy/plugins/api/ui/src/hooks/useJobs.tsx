@@ -33,7 +33,7 @@ export function useJobs ({
   func
 }: {
   url: string | null,
-  state: string | undefined,
+  state?: string | undefined,
   func?: string | undefined
 }) {
   const fullUrl = useMemo(() => {

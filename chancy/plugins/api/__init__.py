@@ -182,7 +182,10 @@ class Api(Plugin):
                         "POST",
                     ],
                 ),
-                Middleware(SessionMiddleware, secret_key=self.secret_key),
+                Middleware(
+                    SessionMiddleware, secret_key=self.secret_key,
+                    max_age=60 * 60 * 24,  # 1 day
+                ),
                 Middleware(
                     AuthenticationMiddleware,
                     backend=self.authentication_backend,

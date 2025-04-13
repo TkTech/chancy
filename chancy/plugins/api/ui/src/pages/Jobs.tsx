@@ -1,9 +1,8 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {Loading} from '../components/Loading.tsx';
+import {Loading, LoadingWithMessage} from '../components/Loading.tsx';
 import {useJob, useJobs} from '../hooks/useJobs.tsx';
-import {Link, useLocation, useParams, useSearchParams} from 'react-router-dom';
-import {formattedTimeDelta, relativeTime, statusToColor} from '../utils.tsx';
-import {CountdownTimer} from '../components/UpdatingTime.tsx';
+import {Link, useParams} from 'react-router-dom';
+import {formattedTimeDelta, relativeTime} from '../utils.tsx';
 import React, {useState} from 'react';
 import {useSlidePanels} from '../components/SlidePanelContext.tsx';
 import {CopyText} from '../components/Copy.tsx';
@@ -12,6 +11,7 @@ import {WorkerDetails} from './Workers.tsx';
 import {useMetricDetail} from '../hooks/useMetrics.tsx';
 import {MetricChart, ResolutionSelector} from '../components/MetricCharts.tsx';
 import {MetricsWrapper} from './Metrics.tsx';
+import {StateBadge} from '../components/StateBadge.tsx';
 
 interface JobProps {
   jobId?: string;
@@ -56,6 +56,13 @@ function JobMetrics({ func }: { func: string; }) {
   );
 }
 
+/**
+ * Detailed view of a job.
+ *
+ * @param jobId Job ID to display. If not provided, it will be taken from the URL.
+ * @param inPanel Use embedded panel styling
+ * @constructor
+ */
 export function Job({ jobId, inPanel = false }: JobProps) {
   const { url } = useServerConfiguration();
   const params = useParams<{job_id: string}>();
@@ -229,9 +236,7 @@ export function Job({ jobId, inPanel = false }: JobProps) {
         <tr>
           <th>State</th>
           <td>
-              <span className={`badge bg-${statusToColor(job.state)}`}>
-                {job.state}
-              </span>
+            <StateBadge state={job.state} />
           </td>
         </tr>
         <tr>
@@ -366,33 +371,13 @@ export function Job({ jobId, inPanel = false }: JobProps) {
 
 export function Jobs() {
   const {url} = useServerConfiguration();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
-  const { pathname } = location;
-  const state = pathname.split("/")[2];
 
-  const func = searchParams.get('func') || undefined;
-  const [funcInput, setFuncInput] = React.useState(func || '');
-  
   const { openPanel } = useSlidePanels();
 
   const { data: jobs, isLoading, dataUpdatedAt } = useJobs({
-    url: url,
-    state: state,
-    func: func
+    url: url
   });
-  
-  const updateFuncFilter = (value: string) => {
-    setFuncInput(value);
-    const newParams = {...Object.fromEntries(searchParams.entries())};
-    if (value) {
-      newParams.func = value;
-    } else {
-      delete newParams.func;
-    }
-    setSearchParams(newParams);
-  }
-  
+
   const handleJobClick = (jobId: string, e: React.MouseEvent) => {
     e.preventDefault();
     openPanel({
@@ -401,38 +386,18 @@ export function Jobs() {
     });
   };
 
-  if (isLoading) return <Loading />;
+  if (isLoading) return <LoadingWithMessage message={"Loading jobs..."} />
 
   return (
     <div className={"container-fluid"}>
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2 className="mb-0">
-          <span className={`text-${statusToColor(state)}`}>
-            {state.charAt(0).toUpperCase() + state.slice(1)} Jobs
-          </span>
-        </h2>
-        <div className="d-flex align-items-center">
+        <div>
+          <h2 className="mb-0">Jobs</h2>
           <small className="text-muted me-2">
             Last updated: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}
           </small>
-          <div className="input-group input-group-sm me-2" style={{ width: "250px" }}>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Search by function name"
-              value={funcInput}
-              onChange={(e) => updateFuncFilter(e.target.value)}
-            />
-            {func && (
-              <button 
-                className="btn btn-outline-secondary" 
-                type="button"
-                onClick={() => updateFuncFilter('')}
-              >
-                ×
-              </button>
-            )}
-          </div>
+        </div>
+        <div className="d-flex align-items-center">
         </div>
       </div>
 
@@ -442,16 +407,7 @@ export function Jobs() {
           <th className={"w-100"}>Job</th>
           <th className={'text-center'}>Queue</th>
           <th className={"text-center"}>Attempts</th>
-          <th className={"text-center"}>
-            {{
-              "pending": "Created",
-              "running": "Started",
-              "succeeded": "Completed",
-              "failed": "Completed",
-              "expired": "Completed",
-              "retrying": "Started",
-            }[state]}
-          </th>
+          <th className={"text-center"}>Status</th>
         </tr>
         </thead>
         <tbody>
@@ -469,7 +425,7 @@ export function Jobs() {
                 to={`/jobs/${job.id}`} 
                 onClick={(e) => handleJobClick(job.id, e)}
               >
-                {job.func}
+                <code title={job.func}>{job.func.split('.').pop()}</code>
               </Link>
             </td>
             <td className={"text-center"}>
@@ -488,15 +444,8 @@ export function Jobs() {
             <td className={"text-center"}>
               {job.attempts} / {job.max_attempts}
             </td>
-            <td className={"text-center"}>
-              <CountdownTimer date={{
-                "pending": job.created_at,
-                "running": job.started_at,
-                "succeeded": job.completed_at,
-                "failed": job.completed_at,
-                "expired": job.completed_at,
-                "retrying": job.started_at,
-              }[job.state]} />
+            <td>
+              <StateBadge state={job.state} />
             </td>
           </tr>
         ))}

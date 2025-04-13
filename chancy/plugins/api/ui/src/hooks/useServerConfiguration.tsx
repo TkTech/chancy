@@ -18,7 +18,6 @@ export function useServerConfiguration() {
       const response = await fetch(`${host}:${port}/api/v1/configuration`);
       return await response.json();
     },
-    enabled: false
   });
 
   const url = useMemo(() => {
