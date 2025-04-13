@@ -128,7 +128,7 @@ class Api(Plugin):
         host: str = "127.0.0.1",
         debug: bool = False,
         allow_origins: list[str] | None = None,
-        allow_credentials: bool = True,
+        allow_credentials: bool = False,
         secret_key: str | None = None,
         authentication_backend: AuthBackend,
         autostart: bool = False,
@@ -177,7 +177,10 @@ class Api(Plugin):
                     CORSMiddleware,
                     allow_origins=self.allow_origins,
                     allow_credentials=self.allow_credentials,
-                    allow_methods=["*"],
+                    allow_methods=[
+                        "GET",
+                        "POST",
+                    ],
                 ),
                 Middleware(SessionMiddleware, secret_key=self.secret_key),
                 Middleware(
