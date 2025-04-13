@@ -13,7 +13,7 @@ function Layout() {
     <SlidePanelProvider>
       <div>
         <header className="d-flex align-items-center p-3">
-          <img src="/logo_small.png" alt="Chancy" width={"48"} />
+          <img src="/logo_small.png" alt="Chancy" width={"48"} title={"Adorable, no?"} />
           <ul className="nav nav-pills ms-2">
             {[
               {to: "/jobs", label: "Jobs"},
