@@ -219,6 +219,9 @@ class Executor(abc.ABC):
     async def __aexit__(self, exc_type, exc, tb):
         await self.stop()
 
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}({self.worker!r}, {self.queue!r})>"
+
 
 class ConcurrentExecutor(Executor, ABC):
     """

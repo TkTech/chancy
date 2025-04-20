@@ -349,6 +349,21 @@ class Worker:
 
         :param queue: The queue to maintain.
         """
+        wake_event = asyncio.Event()
+
+        def on_queue_pushed(event: Event) -> None:
+            if event.body.get("q") == queue.name:
+                wake_event.set()
+
+        async def wait_before_polling():
+            try:
+                await asyncio.wait_for(
+                    wake_event.wait(),
+                    timeout=queue.polling_interval,
+                )
+            except asyncio.TimeoutError:
+                pass
+
         while queue := self._queues.get(queue.name):
             cls = import_string(queue.executor)
 
@@ -368,6 +383,8 @@ class Worker:
                             "worker": self,
                         },
                     )
+
+                    self.hub.on("queue.pushed", on_queue_pushed)
 
                     while True:
                         new_queue = self._queues.get(queue.name)
@@ -421,13 +438,19 @@ class Worker:
 
                         maximum_jobs_to_poll = concurrency - len(executor)
                         if maximum_jobs_to_poll <= 0:
-                            await asyncio.sleep(queue.polling_interval)
+                            self.chancy.log.info(
+                                f"Executor {executor} is at max capacity"
+                            )
+                            wake_event.clear()
+                            await wait_before_polling()
                             continue
 
                         async with self.chancy.pool.connection() as conn:
                             jobs = await self.fetch_jobs(
                                 queue, conn, up_to=maximum_jobs_to_poll
                             )
+
+                        wake_event.clear()
 
                         for job in jobs:
                             self.chancy.log.info(
@@ -436,8 +459,14 @@ class Worker:
                             )
                             await executor.push(job)
 
-                        await asyncio.sleep(queue.polling_interval)
+                        if len(jobs) == maximum_jobs_to_poll:
+                            # If we got the maximum number of jobs, we can
+                            # skip the sleep because there likely is more jobs available.
+                            continue
+
+                        await wait_before_polling()
                 finally:
+                    self.hub.remove("queue.pushed", on_queue_pushed)
                     self._executors.pop(queue.name, None)
 
     async def _maintain_heartbeat(self):
