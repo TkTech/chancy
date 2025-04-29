@@ -641,7 +641,7 @@ class Chancy:
                 self._get_job_params(job),
             )
             record = cursor.fetchone()
-            references.append(Reference(record[0]))
+            references.append(Reference(record["id"]))
 
         for queue in set(job.queue for job in jobs):
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
