@@ -4,13 +4,12 @@ $enable-rounded: false;
 
 body,
 #root {
-    height: 100vh;
-    width: 100vw;
 }
 
 [data-bs-theme="dark"] {
     --bs-body-bg: #1a1a1a;
     --bs-border-color: #2d2d2d;
+    --accent-bg: #1a1c1e;
 
     #sidebar {
         background-color: #1a1c1e;

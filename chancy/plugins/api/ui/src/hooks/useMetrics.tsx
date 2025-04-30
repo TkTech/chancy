@@ -24,7 +24,14 @@ export function useMetricsOverview({ url }: { url: string | null }) {
   return useQuery<MetricsOverview>({
     queryKey: ['metrics-overview', url],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/metrics`);
+      const response = await fetch(`${url}/api/v1/metrics`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch metrics overview');
+      }
+      
       return response.json();
     },
     enabled: url !== null,
@@ -59,7 +66,14 @@ export function useMetricDetail({
         params.append('worker_id', worker_id);
       }
       
-      const response = await fetch(`${url}/api/v1/metrics/${key}?${params.toString()}`);
+      const response = await fetch(`${url}/api/v1/metrics/${key}?${params.toString()}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch metric details');
+      }
+      
       return response.json();
     },
     enabled: enabled,

@@ -11,7 +11,7 @@ import Layout from './Layout.tsx'
 import './index.scss'
 // @ts-expect-error We need to import this for the side effects
 import * as bootstrap from 'bootstrap'; // eslint-disable-line
-import {ServerConfigurationProvider} from './hooks/useServerConfiguration.tsx';
+import {AppProvider} from './hooks/useServerConfiguration.tsx';
 import {Queue, Queues} from './pages/Queues.tsx';
 import {WorkerDetails, Workers} from './pages/Workers.tsx';
 import {Job, Jobs} from './pages/Jobs.tsx';
@@ -45,9 +45,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ServerConfigurationProvider>
+      <AppProvider>
         <RouterProvider router={router} />
-      </ServerConfigurationProvider>
+      </AppProvider>
     </QueryClientProvider>
   </StrictMode>,
 )

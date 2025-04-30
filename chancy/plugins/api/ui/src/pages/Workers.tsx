@@ -1,4 +1,4 @@
-import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
+import {useApp} from '../hooks/useServerConfiguration.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {useWorkers, Worker} from '../hooks/useWorkers.tsx';
@@ -73,8 +73,8 @@ interface WorkerDetailsProps {
 export function WorkerDetails ({ workerId, inPanel = false }: WorkerDetailsProps) {
   const params = useParams<{worker_id: string}>();
   const worker_id = workerId || params.worker_id;
-  const { url } = useServerConfiguration();
-  const { data: workers, isLoading } = useWorkers(url);
+  const { serverUrl } = useApp();
+  const { data: workers, isLoading } = useWorkers(serverUrl);
   const [resolution, setResolution] = useState<string>('5min');
 
   if (isLoading) return <Loading />;
@@ -106,7 +106,7 @@ export function WorkerDetails ({ workerId, inPanel = false }: WorkerDetailsProps
           {worker.queues.map(queueName => (
             <QueueMetrics
               key={queueName}
-              apiUrl={url}
+              apiUrl={serverUrl}
               queueName={queueName}
               resolution={resolution}
               workerId={worker.worker_id}
@@ -119,8 +119,8 @@ export function WorkerDetails ({ workerId, inPanel = false }: WorkerDetailsProps
 }
 
 export function Workers() {
-  const {url} = useServerConfiguration();
-  const {data: workers, isLoading} = useWorkers(url);
+  const {serverUrl} = useApp();
+  const {data: workers, isLoading} = useWorkers(serverUrl);
   const { openPanel } = useSlidePanels();
 
   if (isLoading) return <Loading/>;

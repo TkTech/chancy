@@ -43,7 +43,14 @@ export function useWorkflow ({
   return useQuery<Workflow>({
     queryKey: ['workflow', url, workflow_id],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/workflows/${workflow_id}`);
+      const response = await fetch(`${url}/api/v1/workflows/${workflow_id}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch workflow details');
+      }
+      
       return await response.json();
     },
     enabled: url !== null && workflow_id !== undefined,
@@ -59,7 +66,14 @@ export function useWorkflows ({
   return useQuery<Workflow[]>({
     queryKey: ['workflows', url],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/workflows`);
+      const response = await fetch(`${url}/api/v1/workflows`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch workflows');
+      }
+      
       return await response.json();
     },
     enabled: url !== null

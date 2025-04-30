@@ -38,6 +38,7 @@ export function SlidePanel({ isOpen, onClose, children, title, maxWidth, style, 
           "col-md-8",
           "col-12",
           "border-start",
+          "border-4"
         ].join(" ")}
         style={{
           transform: isOpen ? 'translateX(0)' : 'translateX(100%)',

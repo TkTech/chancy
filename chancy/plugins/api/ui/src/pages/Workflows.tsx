@@ -1,4 +1,4 @@
-import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
+import {useApp} from '../hooks/useServerConfiguration.tsx';
 import {useWorkflow, useWorkflows} from '../hooks/useWorkflows.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
@@ -11,9 +11,9 @@ import {StateBadge} from '../components/StateBadge.tsx';
 
 
 export function Workflow() {
-  const { url } = useServerConfiguration();
+  const { serverUrl } = useApp();
   const { workflow_id } = useParams<{workflow_id: string}>();
-  const { data: workflow, isLoading } = useWorkflow({ url, workflow_id, options: {refetchInterval: 5000 } });
+  const { data: workflow, isLoading } = useWorkflow({ url: serverUrl, workflow_id, options: {refetchInterval: 5000 } });
   const { openPanel } = useSlidePanels();
   
   const handleJobClick = (jobId: string, e: React.MouseEvent) => {
@@ -114,8 +114,8 @@ export function Workflow() {
 }
 
 export function Workflows() {
-  const {url} = useServerConfiguration();
-  const {data: workflows, isLoading} = useWorkflows({url});
+  const {serverUrl} = useApp();
+  const {data: workflows, isLoading} = useWorkflows({url: serverUrl});
 
   if (isLoading) return <Loading />;
 

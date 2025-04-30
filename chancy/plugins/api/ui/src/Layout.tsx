@@ -1,13 +1,19 @@
 import {NavLink, Outlet} from 'react-router-dom';
-import {useServerConfiguration} from './hooks/useServerConfiguration.tsx';
+import {useApp} from './hooks/useServerConfiguration.tsx';
 import {SlidePanelProvider} from './components/SlidePanelContext';
 import {Login} from './pages/Login.tsx';
-
+import {LoadingWithMessage} from './components/Loading.tsx';
 
 function Layout() {
-  const {configuration} = useServerConfiguration();
+  const { auth, configuration, isLoading } = useApp();
 
-  if (!configuration) return <Login />
+  if (!auth.isAuthenticated ) {
+    return <Login />;
+  }
+
+  if (!configuration || isLoading) {
+    return <LoadingWithMessage message={"Loading configuration..."} />;
+  }
 
   return (
     <SlidePanelProvider>

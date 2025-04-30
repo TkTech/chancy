@@ -1,9 +1,9 @@
-import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
+import React, {useState} from 'react';
+import {useApp} from '../hooks/useServerConfiguration.tsx';
 import {Loading, LoadingWithMessage} from '../components/Loading.tsx';
 import {useJob, useJobs} from '../hooks/useJobs.tsx';
-import {Link, useParams} from 'react-router-dom';
-import {formattedTimeDelta, relativeTime} from '../utils.tsx';
-import React, {useState} from 'react';
+import {Link, useParams, useSearchParams} from 'react-router-dom';
+import {formattedTimeDelta, relativeTime, statusToColorCode} from '../utils.tsx';
 import {useSlidePanels} from '../components/SlidePanelContext.tsx';
 import {CopyText} from '../components/Copy.tsx';
 import {Queue} from './Queues.tsx';
@@ -11,7 +11,7 @@ import {WorkerDetails} from './Workers.tsx';
 import {useMetricDetail} from '../hooks/useMetrics.tsx';
 import {MetricChart, ResolutionSelector} from '../components/MetricCharts.tsx';
 import {MetricsWrapper} from './Metrics.tsx';
-import {StateBadge} from '../components/StateBadge.tsx';
+import {StateBadge, states, StatusIcons} from '../components/StateBadge.tsx';
 
 interface JobProps {
   jobId?: string;
@@ -20,9 +20,9 @@ interface JobProps {
 
 function JobMetrics({ func }: { func: string; }) {
   const [resolution, setResolution] = useState<string>('5min');
-  const { url } = useServerConfiguration();
+  const { serverUrl } = useApp();
   const { data: metrics, isLoading } = useMetricDetail({
-    url,
+    url: serverUrl,
     key: `job:${func}`,
     resolution
   });
@@ -64,13 +64,13 @@ function JobMetrics({ func }: { func: string; }) {
  * @constructor
  */
 export function Job({ jobId, inPanel = false }: JobProps) {
-  const { url } = useServerConfiguration();
+  const { serverUrl } = useApp();
   const params = useParams<{job_id: string}>();
   const job_id = jobId || params.job_id;
   const { openPanel } = useSlidePanels();
 
   const { data: job, isLoading } = useJob({
-    url: url,
+    url: serverUrl,
     job_id: job_id,
     refetchInterval: 5000
   });
@@ -370,12 +370,17 @@ export function Job({ jobId, inPanel = false }: JobProps) {
 
 
 export function Jobs() {
-  const {url} = useServerConfiguration();
-
+  const { serverUrl } = useApp();
   const { openPanel } = useSlidePanels();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const { data: jobs, isLoading, dataUpdatedAt } = useJobs({
-    url: url
+  const currentState = searchParams.get('state') || undefined;
+  const currentFunc = searchParams.get('func') || undefined;
+
+  const { data: jobs, isLoading, isRefetching } = useJobs({
+    url: serverUrl,
+    state: currentState,
+    func: currentFunc
   });
 
   const handleJobClick = (jobId: string, e: React.MouseEvent) => {
@@ -390,24 +395,80 @@ export function Jobs() {
 
   return (
     <div className={"container-fluid"}>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h2 className="mb-0">Jobs</h2>
-          <small className="text-muted me-2">
-            Last updated: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}
-          </small>
+      <div className={"d-flex mb-4 align-items-center align-content-center"}>
+        <div className={"d-flex flex-grow-1 align-content-center align-items-center"}>
+          <ul className={"nav nav-pills"}>
+            {states.map((state) => {
+              const Icon = StatusIcons[state];
+              return (
+                <li className={"nav-item"} key={state}>
+                  <Link
+                    to={`/jobs?state=${state}`}
+                    style={{
+                      color: statusToColorCode(state),
+                    }}
+                    className={`nav-link ${currentState === state ? 'active' : ''}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setSearchParams((prev) => {
+                          const params = new URLSearchParams(prev);
+                          params.set('state', state);
+                          return params;
+                        }
+                      )
+                    }}
+                  >
+                    <Icon
+                      width={"1em"}
+                      height={"1em"}
+                      className={'me-2'}
+                      style={{
+                        color: statusToColorCode(state),
+                      }}
+                    />
+                    {state}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+          {isRefetching && (
+            <div className={"spinner-border spinner-border-sm ms-2"} role="status">
+              <span className="visually-hidden">Updating...</span>
+            </div>
+          )}
         </div>
-        <div className="d-flex align-items-center">
+        <div>
+          <input
+            type="text"
+            className={"form-control form-control-sm"}
+            placeholder={"Search..."}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === "") {
+                setSearchParams((prev) => {
+                  const params = new URLSearchParams(prev);
+                  params.delete('func');
+                  return params;
+                });
+              } else {
+                setSearchParams((prev) => {
+                  const params = new URLSearchParams(prev);
+                  params.set('func', value);
+                  return params;
+                });
+              }
+            }}
+          />
         </div>
       </div>
-
       <table className={'table table-hover mb-0'}>
         <thead>
         <tr>
           <th className={"w-100"}>Job</th>
           <th className={'text-center'}>Queue</th>
           <th className={"text-center"}>Attempts</th>
-          <th className={"text-center"}>Status</th>
+          <th className={"text-center"}>State</th>
         </tr>
         </thead>
         <tbody>
@@ -421,8 +482,8 @@ export function Jobs() {
         {jobs?.map((job) => (
           <tr key={job.id}>
             <td className={"text-break"}>
-              <Link 
-                to={`/jobs/${job.id}`} 
+              <Link
+                to={`/jobs/${job.id}`}
                 onClick={(e) => handleJobClick(job.id, e)}
               >
                 <code title={job.func}>{job.func.split('.').pop()}</code>

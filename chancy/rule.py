@@ -108,6 +108,13 @@ class JobRules:
     """
     A collection of rules that can be used to filter the main job table.
     """
+    
+    class All(Rule):
+        def __init__(self):
+            super().__init__("all")
+            
+        def to_sql(self) -> sql.Composable:
+            return sql.SQL("TRUE")
 
     class Age(Rule):
         def __init__(self):

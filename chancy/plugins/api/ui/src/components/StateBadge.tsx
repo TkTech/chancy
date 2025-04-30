@@ -8,33 +8,45 @@ import Succeeded from '../assets/img/succeeded.svg?react';
 import Failed from '../assets/img/failed.svg?react';
 import {statusToColorCode} from '../utils.tsx';
 
+export const states = [
+  'pending',
+  'running',
+  'succeeded',
+  'failed',
+  'expired',
+  'retrying'
+] as const;
+
+export type State = typeof states[number];
+
+export const StatusIcons: Record<State, React.ElementType> = {
+  pending: Pending,
+  running: Running,
+  succeeded: Succeeded,
+  failed: Failed,
+  expired: Failed,
+  retrying: Pending
+} as const;
+
 export function StateBadge({state}: { state: string }) {
-  const StatusIcon = {
-    pending: Pending,
-    running: Running,
-    succeeded: Succeeded,
-    completed: Succeeded,
-    failed: Failed,
-    expired: Failed,
-    retrying: Pending
-  }[state] || Pending;
+  const StatusIcon = StatusIcons[state as State] || Pending;
 
   return (
-    <div
-      className={'d-flex align-items-center'}
+    <span
+      className={"text-nowrap"}
       style={{
         color: statusToColorCode(state),
       }}
     >
       <StatusIcon
-        width={"24"}
-        height={24}
+        width={"1em"}
+        height={"1em"}
         className={'me-2'}
         style={{
           color: statusToColorCode(state),
         }}
       />
       {state}
-    </div>
+    </span>
   )
 }

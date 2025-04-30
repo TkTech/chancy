@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
+import {useApp} from '../hooks/useServerConfiguration.tsx';
 import {Link, useParams } from 'react-router-dom';
 import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
@@ -36,14 +36,14 @@ interface QueueProps {
 export function Queue({ queueName, inPanel = false }: QueueProps) {
   const params = useParams<{name: string}>();
   const name = queueName || params.name;
-  const { url } = useServerConfiguration();
-  const { data: queues, isLoading } = useQueues(url);
-  const { data: workers, isLoading: workersLoading } = useWorkers(url);
+  const { serverUrl, configuration } = useApp();
+  const { data: queues, isLoading } = useQueues(serverUrl);
+  const { data: workers, isLoading: workersLoading } = useWorkers(serverUrl);
   const [resolution, setResolution] = useState<string>('5min');
   const { openPanel } = useSlidePanels();
   
   // Check if metrics plugin is available
-  const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
+  const hasMetricsPlugin = configuration?.plugins.includes('Metrics');
 
   if (isLoading || workersLoading) return <Loading />;
   const queue = queues?.find(queue => queue.name === name);
@@ -156,7 +156,7 @@ export function Queue({ queueName, inPanel = false }: QueueProps) {
           <ResolutionSelector resolution={resolution} setResolution={setResolution} />
 
           <QueueMetrics
-            apiUrl={url}
+            apiUrl={serverUrl}
             queueName={queue.name}
             resolution={resolution}
           />
@@ -168,9 +168,9 @@ export function Queue({ queueName, inPanel = false }: QueueProps) {
 
 
 export function Queues() {
-  const { url } = useServerConfiguration();
-  const { data: queues, isLoading } = useQueues(url);
-  const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
+  const { serverUrl, configuration } = useApp();
+  const { data: queues, isLoading } = useQueues(serverUrl);
+  const hasMetricsPlugin = configuration?.plugins.includes('Metrics');
   const { openPanel } = useSlidePanels();
 
   if (isLoading) return <Loading />;
@@ -208,7 +208,7 @@ export function Queues() {
             </td>
             {hasMetricsPlugin && (
               <td className="text-center">
-                <QueueThroughputSpark queueName={queue.name} apiUrl={url} />
+                <QueueThroughputSpark queueName={queue.name} apiUrl={serverUrl} />
               </td>
             )}
             <td className={"text-center"}>

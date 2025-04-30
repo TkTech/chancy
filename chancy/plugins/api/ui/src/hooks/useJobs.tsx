@@ -59,6 +59,11 @@ export function useJobs ({
       }
 
       const response = await fetch(fullUrl);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch jobs');
+      }
+      
       return response.json();
     },
     enabled: url !== null,
@@ -79,7 +84,14 @@ export function useJob ({
   return useQuery<Job>({
     queryKey: ['job', url, job_id],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/jobs/${job_id}`);
+      const response = await fetch(`${url}/api/v1/jobs/${job_id}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch job details');
+      }
+      
       return response.json();
     },
     enabled: url !== null && job_id !== undefined,

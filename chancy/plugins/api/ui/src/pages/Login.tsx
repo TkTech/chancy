@@ -1,40 +1,32 @@
-import {useMutation, useQueryClient} from '@tanstack/react-query';
-import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {Loading, LoadingWithMessage} from '../components/Loading.tsx';
-import {useState} from 'react';
+import { useState } from 'react';
+import { useApp } from '../hooks/useServerConfiguration.tsx';
+import { Loading, LoadingWithMessage } from '../components/Loading.tsx';
 
 export function Login() {
-  const {isLoading, setHost, setPort, host, port, url, refetch} = useServerConfiguration();
+  const { serverSettings, updateServerSettings, auth, login } = useApp();
+  
   const [formUsername, setFormUsername] = useState("");
   const [formPassword, setFormPassword] = useState("");
-  const queryClient = useQueryClient();
+  const [formHost, setFormHost] = useState(serverSettings.host);
+  const [formPort, setFormPort] = useState(serverSettings.port);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  const loginMutation = useMutation({
-    mutationFn: async (
-      {username, password}: { username: string, password: string }
-    ) => {
-      const response = await fetch(`${url}/api/v1/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({username, password}),
-      });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConnectionError(null);
+    
+    updateServerSettings({
+      host: formHost,
+      port: formPort,
+    });
+    await login(formUsername, formPassword);
+  };
 
-      if (!response.ok || response.status !== 200) {
-        throw new Error("Invalid credentials");
-      }
-
-      await queryClient.invalidateQueries();
-      await refetch();
-      return await response.json();
-    }
-  });
-
-  if (isLoading) {
+  // Show loading state during authentication or form submission
+  if (auth?.isLoading) {
     return (
       <div className={"p-4"}>
-        <LoadingWithMessage message={`Attempting to connect to ${host}:${port}...`}/>
+        <LoadingWithMessage message={`Attempting to connect to ${formHost}:${formPort}...`}/>
       </div>
     );
   }
@@ -46,24 +38,20 @@ export function Login() {
           <img src="/logo_small.png" alt="Chancy Logo" width={"128"} />
           <h1 className="ms-2 mb-0">Chancy</h1>
         </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            loginMutation.mutate({
-              username: formUsername,
-              password: formPassword
-            })
-          }}
-        >
+        <form onSubmit={handleSubmit}>
           <div className={"d-flex align-items-center my-2"}>
             <div className={"me-2"}>
               User
             </div>
             <hr className={"flex-grow-1"} />
           </div>
-          {loginMutation.isError && (
-            <div className={"alert alert-danger"}>{loginMutation.error.message}</div>
+          
+          {(auth?.error || connectionError) && (
+            <div className={"alert alert-danger"}>
+              {auth?.error || connectionError}
+            </div>
           )}
+          
           <div className={"form-floating"}>
             <input
               className={"form-control"}
@@ -72,6 +60,7 @@ export function Login() {
               value={formUsername}
               onChange={(e) => setFormUsername(e.target.value)}
               autoFocus={true}
+              required
             />
             <label htmlFor={"username"}>Username</label>
           </div>
@@ -82,6 +71,7 @@ export function Login() {
               id={"password"}
               value={formPassword}
               onChange={(e) => setFormPassword(e.target.value)}
+              required
             />
             <label htmlFor={"password"}>Password</label>
           </div>
@@ -97,8 +87,9 @@ export function Login() {
               type={"text"}
               id={"host"}
               placeholder={"http://localhost"}
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
+              value={formHost}
+              onChange={(e) => setFormHost(e.target.value)}
+              required
             />
             <label htmlFor={"host"}>Host</label>
           </div>
@@ -108,19 +99,24 @@ export function Login() {
               type={"number"}
               id={"port"}
               placeholder={"8000"}
-              value={port}
-              onChange={(e) => setPort(parseInt(e.target.value))}/>
+              value={formPort}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormPort(value ? parseInt(value) : 0);
+              }}
+              required
+            />
             <label htmlFor={"port"}>Port</label>
           </div>
           <button
             className={"btn btn-primary w-100 mt-4"}
             type={"submit"}
-            disabled={loginMutation.isPending}
+            disabled={auth.isLoading}
           >
-            {loginMutation.isPending ? <Loading /> : "Connect"}
+            {auth.isLoading ? <Loading /> : "Connect"}
           </button>
         </form>
       </div>
     </div>
-    )
+  );
 }
