@@ -397,9 +397,7 @@ class Chancy:
                 return queue
 
     @_ensure_sync_pool_is_open
-    def sync_declare(
-        self, queue: Queue, *, upsert: bool = False
-    ) -> Queue:
+    def sync_declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
         """
         Synchronously declare a queue in the database. See :func:`declare` for
         more information.
