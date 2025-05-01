@@ -11,7 +11,7 @@ from chancy.utils import timed_block
 class Pruner(Plugin):
     """
     A plugin that prunes stale data from the database.
-    
+
     .. note::
         This plugin is enabled by default, you only need to provide it in the
         list of plugins to customize its arguments or if ``no_default_plugins``
