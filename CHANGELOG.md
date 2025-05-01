@@ -4,7 +4,23 @@ Changelog
 0.24.0
 ------
 
-- 📝 Documentation fix to the cron plugin example (Thanks @PaulM5406)
+📝 Documentation
+
+- Correction to the cron plugin example (Thanks @PaulM5406)
+
+🐛 Fixes
+
+- Fix for `sync_push_many_ex` using index access for columns instead of key
+  by @nico-deforge.
+- Fixed a deprecated usage of `ConnectionPool()` with an implicit `open=True`.
+
+✨ Improvements
+
+- Exposed the `created_at` field on a QueuedJob record by @PaulM5406.
+- Erase the cached psycopg pool connection when the context manager is closed
+  to support multiple connects and disconnects.
+- Added `Chancy.sync_declare()`, `Chancy.sync_declare_ex()` and
+  `Chancy.sync_get_job`.
 
 0.23.0
 ------

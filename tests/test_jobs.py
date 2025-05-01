@@ -225,3 +225,17 @@ async def test_failing_job(chancy: Chancy, worker: Worker):
     ref = await chancy.push(Job.from_func(job_that_fails))
     j = await chancy.wait_for_job(ref, timeout=30)
     assert j.state == QueuedJob.State.FAILED
+
+
+@pytest.mark.asyncio
+async def test_sync_push(chancy: Chancy, worker: Worker):
+    """
+    Ensure that the synchronous push method works as expected (as well as
+    sync_declare).
+    """
+    with chancy:
+        chancy.sync_declare(Queue("low"))
+        ref = chancy.sync_push(job_to_run.job.with_queue("low"))
+
+    j = await chancy.wait_for_job(ref, timeout=30)
+    assert j.state == QueuedJob.State.SUCCEEDED
