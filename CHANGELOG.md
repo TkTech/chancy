@@ -1,6 +1,11 @@
 Changelog
 =========
 
+0.24.0
+------
+
+- 📝 Documentation fix to the cron plugin example (Thanks @PaulM5406)
+
 0.23.0
 ------
 
@@ -17,8 +22,8 @@ Changelog
 0.22.0
 ------
 
-This release requires that you run migrations, as it converts all JSON columns
-to JSONB. Call `chancy.migrate()` or use the CLI:
+🚨 This release requires that you run migrations, as it converts all JSON
+columns to JSONB. Call `chancy.migrate()` or use the CLI:
 
 ```bash
 chancy --app <your app> misc migrate
