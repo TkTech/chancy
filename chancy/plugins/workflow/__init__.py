@@ -151,6 +151,11 @@ class WorkflowPlugin(Plugin):
     you can use all the existing job features, such as job retries, timeouts,
     scheduling, and so on.
 
+    .. note::
+        This plugin is enabled by default, you only need to provide it in the
+        list of plugins to customize its arguments or if ``no_default_plugins``
+        is set to ``True``.
+
     Enable the plugin by adding it to the list of plugins in the Chancy
     constructor:
 
@@ -161,7 +166,7 @@ class WorkflowPlugin(Plugin):
 
         async with Chancy(
             "postgresql://localhost/postgres",
-            plugins=[Leadership(), WorkflowPlugin()]
+            plugins=[WorkflowPlugin()],
         ) as chancy:
             ...
 

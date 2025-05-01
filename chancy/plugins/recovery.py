@@ -11,6 +11,20 @@ class Recovery(Plugin):
     """
     Recovers jobs that appear to be abandoned by a worker.
 
+    .. note::
+        This plugin is enabled by default, you only need to provide it in the
+        list of plugins to customize its arguments or if ``no_default_plugins``
+        is set to ``True``.
+
+    .. code-block:: python
+
+        from chancy.plugins.recovery import Recovery
+
+        async with Chancy(..., plugins=[
+            Recovery()
+        ]) as chancy:
+            ...
+
     Typically, this happens when a worker is unexpectedly terminated, or has
     otherwise been lost which we recognize by checking the last seen timestamp
     of the worker heartbeat.
