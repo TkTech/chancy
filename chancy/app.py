@@ -256,6 +256,7 @@ class Chancy:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.pool.close()
+        del self.pool
 
     def __enter__(self):
         self.sync_pool.open()
@@ -263,6 +264,7 @@ class Chancy:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.sync_pool.close()
+        del self.sync_pool
         return False
 
     @cached_property
