@@ -219,6 +219,9 @@ class Worker:
                     f"dependencies: {plugin.get_dependencies()}"
                 )
 
+            if not plugin.should_autostart():
+                continue
+
             self.manager.add(
                 plugin.__class__.__name__,
                 plugin.run(self, self.chancy),
@@ -736,6 +739,8 @@ class Worker:
                                 attempts < max_attempts
                             AND
                                 (scheduled_at IS NULL OR scheduled_at <= NOW())
+                            AND
+                                (deadline IS NULL OR deadline > NOW())
                             ORDER BY
                                 priority DESC,
                                 id DESC

@@ -1,17 +1,28 @@
-import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
+import {useApp} from '../hooks/useServerConfiguration.tsx';
 import {useWorkflow, useWorkflows} from '../hooks/useWorkflows.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {UpdatingTime} from '../components/UpdatingTime.tsx';
-import {statusToColor} from '../utils.tsx';
 import WorkflowChart from './WorkflowChart.tsx';
 import {ReactFlowProvider} from '@xyflow/react';
+import {useSlidePanels} from '../components/SlidePanelContext.tsx';
+import {Job} from './Jobs.tsx';
+import {StateBadge} from '../components/StateBadge.tsx';
 
 
 export function Workflow() {
-  const { url } = useServerConfiguration();
+  const { serverUrl } = useApp();
   const { workflow_id } = useParams<{workflow_id: string}>();
-  const { data: workflow, isLoading } = useWorkflow({ url, workflow_id, options: {refetchInterval: 5000 } });
+  const { data: workflow, isLoading } = useWorkflow({ url: serverUrl, workflow_id, options: {refetchInterval: 5000 } });
+  const { openPanel } = useSlidePanels();
+  
+  const handleJobClick = (jobId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    openPanel({
+      title: "Job Details",
+      content: <Job jobId={jobId} inPanel={true} />
+    });
+  };
 
   if (isLoading) return <Loading />;
 
@@ -36,7 +47,7 @@ export function Workflow() {
         <tr>
           <th>State</th>
           <td>
-            <span className={`badge bg-${statusToColor(workflow.state)}`}>{workflow.state}</span>
+            <StateBadge state={workflow.state} />
           </td>
         </tr>
         <tr>
@@ -79,21 +90,17 @@ export function Workflow() {
               <tr key={step_id}>
                 <td>{step_id}</td>
                 <td>
-                  {step.state ? (
-                    <span className={`badge bg-${statusToColor(step.state)}`}>
-                      {step.state}
-                    </span>
-                  ) : (
-                    <span className="badge bg-secondary">Waiting</span>
-                  )}
+                  {step.state && <StateBadge state={step.state} /> || "-"}
                 </td>
                 <td>
                   {step.job_id ? (
-                    <Link to={`/jobs/${step.job_id}`}>
+                    <Link to={`/jobs/${step.job_id}`} onClick={(e) => handleJobClick(step.job_id, e)}>
                       {step.job_id}
                     </Link>
                   ) : (
-                    <span className="text-muted">Waiting for dependencies</span>
+                    <em className="text-muted">
+                      Waiting for dependencies to be met.
+                    </em>
                   )}
                 </td>
               </tr>
@@ -107,8 +114,8 @@ export function Workflow() {
 }
 
 export function Workflows() {
-  const {url} = useServerConfiguration();
-  const {data: workflows, isLoading} = useWorkflows({url});
+  const {serverUrl} = useApp();
+  const {data: workflows, isLoading} = useWorkflows({url: serverUrl});
 
   if (isLoading) return <Loading />;
 
@@ -132,7 +139,7 @@ export function Workflows() {
               </Link>
             </td>
             <td className={"text-center"}>
-              <span className={`badge bg-${statusToColor(workflow.state)}`}>{workflow.state}</span>
+              <StateBadge state={workflow.state} />
             </td>
             <td className={"text-center text-nowrap"}>
               <UpdatingTime date={workflow.created_at} />

@@ -1,0 +1,68 @@
+import React from 'react';
+
+interface SlidePanelProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  title: string | React.ReactNode;
+  maxWidth?: string;
+  style?: React.CSSProperties;
+  hideOverlay?: boolean;
+}
+
+export function SlidePanel({ isOpen, onClose, children, title, maxWidth, style, hideOverlay = false }: SlidePanelProps) {
+  return (
+    <>
+      {!hideOverlay && (
+        <div 
+          className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50" 
+          style={{ 
+            zIndex: 1040,
+            opacity: isOpen ? 0.5 : 0,
+            visibility: isOpen ? 'visible' : 'hidden',
+            transition: 'opacity 0.3s ease-in-out, visibility 0.3s ease-in-out'
+          }}
+          onClick={onClose}
+        />
+      )}
+      
+      <div
+        className={[
+          "position-fixed",
+          "top-0",
+          "end-0",
+          "vh-100",
+          "shadow-lg",
+          "overflow-auto",
+          "transition-all",
+          "col-md-8",
+          "col-12",
+          "border-start",
+          "border-4"
+        ].join(" ")}
+        style={{
+          transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.3s ease-in-out',
+          zIndex: 1050,
+          backgroundColor: "var(--bs-body-bg)",
+          borderColor: "var(--bs-border-color)",
+          maxWidth: maxWidth || "1024px",
+          ...style
+        }}
+      >
+        <div className="d-flex justify-content-between align-items-center p-3 border-bottom">
+          <h5 className="mb-0">{title}</h5>
+          <button 
+            type="button" 
+            className="btn-close" 
+            aria-label="Close" 
+            onClick={onClose}
+          />
+        </div>
+        <div className="p-3 overflow-auto" style={{ height: 'calc(100% - 60px)' }}>
+          {children}
+        </div>
+      </div>
+    </>
+  );
+}

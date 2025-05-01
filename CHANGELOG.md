@@ -1,6 +1,22 @@
 Changelog
 =========
 
+0.24.0
+------
+
+🚨 This release requires that you run migrations, as it adds a `deadline` column
+to the jobs table and updates the unique_key index to include the expired
+job state.
+
+- ✨ Added support for job deadlines, after which the job will refuse to execute
+  and be marked as expired. Implemented in the new default `Deadline` plugin.
+  No need to change anything if you haven't set `no_default_plugins`.
+- ✨ `chancy worker web` CLI now accepts `--allow-credentials` to allow
+  credentials to be sent with CORS requests. This is useful for local
+  development of the dashboard itself, but should not be used in production.
+- ✨ Various UX improvements to the dashboard, including job progress timelines.
+- 📝 Documentation fix to the cron plugin example (Thanks @PaulM5406)
+
 0.23.0
 ------
 
@@ -17,8 +33,8 @@ Changelog
 0.22.0
 ------
 
-This release requires that you run migrations, as it converts all JSON columns
-to JSONB. Call `chancy.migrate()` or use the CLI:
+🚨 This release requires that you run migrations, as it converts all JSON
+columns to JSONB. Call `chancy.migrate()` or use the CLI:
 
 ```bash
 chancy --app <your app> misc migrate

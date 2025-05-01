@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { useServerConfiguration } from '../hooks/useServerConfiguration';
+import { useApp } from '../hooks/useServerConfiguration';
 import { Loading } from '../components/Loading';
 import { useMetricsOverview, useMetricDetail } from '../hooks/useMetrics';
 import { Link, useParams } from 'react-router-dom';
 import { MetricChart, ResolutionSelector } from '../components/MetricCharts';
 
-const MetricsWrapper = ({
+export const MetricsWrapper = ({
   isLoading, 
   data,
   errorMessage,
@@ -28,8 +28,8 @@ const MetricsWrapper = ({
 };
 
 export function MetricsList() {
-  const { url } = useServerConfiguration();
-  const { data: overview, isLoading } = useMetricsOverview({ url });
+  const { serverUrl } = useApp();
+  const { data: overview, isLoading } = useMetricsOverview({ url: serverUrl });
 
   return (
     <MetricsWrapper
@@ -83,12 +83,12 @@ export function MetricsList() {
 }
 
 export function MetricDetail() {
-  const { url } = useServerConfiguration();
+  const { serverUrl } = useApp();
   const { metricKey } = useParams<{ metricKey: string }>();
   const [resolution, setResolution] = useState<string>('5min');
 
   const { data: metrics, isLoading } = useMetricDetail({
-    url,
+    url: serverUrl,
     key: metricKey as string,
     resolution
   });

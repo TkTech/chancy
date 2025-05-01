@@ -144,7 +144,7 @@ class CoreApiPlugin(ApiPlugin):
         limit = min(int(request.query_params.get("limit", 100)), 100)
         before = request.query_params.get("before")
 
-        rule = JobRules.State() == "pending"
+        rule = JobRules.All()
 
         if state:
             rule = JobRules.State() == state

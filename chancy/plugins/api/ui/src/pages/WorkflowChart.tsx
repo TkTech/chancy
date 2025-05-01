@@ -5,7 +5,9 @@ import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import {Workflow} from '../hooks/useWorkflows.tsx';
 import {Link} from 'react-router-dom';
-import {statusToColor} from '../utils.tsx';
+import {statusToColorCode} from '../utils.tsx';
+import {useSlidePanels} from '../components/SlidePanelContext.tsx';
+import {Job} from './Jobs.tsx';
 
 interface WorkflowChartProps {
   workflow: Workflow;
@@ -22,6 +24,15 @@ type CustomNode = Node<{
 
 const CustomNode = ({ data }: NodeProps<CustomNode>) => {
   const nodeRef = useRef<HTMLDivElement>(null);
+  const { openPanel } = useSlidePanels();
+  
+  const handleJobClick = (jobId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    openPanel({
+      title: "Job Details",
+      content: <Job jobId={jobId} inPanel={true} />
+    });
+  };
 
   return (
     <div ref={nodeRef} style={{
@@ -30,11 +41,15 @@ const CustomNode = ({ data }: NodeProps<CustomNode>) => {
       <Handle type="target" position={Position.Left} style={{
         opacity: 0,
       }} />
-      <div className={`p-3 border border-2 border-${statusToColor(data.state)}`}>
+      <div className={"p-3 border border-2 shadow-lg"} style={{
+        // @ts-expect-error: CSS variable
+        "--bs-border-color": statusToColorCode(data.state),
+        backgroundColor: "rgba(255, 255, 255, 0.1)",
+      }}>
         <div className={"fw-bolder"}>{data.label}</div>
         <div className="text-xs">
           {data.jobId ? (
-            <Link to={`/jobs/${data.jobId}`}>
+            <Link to={`/jobs/${data.jobId}`} onClick={(e) => handleJobClick(data.jobId, e)}>
               {data.jobId}
             </Link>
           ) : "-"}

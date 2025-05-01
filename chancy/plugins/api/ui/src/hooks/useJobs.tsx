@@ -33,7 +33,7 @@ export function useJobs ({
   func
 }: {
   url: string | null,
-  state: string | undefined,
+  state?: string | undefined,
   func?: string | undefined
 }) {
   const fullUrl = useMemo(() => {
@@ -59,6 +59,11 @@ export function useJobs ({
       }
 
       const response = await fetch(fullUrl);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch jobs');
+      }
+      
       return response.json();
     },
     enabled: url !== null,
@@ -69,17 +74,27 @@ export function useJobs ({
 
 export function useJob ({
   url,
-  job_id
+  job_id,
+  refetchInterval = false
 }: {
   url: string | null,
-  job_id: string | undefined
+  job_id: string | undefined,
+  refetchInterval?: number | false
 }) {
   return useQuery<Job>({
     queryKey: ['job', url, job_id],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/jobs/${job_id}`);
+      const response = await fetch(`${url}/api/v1/jobs/${job_id}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch job details');
+      }
+      
       return response.json();
     },
-    enabled: url !== null && job_id !== undefined
+    enabled: url !== null && job_id !== undefined,
+    refetchInterval: refetchInterval,
   });
 }

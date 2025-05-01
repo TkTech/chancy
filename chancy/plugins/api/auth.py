@@ -12,15 +12,30 @@ from starlette.requests import HTTPConnection, Request
 
 
 class AuthBackend(AuthenticationBackend, abc.ABC):
+    """
+    Base class for authentication backends.
+    """
+
     @abc.abstractmethod
     async def login(
         self, request: Request, username: str, password: str
     ) -> bool:
-        pass
+        """
+        Authenticate a user, setting any necessary session data.
+
+        :param request: The request object.
+        :param username: The username of the user.
+        :param password: The password of the user.
+        :return: True if the user is authenticated, False otherwise.
+        """
 
     @abc.abstractmethod
     async def logout(self, request: Request) -> None:
-        pass
+        """
+        Log out a user.
+
+        :param request: The request object.
+        """
 
 
 class SimpleAuthBackend(AuthBackend):

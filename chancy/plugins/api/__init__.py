@@ -37,51 +37,60 @@ class _SPAStaticFiles(StaticFiles):
 class Api(Plugin):
     """
     Provides an API and a dashboard for viewing the state of the Chancy cluster.
+    You can use this to view the status of jobs, queues, workers, workflows,
+    metrics and more.
 
     Running this plugin requires a few additional dependencies, you can install
     them with:
 
     .. code-block:: bash
 
-        pip install chancy[web]
+        pip install chancy[cli,web]
 
-    To have the API run permanently on each Worker, you can add it to the
-    plugins list when creating the Chancy instance:
-
-    .. code-block:: python
-
-        from chancy.plugins.api import Api
-        from chancy.plugins.api.auth import SimpleAuthBackend
-
-        async with Chancy(..., plugins=[
-            Api(
-                authentication_backend=SimpleAuthBackend({"admin": "password"}),
-                secret_key="<a strong, random secret key>",
-            ),
-        ]) as chancy:
-            ...
-
-    .. note::
-
-        The API is still mostly undocumented, as its development is driven by
-        the needs of the dashboard and may change significantly before it
-        becomes stable.
-
-    Since it's very common to only want the dashboard temporarily, you can
-    start it with the CLI. This can also be used to connect to a remote Chancy
-    instance:
+    You can then start the API and dashboard with:
 
     .. code-block:: bash
 
-        pip install chancy[cli,web]
         chancy --app worker.chancy worker web
 
     This will run the API and dashboard on port 8000 by default (you can change
     this with the ``--port`` and ``--host`` flags), and generate a temporary
     random password for the admin user.
 
+    To customize the API, pass it as plugin to the Chancy instance:
+
+    .. code-block:: python
+
+        from chancy import Chancy
+        from chancy.plugins.api import Api, SimpleAuthBackend
+
+        chancy = Chancy(..., plugins=[
+            Api(
+                authentication_backend=SimpleAuthBackend({"admin": "password"}),
+                secret_key="<a strong, random secret key>",
+            ),
+        ])
+
+    You can write your own authentication backend by subclassing the
+    :class:`~chancy.plugins.api.auth.AuthBackend` class. The default
+    :class:`~chancy.plugins.api.auth.SimpleAuthBackend` class uses a simple
+    dictionary to store the users and passwords. The password is stored in
+    plaintext, so this is not recommended for production use. If you're using
+    Django, Chancy includes a Django authentication integration, see the
+    :doc:`Django integration documentation </howto/django>` for more
+    information.
+
+    .. note::
+
+        The API itself is still mostly undocumented, as its development is
+        driven by the needs of the dashboard and may change significantly
+        before it becomes stable.
+
     Screenshots
     -----------
+
+    .. image:: ../misc/ux_login.png
+        :alt: Login page
 
     .. image:: ../misc/ux_jobs.png
         :alt: Jobs page
@@ -100,7 +109,17 @@ class Api(Plugin):
     :param host: The host to listen on.
     :param debug: Whether to run the server in debug mode.
     :param allow_origins: A list of origins that are allowed to access the API.
+    :param allow_credentials: Whether to allow credentials to be sent with
+                              requests. This is required for cookies to work.
+    :param secret_key: A secret key used to sign cookies. This should be a
+                       strong, random key. If not provided, a random key will
+                       be generated each time the server is started.
+    :param authentication_backend: The authentication backend to use.
+    :param autostart: Whether to start the server automatically when the
+                      worker starts.
     """
+
+    AUTOSTART = False
 
     def __init__(
         self,
@@ -109,8 +128,10 @@ class Api(Plugin):
         host: str = "127.0.0.1",
         debug: bool = False,
         allow_origins: list[str] | None = None,
+        allow_credentials: bool = False,
         secret_key: str | None = None,
         authentication_backend: AuthBackend,
+        autostart: bool = False,
     ):
         super().__init__()
         self.port = port
@@ -118,13 +139,18 @@ class Api(Plugin):
         self.debug = debug
         self.root = Path(__file__).parent
         self.allow_origins = allow_origins or []
+        self.allow_credentials = allow_credentials
         self.plugins: set[Type[ApiPlugin]] = {CoreApiPlugin}
         self.authentication_backend = authentication_backend
         self.secret_key = secret_key or secrets.token_urlsafe(32)
+        self._should_autostart = autostart
 
     @staticmethod
     def get_identifier() -> str:
         return "chancy.api"
+
+    def should_autostart(self) -> bool:
+        return self._should_autostart
 
     async def run(self, worker: Worker, chancy: Chancy):
         """
@@ -150,8 +176,16 @@ class Api(Plugin):
                 Middleware(
                     CORSMiddleware,
                     allow_origins=self.allow_origins,
+                    allow_credentials=self.allow_credentials,
+                    allow_methods=[
+                        "GET",
+                        "POST",
+                    ],
                 ),
-                Middleware(SessionMiddleware, secret_key=self.secret_key),
+                Middleware(
+                    SessionMiddleware, secret_key=self.secret_key,
+                    max_age=60 * 60 * 24,  # 1 day
+                ),
                 Middleware(
                     AuthenticationMiddleware,
                     backend=self.authentication_backend,

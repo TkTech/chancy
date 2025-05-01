@@ -11,7 +11,7 @@ import Layout from './Layout.tsx'
 import './index.scss'
 // @ts-expect-error We need to import this for the side effects
 import * as bootstrap from 'bootstrap'; // eslint-disable-line
-import {ServerConfigurationProvider} from './hooks/useServerConfiguration.tsx';
+import {AppProvider} from './hooks/useServerConfiguration.tsx';
 import {Queue, Queues} from './pages/Queues.tsx';
 import {WorkerDetails, Workers} from './pages/Workers.tsx';
 import {Job, Jobs} from './pages/Jobs.tsx';
@@ -30,12 +30,7 @@ const router = createBrowserRouter([
       { path: "/queues/:name", element: <Queue /> },
       { path: "/workers",  element: <Workers /> },
       { path: "/workers/:worker_id",  element: <WorkerDetails /> },
-      { path: "/jobs", element: <Jobs />, loader: () => redirect("/jobs/pending") },
-      { path: "/jobs/pending", element: <Jobs />},
-      { path: "/jobs/running", element: <Jobs />},
-      { path: "/jobs/succeeded", element: <Jobs />},
-      { path: "/jobs/failed", element: <Jobs />},
-      { path: "/jobs/retrying", element: <Jobs />},
+      { path: "/jobs", element: <Jobs /> },
       { path: "/jobs/:job_id", element: <Job />},
       { path: "/crons", element: <Crons />},
       { path: "/crons/:cron_id", element: <Cron />},
@@ -50,9 +45,9 @@ const router = createBrowserRouter([
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ServerConfigurationProvider>
+      <AppProvider>
         <RouterProvider router={router} />
-      </ServerConfigurationProvider>
+      </AppProvider>
     </QueryClientProvider>
   </StrictMode>,
 )

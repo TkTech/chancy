@@ -1,12 +1,12 @@
-import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
+import {useApp} from '../hooks/useServerConfiguration.tsx';
 import {useCrons} from '../hooks/useCrons.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 
 export function Cron() {
-  const { url } = useServerConfiguration();
-  const { data: crons, isLoading } = useCrons({ url });
+  const { serverUrl } = useApp();
+  const { data: crons, isLoading } = useCrons({ url: serverUrl });
   const { cron_id } = useParams<{cron_id: string}>();
 
   if (isLoading) return <Loading />;
@@ -133,14 +133,19 @@ export function Cron() {
 }
 
 export function Crons() {
-  const { url } = useServerConfiguration();
-  const { data: crons, isLoading } = useCrons({ url });
+  const { serverUrl } = useApp();
+  const { data: crons, isLoading } = useCrons({ url: serverUrl });
 
   if (isLoading) return <Loading />;
 
   return (
     <div className={"container-fluid"}>
       <h2 className={"mb-4"}>Crons</h2>
+      <p>
+        Crons are scheduled jobs that run at specified intervals using
+        a <a href={'https://crontab.guru/'} target={'_blank'} rel={'noreferrer'}>cron
+        expression</a>.
+      </p>
       <table className={"table mb-0"}>
         <thead>
         <tr>
