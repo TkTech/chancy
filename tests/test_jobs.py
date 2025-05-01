@@ -239,3 +239,30 @@ async def test_sync_push(chancy: Chancy, worker: Worker):
 
     j = await chancy.wait_for_job(ref, timeout=30)
     assert j.state == QueuedJob.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_job_ordering(chancy: Chancy, worker: Worker):
+    """
+    Ensure that jobs are run in the order they are pushed when there is a
+    concurrency of 1 and no priority.
+    """
+    refs = []
+    for i in range(30):
+        refs.append(await chancy.push(job_to_run.job.with_queue("low")))
+        await asyncio.sleep(0.1)
+
+    await chancy.declare(Queue("low", concurrency=1))
+
+    completed = []
+    for ref in refs:
+        j = await chancy.wait_for_job(ref, timeout=30)
+        assert j.state == QueuedJob.State.SUCCEEDED
+        completed.append(j)
+
+    # Ensure each job has a completed_at ordered by the order they were
+    # pushed.
+    by_completed_at = sorted(completed, key=lambda x: x.completed_at)
+    by_uuid7 = sorted(completed, key=lambda x: x.id)
+
+    assert by_completed_at == by_uuid7

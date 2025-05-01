@@ -738,7 +738,7 @@ class Worker:
                                 (scheduled_at IS NULL OR scheduled_at <= NOW())
                             ORDER BY
                                 priority DESC,
-                                id DESC
+                                id ASC
                             LIMIT
                                 %(maximum_jobs_to_fetch)s
                             FOR UPDATE OF {jobs} SKIP LOCKED

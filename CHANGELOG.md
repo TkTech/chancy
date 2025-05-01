@@ -21,6 +21,9 @@ Changelog
   to support multiple connects and disconnects.
 - Added `Chancy.sync_declare()`, `Chancy.sync_declare_ex()` and
   `Chancy.sync_get_job`.
+- Jobs are now naturally fetched oldest to newest due to the nature of the
+  UUID7s that are used for the job IDs. Job features like priority may affect
+  this ordering.
 
 0.23.0
 ------
