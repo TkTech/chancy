@@ -669,7 +669,7 @@ class Chancy:
         self,
         ref: Reference,
         *,
-        interval: int = 1,
+        interval: float = 1,
         timeout: float | int | None = None,
     ) -> QueuedJob | None:
         """

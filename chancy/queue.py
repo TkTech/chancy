@@ -128,3 +128,6 @@ class Queue:
             "rate_limit_window": self.rate_limit_window,
             "resume_at": self.resume_at,
         }
+
+    def __repr__(self) -> str:
+        return f"<Queue({self.name})>"
