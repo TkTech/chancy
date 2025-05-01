@@ -8,9 +8,9 @@ import uuid
 import socket
 import signal
 import platform
-
 import sys
 import warnings
+from collections import defaultdict
 
 from psycopg import sql
 from psycopg import AsyncConnection
@@ -23,7 +23,7 @@ from chancy.executors.base import Executor
 from chancy.hub import Hub, Event
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
-from chancy.utils import TaskManager, import_string
+from chancy.utils import TaskManager, import_string, sleep
 from chancy.job import QueuedJob, Reference
 
 
@@ -175,6 +175,10 @@ class Worker:
         #: An event that is set when the worker is shutting down due to
         #: receiving a signal.
         self.shutdown_event = asyncio.Event()
+        #: Events set whenever a job is pushed to a queue.
+        self.queue_pushed_events: dict[str, asyncio.Event] = defaultdict(
+            asyncio.Event
+        )
 
         # Set once the notifications listener is ready.
         self._notifications_ready_event = asyncio.Event()
@@ -208,6 +212,7 @@ class Worker:
             raise MigrationsNeededError()
 
         self.hub.on("job.cancelled", self._handle_cancellation)
+        self.hub.on("queue.pushed", self._handle_queue_pushed)
 
         for plugin in self.chancy.plugins.values():
             if plugin.get_scope() != PluginScope.WORKER:
@@ -252,12 +257,7 @@ class Worker:
                 )
 
         await self.chancy.declare(Queue(name="default"))
-        await self.hub.emit(
-            "worker.started",
-            {
-                "worker": self,
-            },
-        )
+        await self.hub.emit("worker.started", {"worker": self})
 
     async def wait_for_shutdown(self):
         """
@@ -312,6 +312,7 @@ class Worker:
             for queue_name in list(self._queues.keys()):
                 if queue_name not in db_queues:
                     del self._queues[queue_name]
+                    self.queue_pushed_events.pop(queue_name, None)
                     self.chancy.log.info(f"Removed queue {queue_name}")
 
             for queue_name, queue in db_queues.items():
@@ -369,7 +370,11 @@ class Worker:
                         },
                     )
 
-                    while True:
+                    while await sleep(
+                        queue.polling_interval,
+                        events=[self.queue_pushed_events[queue.name].wait()],
+                    ):
+                        self.queue_pushed_events[queue.name].clear()
                         new_queue = self._queues.get(queue.name)
 
                         if new_queue != queue:
@@ -435,8 +440,6 @@ class Worker:
                                 f"{job.queue!r}"
                             )
                             await executor.push(job)
-
-                        await asyncio.sleep(queue.polling_interval)
                 finally:
                     self._executors.pop(queue.name, None)
 
@@ -854,6 +857,12 @@ class Worker:
         )
         for executor in self._executors.values():
             await executor.cancel(Reference(event.body["j"]))
+
+    async def _handle_queue_pushed(self, event: Event):
+        q = event.body["q"]
+        if q not in self._queues:
+            return
+        self.queue_pushed_events[q].set()
 
     @property
     def executors(self) -> dict[str, Executor]:
