@@ -13,6 +13,7 @@ Changelog
 - Fix for `sync_push_many_ex` using index access for columns instead of key
   by @nico-deforge.
 - Fixed a deprecated usage of `ConnectionPool()` with an implicit `open=True`.
+- Fixed the `queue.pushed` event not waking up a worker waiting for jobs.
 
 ✨ Improvements
 

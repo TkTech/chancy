@@ -122,17 +122,11 @@ async def test_immediate_processing(chancy: Chancy, worker: Worker):
     notifications instead of waiting for the full polling interval.
     """
     # Create a queue with a long polling interval
-    await chancy.declare(
-        Queue(
-            "test_immediate",
-            polling_interval=10,
-            concurrency=1,
-        ),
-        upsert=True,
-    )
+    await chancy.declare(Queue("test_immediate", polling_interval=10))
 
     # Wait for queue to be registered with worker
-    await asyncio.sleep(0.5)
+    await worker.hub.wait_for("worker.queue.started")
+    await asyncio.sleep(5)
 
     job = await chancy.push(Job.from_func(job_to_run, queue="test_immediate"))
 
