@@ -213,6 +213,13 @@ class Executor(abc.ABC):
         Get the number of jobs currently within the executor.
         """
 
+    def __repr__(self):
+        return (
+            f"<{self.__class__.__name__}"
+            f" worker={self.worker!r}"
+            f" queue={self.queue.name!r}>"
+        )
+
     async def __aenter__(self):
         return self
 

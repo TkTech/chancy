@@ -58,7 +58,13 @@ class Metrics(Plugin):
     Metrics are synchronized across workers, so each worker has access to the
     full set of metrics.
 
-    Example:
+    .. note::
+        This plugin is enabled by default, you only need to provide it in the
+        list of plugins to customize its arguments or if ``no_default_plugins``
+        is set to ``True``.
+
+    Enable the plugin by adding it to the list of plugins in the Chancy
+    constructor:
 
     .. code-block:: python
 

@@ -204,6 +204,8 @@ class QueuedJob(Job):
 
     #: The unique identifier for this job instance.
     id: str
+    #: The time at which this job was created.
+    created_at: datetime
     #: The time at which this job was started, if it has been started.
     started_at: Optional[datetime] = None
     #: The time at which this job was completed, if it has been completed.
@@ -222,6 +224,7 @@ class QueuedJob(Job):
             func=data["func"],
             kwargs=data["kwargs"],
             priority=data["priority"],
+            created_at=data["created_at"],
             scheduled_at=data["scheduled_at"],
             started_at=data["started_at"],
             completed_at=data["completed_at"],

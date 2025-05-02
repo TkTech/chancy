@@ -11,18 +11,18 @@ class Reprioritize(Plugin):
     in the queue. This helps prevent job starvation by gradually increasing the
     priority of older jobs.
 
-    Example usage:
-
     .. code-block:: python
 
-        plugin = Reprioritize(
-            rule=(
-                (Reprioritize.Rules.Age() > 600) &
-                (Reprioritize.Rules.Queue() == "high-priority")
-            ),
-            check_interval=300,
-            priority_increase=1
-        )
+        async with Chancy(..., plugins=[
+            Reprioritize(
+                rule=(
+                    Reprioritize.Rules.Age() > 600) &
+                    (Reprioritize.Rules.Queue() == "high-priority")
+                ),
+                check_interval=300,
+                priority_increase=1,
+        ]) as chancy:
+            ...
 
     This means that any job that has been in the queue for more than 10 minutes
     will have its priority increased by 1 every 5 minutes, but only for jobs
