@@ -27,6 +27,8 @@ Changelog
   this ordering.
 - Added the `worker.queue.full` event to notify when a queue's polling event
   ran, but was unable to start any jobs due to the executor being full.
+- If a queue pulled its maximum number of jobs, it'll immediately re-poll for
+  more, as it's unlikely that the queue is now empty.
 
 0.23.0
 ------
