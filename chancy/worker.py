@@ -430,6 +430,14 @@ class Worker:
                         else:
                             maximum_jobs_to_poll = concurrency - len(executor)
                             if maximum_jobs_to_poll <= 0:
+                                await self.hub.emit(
+                                    "worker.queue.full",
+                                    {
+                                        "queue": queue,
+                                        "executor": executor,
+                                        "worker": self,
+                                    },
+                                )
                                 continue
 
                             async with self.chancy.pool.connection() as conn:
