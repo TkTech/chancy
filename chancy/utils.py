@@ -133,8 +133,8 @@ def chancy_uuid() -> str:
     """
     t = (time.time_ns() // 100) & 0xFFFFFFFFFFFFFF
     rand = secrets.randbits(62)
-    uuid = (t << 68) | (7 << 64) | (2 << 62) | rand
-    return f"{uuid:032x}"
+    uuid7 = (t << 68) | (7 << 64) | (2 << 62) | rand
+    return f"{uuid7:032x}"
 
 
 def json_dumps(obj, **kwargs):
