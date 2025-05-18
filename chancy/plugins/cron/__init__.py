@@ -5,7 +5,7 @@ from psycopg import sql
 from croniter import croniter
 from psycopg.rows import dict_row
 
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.worker import Worker
 from chancy.app import Chancy
 from chancy.job import Job, IsAJob

@@ -3,7 +3,7 @@ from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
 from chancy.worker import Worker
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.rule import SQLAble, JobRules
 from chancy.utils import timed_block
 

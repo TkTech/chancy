@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.app import Chancy
 from chancy.worker import Worker
 
