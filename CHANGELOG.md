@@ -1,6 +1,35 @@
 Changelog
 =========
 
+0.24.0
+------
+
+📝 Documentation
+
+- Correction to the cron plugin example (Thanks @PaulM5406)
+
+🐛 Fixes
+
+- Fix for `sync_push_many_ex` using index access for columns instead of key
+  by @nico-deforge.
+- Fixed a deprecated usage of `ConnectionPool()` with an implicit `open=True`.
+- Fixed the `queue.pushed` event not waking up a worker waiting for jobs.
+
+✨ Improvements
+
+- Exposed the `created_at` field on a QueuedJob record by @PaulM5406.
+- Erase the cached psycopg pool connection when the context manager is closed
+  to support multiple connects and disconnects.
+- Added `Chancy.sync_declare()`, `Chancy.sync_declare_ex()` and
+  `Chancy.sync_get_job`.
+- Jobs are now naturally fetched oldest to newest due to the nature of the
+  UUID7s that are used for the job IDs. Job features like priority may affect
+  this ordering.
+- Added the `worker.queue.full` event to notify when a queue's polling event
+  ran, but was unable to start any jobs due to the executor being full.
+- If a queue pulled its maximum number of jobs, it'll immediately re-poll for
+  more, as it's unlikely that the queue is now empty.
+
 0.23.0
 ------
 
@@ -17,8 +46,8 @@ Changelog
 0.22.0
 ------
 
-This release requires that you run migrations, as it converts all JSON columns
-to JSONB. Call `chancy.migrate()` or use the CLI:
+🚨 This release requires that you run migrations, as it converts all JSON
+columns to JSONB. Call `chancy.migrate()` or use the CLI:
 
 ```bash
 chancy --app <your app> misc migrate

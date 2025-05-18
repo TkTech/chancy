@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.app import Chancy
 from chancy.worker import Worker
 
@@ -68,10 +68,6 @@ class Leadership(Plugin):
     @staticmethod
     def get_identifier() -> str:
         return "chancy.leadership"
-
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
 
     def get_tables(self) -> list[str]:
         """Get the names of all tables this plugin is responsible for."""
@@ -178,10 +174,6 @@ class ImmediateLeadership(Plugin):
     This plugin is only ever intended for testing purposes, and should not be
     used in a production environment.
     """
-
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
 
     @staticmethod
     def get_identifier() -> str:

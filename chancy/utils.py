@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import enum
+import importlib
 import inspect
 import uuid
 import time
@@ -116,8 +117,8 @@ def import_string(name):
     :return: Any
     """
     mod_name, _, func_name = name.rpartition(".")
-    mod = __import__(mod_name, fromlist=[func_name])
-    return getattr(mod, func_name)
+    module = importlib.import_module(mod_name)
+    return getattr(module, func_name)
 
 
 def chancy_uuid() -> str:
@@ -132,8 +133,8 @@ def chancy_uuid() -> str:
     """
     t = (time.time_ns() // 100) & 0xFFFFFFFFFFFFFF
     rand = secrets.randbits(62)
-    uuid = (t << 68) | (7 << 64) | (2 << 62) | rand
-    return f"{uuid:032x}"
+    uuid7 = (t << 68) | (7 << 64) | (2 << 62) | rand
+    return f"{uuid7:032x}"
 
 
 def json_dumps(obj, **kwargs):

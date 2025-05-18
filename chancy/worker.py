@@ -8,9 +8,9 @@ import uuid
 import socket
 import signal
 import platform
-
 import sys
 import warnings
+from collections import defaultdict
 
 from psycopg import sql
 from psycopg import AsyncConnection
@@ -23,7 +23,7 @@ from chancy.executors.base import Executor
 from chancy.hub import Hub, Event
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
-from chancy.utils import TaskManager, import_string
+from chancy.utils import TaskManager, import_string, sleep
 from chancy.job import QueuedJob, Reference
 
 
@@ -175,6 +175,10 @@ class Worker:
         #: An event that is set when the worker is shutting down due to
         #: receiving a signal.
         self.shutdown_event = asyncio.Event()
+        #: Events set whenever a job is pushed to a queue.
+        self.queue_wake_events: dict[str, asyncio.Event] = defaultdict(
+            asyncio.Event
+        )
 
         # Set once the notifications listener is ready.
         self._notifications_ready_event = asyncio.Event()
@@ -208,6 +212,7 @@ class Worker:
             raise MigrationsNeededError()
 
         self.hub.on("job.cancelled", self._handle_cancellation)
+        self.hub.on("queue.pushed", self._handle_queue_pushed)
 
         for plugin in self.chancy.plugins.values():
             if plugin.get_scope() != PluginScope.WORKER:
@@ -252,12 +257,7 @@ class Worker:
                 )
 
         await self.chancy.declare(Queue(name="default"))
-        await self.hub.emit(
-            "worker.started",
-            {
-                "worker": self,
-            },
-        )
+        await self.hub.emit("worker.started", {"worker": self})
 
     async def wait_for_shutdown(self):
         """
@@ -312,6 +312,7 @@ class Worker:
             for queue_name in list(self._queues.keys()):
                 if queue_name not in db_queues:
                     del self._queues[queue_name]
+                    self.queue_wake_events.pop(queue_name, None)
                     self.chancy.log.info(f"Removed queue {queue_name}")
 
             for queue_name, queue in db_queues.items():
@@ -369,29 +370,38 @@ class Worker:
                         },
                     )
 
-                    while True:
+                    # Start with the event set so the loop runs immediately on
+                    # the first iteration.
+                    self.queue_wake_events[queue.name].set()
+
+                    while await sleep(
+                        queue.polling_interval,
+                        events=[self.queue_wake_events[queue.name].wait()],
+                    ):
+                        self.queue_wake_events[queue.name].clear()
                         new_queue = self._queues.get(queue.name)
 
-                        if new_queue != queue:
-                            # Drain the queue if it's being removed / updated
-                            while len(executor) > 0:
-                                await asyncio.sleep(queue.polling_interval)
-
-                            # The queue was completely removed.
-                            if new_queue is None:
-                                await self.hub.emit(
-                                    "worker.queue.removed",
-                                    {
-                                        "queue": queue,
-                                        "executor": executor,
-                                        "worker": self,
-                                    },
-                                )
-                                return
-
-                            # Otherwise it's just a configuration change, so
-                            # break out to the outer loop to reconfigure the
-                            # executor.
+                        # There's been a change in the state of the queue,
+                        # we'll let the executor drain before we do anything
+                        # else.
+                        if new_queue != queue and len(executor) > 0:
+                            continue
+                        # The queue was completely removed and the executor
+                        # has been drained, terminate.
+                        elif new_queue is None:
+                            await self.hub.emit(
+                                "worker.queue.removed",
+                                {
+                                    "queue": queue,
+                                    "executor": executor,
+                                    "worker": self,
+                                },
+                            )
+                            return
+                        # The queue still exists but has been reconfigured,
+                        # so we break out to the outer loop to start a new
+                        # executor.
+                        elif new_queue != queue and new_queue:
                             await self.hub.emit(
                                 "worker.queue.updated",
                                 {
@@ -401,8 +411,9 @@ class Worker:
                                 },
                             )
                             break
-
-                        if queue.state == Queue.State.PAUSED:
+                        # Do nothing at all if the queue is paused, unless it
+                        # had an automatic resume time set.
+                        elif queue.state == Queue.State.PAUSED:
                             if (
                                 queue.resume_at is not None
                                 and queue.resume_at
@@ -414,29 +425,38 @@ class Worker:
                                 queue = dataclasses.replace(
                                     queue, state=Queue.State.ACTIVE
                                 )
+                        # Otherwise, we can fetch jobs from the queue until
+                        # the executor is full.
+                        else:
+                            maximum_jobs_to_poll = concurrency - len(executor)
+                            if maximum_jobs_to_poll <= 0:
+                                await self.hub.emit(
+                                    "worker.queue.full",
+                                    {
+                                        "queue": queue,
+                                        "executor": executor,
+                                        "worker": self,
+                                    },
+                                )
                                 continue
-                            else:
-                                await asyncio.sleep(queue.polling_interval)
-                                continue
 
-                        maximum_jobs_to_poll = concurrency - len(executor)
-                        if maximum_jobs_to_poll <= 0:
-                            await asyncio.sleep(queue.polling_interval)
-                            continue
+                            async with self.chancy.pool.connection() as conn:
+                                jobs = await self.fetch_jobs(
+                                    queue, conn, up_to=maximum_jobs_to_poll
+                                )
 
-                        async with self.chancy.pool.connection() as conn:
-                            jobs = await self.fetch_jobs(
-                                queue, conn, up_to=maximum_jobs_to_poll
-                            )
+                            for job in jobs:
+                                self.chancy.log.info(
+                                    f"Pulled {job.id!r} ({job.func!r}) for"
+                                    f" queue {job.queue!r}"
+                                )
+                                await executor.push(job)
 
-                        for job in jobs:
-                            self.chancy.log.info(
-                                f"Pulled {job.id!r} ({job.func!r}) for queue"
-                                f"{job.queue!r}"
-                            )
-                            await executor.push(job)
-
-                        await asyncio.sleep(queue.polling_interval)
+                            # If we pulled exactly the maximum number of jobs,
+                            # there's likely more jobs available, so we set the
+                            # event to skip the next sleep.
+                            if len(jobs) == maximum_jobs_to_poll:
+                                self.queue_wake_events[queue.name].set()
                 finally:
                     self._executors.pop(queue.name, None)
 
@@ -738,7 +758,7 @@ class Worker:
                                 (scheduled_at IS NULL OR scheduled_at <= NOW())
                             ORDER BY
                                 priority DESC,
-                                id DESC
+                                id ASC
                             LIMIT
                                 %(maximum_jobs_to_fetch)s
                             FOR UPDATE OF {jobs} SKIP LOCKED
@@ -854,6 +874,12 @@ class Worker:
         )
         for executor in self._executors.values():
             await executor.cancel(Reference(event.body["j"]))
+
+    async def _handle_queue_pushed(self, event: Event):
+        q = event.body["q"]
+        if q not in self._queues:
+            return
+        self.queue_wake_events[q].set()
 
     @property
     def executors(self) -> dict[str, Executor]:

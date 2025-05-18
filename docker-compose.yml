@@ -1,6 +1,5 @@
-# A docker file that sets up postgres.
-version: '3.1'
-
+# A docker file that sets up postgres for the test suite
+# with extensive logging and auto_explain enabled.
 services:
   db:
     image: postgres

@@ -5,7 +5,7 @@ from psycopg import sql
 from croniter import croniter
 from psycopg.rows import dict_row
 
-from chancy.plugin import Plugin, PluginScope
+from chancy.plugin import Plugin
 from chancy.worker import Worker
 from chancy.app import Chancy
 from chancy.job import Job, IsAJob
@@ -53,15 +53,15 @@ class Cron(Plugin):
 
         import asyncio
         from chancy import Chancy, Worker, Queue, job
-        from chancy.plugins.pruner import Cron
+        from chancy.plugins.cron import Cron
 
         @job(queue="default")
         def hello_world():
             print("hello_world")
 
-        async with Chancy("postgresql://localhost/postgres", plugins=[Cron()]) as chancy:
-                Cron(),
-            ],
+        async with Chancy(
+            "postgresql://localhost/postgres",
+            plugins=[Cron()]
         ) as chancy:
             await Cron.schedule(
                 chancy,
@@ -98,10 +98,6 @@ class Cron(Plugin):
     def __init__(self, *, poll_interval: int = 60):
         super().__init__()
         self.poll_interval = poll_interval
-
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
 
     async def run(self, worker: Worker, chancy: Chancy):
         table = sql.Identifier(f"{chancy.prefix}cron")

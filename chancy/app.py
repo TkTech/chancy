@@ -256,6 +256,7 @@ class Chancy:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.pool.close()
+        del self.pool
 
     def __enter__(self):
         self.sync_pool.open()
@@ -263,6 +264,7 @@ class Chancy:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.sync_pool.close()
+        del self.sync_pool
         return False
 
     @cached_property
@@ -290,6 +292,9 @@ class Chancy:
             min_size=self.min_connection_pool_size,
             max_size=self.max_connection_pool_size,
             reconnect_timeout=self.poll_reconnect_timeout,
+            # Opening the pool here is deprecated, and should be done
+            # explicitly by the user with a context manager or open/close.
+            open=False,
         )
 
     @_ensure_pool_is_open
@@ -376,6 +381,10 @@ class Chancy:
             async with Chancy("postgresql://localhost/chancy") as chancy:
                 await chancy.declare(Queue("default"))
 
+        .. seealso::
+
+            :meth:`sync_declare` for a synchronous version of this method.
+
         :param queue: The queue to declare.
         :param upsert: If `True`, the queue will be updated if it already
             exists. Defaults to `False`.
@@ -385,6 +394,32 @@ class Chancy:
             async with conn.cursor(row_factory=dict_row) as cursor:
                 queue = await self.declare_ex(cursor, queue, upsert=upsert)
                 await self.notify(cursor, "queue.declared", {"q": queue.name})
+                return queue
+
+    @_ensure_sync_pool_is_open
+    def sync_declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
+        """
+        Synchronously declare a queue in the database. See :func:`declare` for
+        more information.
+
+        .. code-block:: python
+
+            with Chancy("postgresql://localhost/chancy") as chancy:
+                chancy.sync_declare(Queue("default"))
+
+        .. seealso::
+
+            :meth:`declare` for an asynchronous version of this method.
+
+        :param queue: The queue to declare.
+        :param upsert: If `True`, the queue will be updated if it already
+            exists. Defaults to `False`.
+        :return: The queue as it exists in the database.
+        """
+        with self.sync_pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cursor:
+                queue = self.sync_declare_ex(cursor, queue, upsert=upsert)
+                self.sync_notify(cursor, "queue.declared", {"q": queue.name})
                 return queue
 
     async def declare_ex(
@@ -423,6 +458,46 @@ class Chancy:
         )
 
         result = await cursor.fetchone()
+        return Queue(
+            **{
+                **result,
+                "name": queue.name,
+                "tags": set(result["tags"]),
+            }
+        )
+
+    def sync_declare_ex(
+        self,
+        cursor: Cursor[DictRow],
+        queue: Queue,
+        *,
+        upsert: bool = False,
+    ) -> Queue:
+        """
+        Synchronously declare a queue in the database using a specific cursor.
+        See :func:`declare_ex` for more information.
+
+        .. seealso::
+
+            :meth:`declare_ex` for an asynchronous version of this method.
+        """
+        cursor.execute(
+            self._declare_sql(upsert),
+            {
+                "name": queue.name,
+                "state": queue.state.value,
+                "concurrency": queue.concurrency,
+                "tags": list(queue.tags),
+                "executor": queue.executor,
+                "executor_options": Json(queue.executor_options),
+                "polling_interval": queue.polling_interval,
+                "rate_limit": queue.rate_limit,
+                "rate_limit_window": queue.rate_limit_window,
+                "resume_at": queue.resume_at,
+            },
+        )
+
+        result = cursor.fetchone()
         return Queue(
             **{
                 **result,
@@ -640,7 +715,7 @@ class Chancy:
                 self._get_job_params(job),
             )
             record = cursor.fetchone()
-            references.append(Reference(record[0]))
+            references.append(Reference(record["id"]))
 
         for queue in set(job.queue for job in jobs):
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
@@ -660,6 +735,23 @@ class Chancy:
             async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(self._get_job_sql(), [ref.identifier])
                 record = await cursor.fetchone()
+                if record is None:
+                    return None
+                return QueuedJob.unpack(record)
+
+    @_ensure_sync_pool_is_open
+    def sync_get_job(self, ref: Reference) -> QueuedJob | None:
+        """
+        Synchronously resolve a reference to a job instance.
+
+        If the job no longer exists, returns ``None``.
+
+        :param ref: The reference to the job to retrieve.
+        """
+        with self.sync_pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cursor:
+                cursor.execute(self._get_job_sql(), [ref.identifier])
+                record = cursor.fetchone()
                 if record is None:
                     return None
                 return QueuedJob.unpack(record)
