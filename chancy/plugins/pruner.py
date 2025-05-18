@@ -104,10 +104,6 @@ class Pruner(Plugin):
     def get_dependencies() -> list[str]:
         return ["chancy.leadership"]
 
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
-
     async def run(self, worker: Worker, chancy: Chancy):
         while await self.sleep(self.poll_interval):
             await self.wait_for_leader(worker)

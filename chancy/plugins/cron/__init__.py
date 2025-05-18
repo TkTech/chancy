@@ -99,10 +99,6 @@ class Cron(Plugin):
         super().__init__()
         self.poll_interval = poll_interval
 
-    @classmethod
-    def get_scope(cls) -> PluginScope:
-        return PluginScope.WORKER
-
     async def run(self, worker: Worker, chancy: Chancy):
         table = sql.Identifier(f"{chancy.prefix}cron")
 
