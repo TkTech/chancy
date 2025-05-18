@@ -176,7 +176,7 @@ class Worker:
         #: receiving a signal.
         self.shutdown_event = asyncio.Event()
         #: Events set whenever a job is pushed to a queue.
-        self.queue_pushed_events: dict[str, asyncio.Event] = defaultdict(
+        self.queue_wake_events: dict[str, asyncio.Event] = defaultdict(
             asyncio.Event
         )
 
@@ -312,7 +312,7 @@ class Worker:
             for queue_name in list(self._queues.keys()):
                 if queue_name not in db_queues:
                     del self._queues[queue_name]
-                    self.queue_pushed_events.pop(queue_name, None)
+                    self.queue_wake_events.pop(queue_name, None)
                     self.chancy.log.info(f"Removed queue {queue_name}")
 
             for queue_name, queue in db_queues.items():
@@ -372,13 +372,13 @@ class Worker:
 
                     # Start with the event set so the loop runs immediately on
                     # the first iteration.
-                    self.queue_pushed_events[queue.name].set()
+                    self.queue_wake_events[queue.name].set()
 
                     while await sleep(
                         queue.polling_interval,
-                        events=[self.queue_pushed_events[queue.name].wait()],
+                        events=[self.queue_wake_events[queue.name].wait()],
                     ):
-                        self.queue_pushed_events[queue.name].clear()
+                        self.queue_wake_events[queue.name].clear()
                         new_queue = self._queues.get(queue.name)
 
                         # There's been a change in the state of the queue,
@@ -451,6 +451,12 @@ class Worker:
                                     f" queue {job.queue!r}"
                                 )
                                 await executor.push(job)
+
+                            # If we pulled exactly the maximum number of jobs,
+                            # there's likely more jobs available, so we set the
+                            # event to skip the next sleep.
+                            if len(jobs) == maximum_jobs_to_poll:
+                                self.queue_wake_events[queue.name].set()
                 finally:
                     self._executors.pop(queue.name, None)
 
@@ -873,7 +879,7 @@ class Worker:
         q = event.body["q"]
         if q not in self._queues:
             return
-        self.queue_pushed_events[q].set()
+        self.queue_wake_events[q].set()
 
     @property
     def executors(self) -> dict[str, Executor]:

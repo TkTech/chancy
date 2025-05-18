@@ -25,6 +25,8 @@ Changelog
 - Jobs are now naturally fetched oldest to newest due to the nature of the
   UUID7s that are used for the job IDs. Job features like priority may affect
   this ordering.
+- Added the `worker.queue.full` event to notify when a queue's polling event
+  ran, but was unable to start any jobs due to the executor being full.
 
 0.23.0
 ------
