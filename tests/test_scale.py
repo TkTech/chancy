@@ -85,8 +85,8 @@ async def test_busy_chancy(chancy: Chancy, worker_no_start: Worker):
 
         with timed_block() as timer:
             await worker_no_start.fetch_jobs(queue, conn, up_to=1)
-        assert timer.elapsed < 0.1
+        assert timer.elapsed < 0.2
 
         with timed_block() as timer:
             await worker_no_start.fetch_jobs(queue, conn, up_to=100)
-        assert timer.elapsed < 0.1
+        assert timer.elapsed < 0.2

@@ -238,6 +238,9 @@ class QueuedJob(Job):
             meta=data["meta"],
         )
 
+    def __bool__(self):
+        return self.state == QueuedJob.State.SUCCEEDED
+
 
 P = ParamSpec("P")
 R = TypeVar("R")
