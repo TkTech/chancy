@@ -30,12 +30,11 @@ class Trigger(Plugin):
     -----
 
     You can register a job to run when a specific table is modified by
-    creating a trigger. The trigger will listen for specified operations
-    (INSERT, UPDATE, DELETE) and create a job using the provided job template:
+    creating a trigger. For example, to run a job whenever a row in the
+    ``users`` is inserted or updated, you can do the following:
 
     .. code-block:: python
 
-        import asyncio
         from chancy import Chancy, Worker, Queue, job
         from chancy.plugins.trigger import Trigger
 
@@ -76,6 +75,10 @@ class Trigger(Plugin):
             'schema_name': 'public',
             'trigger_name': 'chancy_trigger_675ed409_4da2_4967_bfc7_7bc641f1cc92_insert'
         }
+
+    The timestamp is particularly useful, as you can use it to select all
+    recently changed rows when combined with a timestamp column in the
+    table.
     """
 
     def migrate_key(self) -> str | None:

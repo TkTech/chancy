@@ -100,3 +100,8 @@ async def test_trigger_creates_job_on_change(
             """,
                 (handle_table_change.job.func,),
             )
+
+            jobs = await cursor.fetchall()
+            assert (
+                len(jobs) == 0
+            ), "Trigger should not create jobs when disabled"

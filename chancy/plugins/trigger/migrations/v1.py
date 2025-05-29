@@ -16,8 +16,8 @@ class V1Migration(Migration):
                     table_name TEXT NOT NULL,
                     schema_name TEXT NOT NULL DEFAULT 'public',
                     trigger_name TEXT NOT NULL,
-                    operations JSON NOT NULL,
-                    job_template JSON NOT NULL,
+                    operations JSONB NOT NULL,
+                    job_template JSONB NOT NULL,
                     enabled BOOLEAN NOT NULL DEFAULT true,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     UNIQUE(schema_name, table_name, trigger_name)
