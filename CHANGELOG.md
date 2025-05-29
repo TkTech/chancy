@@ -1,6 +1,16 @@
 Changelog
 =========
 
+0.25.0
+------
+
+✨ Improvements
+
+- Added the `Trigger` plugin, which allows you to start jobs when arbitrary
+  database events occur, such as inserts, updates, or deletes.
+- `QueuedJob`s are now "thruthy" and are true if they succeeded, False if in
+  any other state.
+
 0.24.0
 ------
 
