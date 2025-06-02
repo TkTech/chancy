@@ -5,7 +5,6 @@ import click
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
 from chancy.errors import MigrationsNeededError
-from chancy.plugins.api.auth import SimpleAuthBackend
 
 
 @click.group(name="worker")
@@ -78,6 +77,7 @@ async def web_command(
     Start the Chancy dashboard.
     """
     from chancy.plugins.api import Api
+    from chancy.plugins.api.auth import SimpleAuthBackend
 
     chancy: Chancy = ctx.obj["app"]
 
