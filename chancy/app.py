@@ -691,7 +691,7 @@ class Chancy:
         return references
 
     def sync_push_many_ex(
-        self, cursor: Cursor, jobs: list[Job]
+        self, cursor: Cursor, jobs: list[Job | IsAJob[..., Any]]
     ) -> list[Reference]:
         """
         Synchronously push multiple jobs onto the queue using a specific cursor.
@@ -717,7 +717,10 @@ class Chancy:
             record = cursor.fetchone()
             references.append(Reference(record["id"]))
 
-        for queue in set(job.queue for job in jobs):
+        for queue in set(
+            job.queue if isinstance(job, Job) else job.job.queue
+            for job in jobs
+        ):
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
 
         return references
