@@ -127,8 +127,7 @@ class Executor(abc.ABC):
 
         await self.worker.queue_update(new_instance)
 
-    @staticmethod
-    def get_function_and_kwargs(job: QueuedJob) -> tuple[Callable, dict]:
+    def get_function_and_kwargs(self, job: QueuedJob) -> tuple[Callable, dict]:
         """
         Finds the function which should be executed for the given job and
         returns its keyword arguments.
@@ -136,6 +135,9 @@ class Executor(abc.ABC):
         :param job: The job instance to get the function and arguments for.
         :return: A tuple containing the function and its keyword arguments.
         """
+        from chancy.app import Chancy
+        from chancy.worker import Worker
+
         mod_name, func_name = job.func.rsplit(".", 1)
         mod = __import__(mod_name, fromlist=[func_name])
         try:
@@ -160,6 +162,12 @@ class Executor(abc.ABC):
             try:
                 if issubclass(param.annotation, QueuedJob):
                     kwargs[param_name] = job
+                elif issubclass(param.annotation, Worker):
+                    kwargs[param_name] = self.worker
+                elif issubclass(param.annotation, Chancy):
+                    kwargs[param_name] = self.worker.chancy
+                elif issubclass(param.annotation, Executor):
+                    kwargs[param_name] = self
             except TypeError:
                 continue
 
