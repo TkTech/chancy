@@ -11,6 +11,14 @@ Changelog
 - `QueuedJob`s are now "thruthy" and are true if they succeeded, False if in
   any other state.
 
+0.24.1
+------
+
+🐛 Fixes
+
+- Fix the API plugin being imported by the CLI when the API plugin is not
+  installed (#42)
+
 0.24.0
 ------
 
