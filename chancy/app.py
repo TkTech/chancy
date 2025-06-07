@@ -718,8 +718,7 @@ class Chancy:
             references.append(Reference(record["id"]))
 
         for queue in set(
-            job.queue if isinstance(job, Job) else job.job.queue
-            for job in jobs
+            job.queue if isinstance(job, Job) else job.job.queue for job in jobs
         ):
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
 

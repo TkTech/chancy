@@ -102,6 +102,6 @@ async def test_trigger_creates_job_on_change(
             )
 
             jobs = await cursor.fetchall()
-            assert (
-                len(jobs) == 0
-            ), "Trigger should not create jobs when disabled"
+            assert len(jobs) == 0, (
+                "Trigger should not create jobs when disabled"
+            )
