@@ -85,11 +85,17 @@ class Migrator:
             found_migration = False
             for name in dir(module):
                 obj = getattr(module, name)
-                if (
-                    isinstance(obj, type)
-                    and issubclass(obj, Migration)
-                    and obj != Migration
-                ):
+                try:
+                    is_migration_subclass = (
+                        issubclass(obj, Migration) and obj != Migration
+                    )
+                except TypeError:
+                    # Handle wrapt.FunctionWrapper and similar objects that fail issubclass()
+                    # See: https://github.com/GrahamDumpleton/wrapt/issues/130
+                    # See: https://github.com/python/cpython/issues/89010
+                    is_migration_subclass = False
+
+                if is_migration_subclass:
                     if found_migration:
                         raise ValueError(
                             f"Multiple migrations found in {migration.name!r}"
