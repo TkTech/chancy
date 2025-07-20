@@ -7,7 +7,6 @@ project.
 """
 
 import re
-import abc
 import importlib.resources
 
 from psycopg import AsyncConnection, AsyncCursor, sql
@@ -22,17 +21,15 @@ class MigrationError(Exception):
     """
 
 
-class Migration(abc.ABC):
+class Migration:
     """
     A migration is a single unit of work that is applied to the database to
     bring it from one schema version to another.
     """
 
-    @abc.abstractmethod
     async def up(self, migrator: "Migrator", cursor: AsyncCursor[DictRow]):
         pass
 
-    @abc.abstractmethod
     async def down(self, migrator: "Migrator", cursor: AsyncCursor[DictRow]):
         pass
 

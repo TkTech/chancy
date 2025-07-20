@@ -1,6 +1,14 @@
 Changelog
 =========
 
+0.24.2
+------
+
+🐛 Fixes
+
+- Temporarily remove the ABC base class from `Migration` to fix a
+  bug with DataDog monkey patching. (#44)
+
 0.24.1
 ------
 
