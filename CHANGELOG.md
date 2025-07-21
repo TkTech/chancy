@@ -1,6 +1,14 @@
 Changelog
 =========
 
+0.24.3
+------
+
+🐛 Fixes
+
+- Purely a patch version number bump, as the previous release was not
+  properly tagged.
+
 0.24.2
 ------
 
