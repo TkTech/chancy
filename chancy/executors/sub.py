@@ -24,7 +24,7 @@ except ImportError:
             "The SubInterpreterExecutor requires Python 3.13 or later."
         )
 
-from chancy.executors.base import Executor, ConcurrentExecutor
+from chancy.executors.base import ConcurrentExecutor
 from chancy.job import QueuedJob, Limit
 
 
@@ -105,7 +105,7 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         executor. It's responsible for setting up necessary limits,
         running the job, and returning the result.
         """
-        func, kwargs = Executor.get_function_and_kwargs(job)
+        func, kwargs = cls.get_function_and_kwargs(job)
 
         time_limit = next(
             (
