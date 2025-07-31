@@ -130,11 +130,6 @@ class Plugin(abc.ABC):
         string for the plugin.
         """
 
-    async def on_worker_started(self, worker: "Worker"):
-        """
-        Called when the worker has started.
-        """
-
     async def on_job_starting(
         self,
         *,
