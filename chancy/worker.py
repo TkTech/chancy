@@ -357,10 +357,6 @@ class Worker:
                 try:
                     self._executors[queue.name] = executor
 
-                    concurrency = queue.concurrency
-                    if queue.concurrency is None:
-                        concurrency = executor.get_default_concurrency()
-
                     await self.hub.emit(
                         "worker.queue.started",
                         {
@@ -428,8 +424,8 @@ class Worker:
                         # Otherwise, we can fetch jobs from the queue until
                         # the executor is full.
                         else:
-                            maximum_jobs_to_poll = concurrency - len(executor)
-                            if maximum_jobs_to_poll <= 0:
+                            free_slots = executor.free_slots
+                            if free_slots <= 0:
                                 await self.hub.emit(
                                     "worker.queue.full",
                                     {
@@ -442,7 +438,9 @@ class Worker:
 
                             async with self.chancy.pool.connection() as conn:
                                 jobs = await self.fetch_jobs(
-                                    queue, conn, up_to=maximum_jobs_to_poll
+                                    queue,
+                                    conn,
+                                    up_to=free_slots,
                                 )
 
                             for job in jobs:
@@ -452,11 +450,6 @@ class Worker:
                                 )
                                 await executor.push(job)
 
-                            # If we pulled exactly the maximum number of jobs,
-                            # there's likely more jobs available, so we set the
-                            # event to skip the next sleep.
-                            if len(jobs) == maximum_jobs_to_poll:
-                                self.queue_wake_events[queue.name].set()
                 finally:
                     self._executors.pop(queue.name, None)
 

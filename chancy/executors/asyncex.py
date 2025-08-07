@@ -39,7 +39,13 @@ class AsyncExecutor(Executor):
         job = await self.on_job_starting(job)
         task = asyncio.create_task(self._job_wrapper(job))
         self.jobs[task] = job
-        task.add_done_callback(self.jobs.pop)
+        task.add_done_callback(self._on_task_done)
+
+    def _on_task_done(self, task):
+        if self.free_slots == 0:
+            # Executor was exactly full
+            self.worker.queue_wake_events[self.queue.name].set()
+        self.jobs.pop(task)
 
     def __len__(self):
         return len(self.jobs)
