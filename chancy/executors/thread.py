@@ -5,7 +5,7 @@ import asyncio
 import functools
 from typing import Any
 
-from chancy.executors.base import Executor, ConcurrentExecutor
+from chancy.executors.base import ConcurrentExecutor
 from chancy.job import QueuedJob, Limit
 
 
@@ -60,7 +60,7 @@ class ThreadedExecutor(ConcurrentExecutor):
         executor. It's responsible for setting up necessary limits,
         running the job, and returning the result.
         """
-        func, kwargs = Executor.get_function_and_kwargs(job)
+        func, kwargs = self.get_function_and_kwargs(job)
 
         time_limit = next(
             (

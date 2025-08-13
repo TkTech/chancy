@@ -46,7 +46,7 @@ class AsyncExecutor(Executor):
 
     async def _job_wrapper(self, job: QueuedJob):
         try:
-            func, kwargs = Executor.get_function_and_kwargs(job)
+            func, kwargs = self.get_function_and_kwargs(job)
             if not asyncio.iscoroutinefunction(func):
                 raise ValueError(
                     f"Function {job.func!r} is not an async function, which is"
