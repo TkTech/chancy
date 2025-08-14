@@ -743,44 +743,79 @@ class Worker:
                 await cursor.execute(
                     sql.SQL(
                         """
-                        WITH selected_jobs AS (
-                            SELECT
-                                id
-                            FROM
-                                {jobs}
-                            WHERE
-                                queue = %(queue)s
-                            AND
-                                (state = 'pending' OR state = 'retrying')
-                            AND
-                                attempts < max_attempts
-                            AND
-                                (scheduled_at IS NULL OR scheduled_at <= NOW())
-                            ORDER BY
-                                priority DESC,
-                                id ASC
-                            LIMIT
-                                %(maximum_jobs_to_fetch)s
-                            FOR UPDATE OF {jobs} SKIP LOCKED
+                        WITH candidate_jobs AS (
+                            SELECT j.id, j.priority, j.concurrency_key,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY j.concurrency_key 
+                                ORDER BY j.priority DESC, j.id ASC
+                            ) as rank_within_key
+                            FROM {jobs} j
+                            WHERE j.queue = %(queue)s
+                              AND j.state IN ('pending', 'retrying')
+                              AND j.attempts < j.max_attempts
+                              AND (j.scheduled_at IS NULL OR j.scheduled_at <= NOW())
+                            ORDER BY priority DESC, id ASC
+                            LIMIT %(scan_limit)s  -- Limit scan to reasonable number
+                        ),
+                        locked_configs AS (
+                            SELECT cc.concurrency_key, cc.concurrency_max
+                            FROM {concurrency_configs} cc
+                            WHERE cc.concurrency_key IN (
+                                SELECT DISTINCT cj.concurrency_key 
+                                FROM candidate_jobs cj 
+                                WHERE cj.concurrency_key IS NOT NULL
+                            )
+                            FOR UPDATE SKIP LOCKED
+                        ),
+                        concurrency_usage AS (
+                            -- Check usage after locking configs
+                            SELECT 
+                                j.concurrency_key,
+                                COUNT(*) as current_count
+                            FROM {jobs} j
+                            WHERE j.state = 'running'
+                                AND j.concurrency_key IN (SELECT concurrency_key FROM locked_configs)
+                            GROUP BY j.concurrency_key
+                        ),
+                        filtered_jobs AS (
+                            SELECT cj.id, cj.priority
+                            FROM candidate_jobs cj
+                            WHERE cj.concurrency_key IS NULL
+
+                            UNION ALL
+
+                            SELECT cj.id, cj.priority
+                            FROM candidate_jobs cj
+                            INNER JOIN locked_configs lc ON lc.concurrency_key = cj.concurrency_key
+                            LEFT JOIN concurrency_usage cu ON cu.concurrency_key = cj.concurrency_key
+                            WHERE (
+                                (COALESCE(cu.current_count, 0) + cj.rank_within_key) <= lc.concurrency_max
+                            )
+                        ),
+                        selected_jobs AS (
+                            SELECT j.id
+                            FROM {jobs} j
+                            INNER JOIN filtered_jobs fj ON j.id = fj.id
+                            ORDER BY j.priority DESC, j.id ASC
+                            LIMIT %(maximum_jobs_to_fetch)s
+                            FOR UPDATE SKIP LOCKED
                         )
-                        UPDATE
-                            {jobs}
-                        SET
+                        UPDATE {jobs} SET
                             started_at = NOW(),
                             state = 'running',
                             taken_by = %(worker_id)s
-                        FROM
-                            selected_jobs
-                        WHERE
-                            {jobs}.id = selected_jobs.id
+                        FROM selected_jobs sj
+                        WHERE {jobs}.id = sj.id
                         RETURNING {jobs}.*
                         """
                     ).format(
                         jobs=jobs_table,
+                        concurrency_configs=sql.Identifier(f"{self.chancy.prefix}concurrency_configs")
                     ),
                     {
                         "queue": queue.name,
                         "maximum_jobs_to_fetch": up_to,
+                        "scan_limit": max(up_to * 50, 1000),  # Reasonable scan limit
                         "worker_id": self.worker_id,
                     },
                 )

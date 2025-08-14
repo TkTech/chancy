@@ -157,3 +157,56 @@ Prevent duplicate job execution by assigning a unique key:
   Unique jobs ensure only one job with the same ``unique_key`` is
   queued or running at a time, but any number can be completed or
   failed.
+
+Concurrency
+-----------------------
+
+Control the number of jobs that can run simultaneously using concurrency:
+
+.. code-block:: python
+
+    from chancy import job
+
+    @job()
+    def process_user_data(*, user_id: str, action: str):
+        print(f"Processing {action} for user {user_id}")
+
+    async with Chancy("postgresql://localhost/postgres") as chancy:
+        # Limit to 1 concurrent job per user_id
+        job_with_limit = process_user_data.job.with_concurrency(
+            max_concurrent=1,
+            key="user_id"
+        )
+        await chancy.push(job_with_limit.with_kwargs(user_id="123", action="upload"))
+
+The ``key`` parameter determines how jobs are grouped for concurrency limits:
+
+**Field-based keys**: Use a parameter name to group by that field's value:
+
+.. code-block:: python
+
+    # Limit by user_id - max 1 job per user
+    job.with_concurrency(1, "user_id")
+
+**Callable keys**: Use a function to compute complex grouping keys:
+
+.. code-block:: python
+
+    # Limit by user + action combination
+    job.with_concurrency(
+        max_concurrent=2,
+        key=lambda user_id, action, **kw: f"{user_id}:{action}"
+    )
+
+**Function-level limits**: Omit the key to limit all jobs of this type:
+
+.. code-block:: python
+
+    # Limit total concurrent jobs of this type to 5
+    job.with_concurrency(5)
+
+.. note::
+
+    Concurrency constraints are enforced globally across all workers in your
+    cluster. Jobs exceeding the limit will wait in the queue until a slot
+    becomes available.
