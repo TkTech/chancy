@@ -112,6 +112,12 @@ class Job:
     #: Arbitrary metadata associated with this job instance. Plugins can use
     #: this to store additional information during the execution of a job.
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
+    #: The concurrency key specification for this job. Can be a field name string
+    #: or a callable that computes the key from job arguments.
+    concurrency_key: str | Callable | None = None
+    #: The maximum number of jobs with the same concurrency key that can run
+    #: simultaneously across all workers.
+    concurrency_max: int | None = None
 
     @classmethod
     def from_func(cls, func, **kwargs):
@@ -152,6 +158,27 @@ class Job:
     def with_meta(self, meta: dict[str, Any]) -> "Job":
         return dataclasses.replace(self, meta=meta)
 
+    def with_concurrency(
+        self,
+        max_concurrent: int,
+        key: str | Callable | None = None,
+    ) -> "Job":
+        """
+        Add concurrency constraints to this job.
+
+        :param max_concurrent: Maximum number of jobs with the same concurrency
+            key that can run simultaneously.
+        :param key: Either a field name string (e.g., "user_id") or a callable
+            that computes the concurrency key from job arguments. Computed is prefixed
+            by func_name. if key is None, it defaults to func_name.
+        :return: A new Job instance with concurrency constraints.
+        """
+        return dataclasses.replace(
+            self,
+            concurrency_key=key,
+            concurrency_max=max_concurrent,
+        )
+
     def pack(self) -> dict:
         """
         Pack the job into a dictionary that can be serialized and used to
@@ -186,6 +213,47 @@ class Job:
             meta=data["m"],
         )
 
+    def evaluate_concurrency_key(self) -> str | None:
+        """
+        Evaluate the concurrency key from a job's configuration and runtime arguments.
+
+        This function takes a job's concurrency_key specification and the job's
+        runtime arguments to compute the actual concurrency key that will be used
+        for concurrency limiting.
+
+        :return: The computed concurrency key string, or None if no concurrency
+                constraints are configured.
+        """
+        if self.concurrency_max is None:
+            return None
+
+        if self.concurrency_key is None:
+            return self.func
+
+        kwargs = self.kwargs or {}
+        try:
+            if callable(self.concurrency_key):
+                key = self.concurrency_key(**kwargs)
+                if key is None:
+                    raise ValueError("Concurrency key function returned None")
+            elif isinstance(self.concurrency_key, str):
+                # For string field names, look up the value in kwargs
+                key = kwargs.get(self.concurrency_key)
+                if key is None:
+                    raise ValueError(
+                        f"Concurrency key '{self.concurrency_key}' not found in job kwargs"
+                    )
+            else:
+                raise TypeError(
+                    f"Invalid concurrency key type '{type(self.concurrency_key)}'."
+                )
+        except Exception as e:
+            raise ValueError(
+                f"Failed to evaluate concurrency key for job {self.func}"
+            ) from e
+
+        return f"{self.func}:{key}"
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class QueuedJob(Job):
@@ -216,6 +284,9 @@ class QueuedJob(Job):
     state: State = State.PENDING
     #: A list of errors that occurred during the execution of this job.
     errors: list[ErrorT] = dataclasses.field(default_factory=list)
+    #: The computed concurrency key for this specific job instance. This is
+    #: derived from the job's concurrency_key specification and arguments.
+    computed_concurrency_key: str | None = None
 
     @classmethod
     def unpack(cls, data: dict) -> "QueuedJob":
@@ -236,6 +307,7 @@ class QueuedJob(Job):
             errors=data["errors"],
             limits=[Limit.deserialize(limit) for limit in data["limits"]],
             meta=data["meta"],
+            computed_concurrency_key=data.get("concurrency_key"),
         )
 
 
