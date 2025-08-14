@@ -697,6 +697,14 @@ class Chancy:
         # acquire row locks in the same order and cannot deadlock (#89).
         references: list[Reference | None] = [None] * len(jobs)
         for index, job in self._in_lock_order(jobs):
+            if callable(job):
+                job = job.job
+            if job.concurrency_key:
+                await cursor.execute(
+                    self._push_concurrency_config_sql(),
+                    self._get_concurrency_params(job)
+                )
+                
             await cursor.execute(
                 self._push_job_sql(),
                 self._get_job_params(job),
@@ -714,7 +722,7 @@ class Chancy:
         return references
 
     def sync_push_many_ex(
-        self, cursor: Cursor, jobs: list[Job]
+        self, cursor: Cursor, jobs: list[Job | IsAJob[..., Any]]
     ) -> list[Reference]:
         """
         Synchronously push multiple jobs onto the queue using a specific cursor.
@@ -734,6 +742,14 @@ class Chancy:
         # See push_many_ex for why jobs are inserted in unique_key order.
         references: list[Reference | None] = [None] * len(jobs)
         for index, job in self._in_lock_order(jobs):
+            if callable(job):
+                job = job.job
+            if job.concurrency_key:
+                cursor.execute(
+                    self._push_concurrency_config_sql(),
+                    self._get_concurrency_params(job)
+                )
+                
             cursor.execute(
                 self._push_job_sql(),
                 self._get_job_params(job),
@@ -1411,7 +1427,8 @@ class Chancy:
                     priority,
                     max_attempts,
                     scheduled_at,
-                    unique_key
+                    unique_key,
+                    concurrency_key
                 )
             VALUES (
                 %(id)s,
@@ -1423,7 +1440,8 @@ class Chancy:
                 %(priority)s,
                 %(max_attempts)s,
                 %(scheduled_at)s,
-                %(unique_key)s
+                %(unique_key)s,
+                %(concurrency_key)s
             )
             ON CONFLICT (unique_key)
             WHERE
@@ -1530,6 +1548,33 @@ class Chancy:
             action=action,
         )
 
+    def _push_concurrency_config_sql(self):
+        return sql.SQL(
+            """
+            INSERT INTO {concurrency_configs} 
+                (concurrency_key, concurrency_max, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (concurrency_key) DO UPDATE SET
+                concurrency_max = EXCLUDED.concurrency_max,
+                updated_at = NOW()
+            """
+        ).format(
+            concurrency_configs=sql.Identifier(f"{self.prefix}concurrency_configs")
+        )
+
+    @staticmethod
+    def _get_concurrency_params(job: Job) -> tuple:
+        """
+        Get the parameters for storing concurrency configuration.
+        
+        :param job: The job containing concurrency configuration.
+        :return: A tuple of parameters for the concurrency config.
+        """
+        return (
+            job.evaluate_concurrency_key(),
+            job.concurrency_max
+        )
+
     @staticmethod
     def _in_lock_order(
         jobs: list[Job | IsAJob[..., Any]],
@@ -1558,9 +1603,6 @@ class Chancy:
         :param job: The job to get parameters for.
         :return: A dictionary of parameters for the job.
         """
-        if callable(job):
-            job = job.job
-
         return {
             "id": chancy_uuid(),
             "queue": job.queue,
@@ -1572,6 +1614,7 @@ class Chancy:
             "max_attempts": job.max_attempts,
             "scheduled_at": job.scheduled_at,
             "unique_key": job.unique_key,
+            "concurrency_key": job.evaluate_concurrency_key(),
         }
 
 
