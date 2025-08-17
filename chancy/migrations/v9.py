@@ -8,8 +8,8 @@ class AddConcurrencySupport(Migration):
     Add support for job-level concurrency constraints.
 
     This migration adds:
-    1. concurrency_key column to jobs table for storing computed concurrency keys
-    2. concurrency_configs table using concurrency_key as primary key
+    1. concurrency_key column to jobs table for storing computed concurrency keys (prefixed with func_name)
+    2. concurrency_configs table using prefixed concurrency_key as primary key
     3. Optimized indexes for concurrency-aware job selection
     """
 
@@ -24,7 +24,7 @@ class AddConcurrencySupport(Migration):
             ).format(jobs=sql.Identifier(f"{migrator.prefix}jobs"))
         )
 
-        # Create concurrency configurations table (using concurrency_key as PK)
+        # Create concurrency configurations table
         await cursor.execute(
             sql.SQL(
                 """

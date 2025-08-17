@@ -692,19 +692,20 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
+        # Concurrency configs are upserted in concurrency_key order for the
+        # same reason jobs are inserted in unique_key order below.
+        concurrency_params = self._concurrency_params(jobs)
+        if concurrency_params:
+            await cursor.executemany(
+                self._push_concurrency_config_sql(),
+                concurrency_params,
+            )
+
         # Jobs are inserted in unique_key order so that concurrent pushes and
         # the worker's batched job updates (which sort the same way) always
         # acquire row locks in the same order and cannot deadlock (#89).
         references: list[Reference | None] = [None] * len(jobs)
         for index, job in self._in_lock_order(jobs):
-            if callable(job):
-                job = job.job
-            if job.concurrency_key:
-                await cursor.execute(
-                    self._push_concurrency_config_sql(),
-                    self._get_concurrency_params(job)
-                )
-                
             await cursor.execute(
                 self._push_job_sql(),
                 self._get_job_params(job),
@@ -739,17 +740,16 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
+        concurrency_params = self._concurrency_params(jobs)
+        if concurrency_params:
+            cursor.executemany(
+                self._push_concurrency_config_sql(),
+                concurrency_params,
+            )
+
         # See push_many_ex for why jobs are inserted in unique_key order.
         references: list[Reference | None] = [None] * len(jobs)
         for index, job in self._in_lock_order(jobs):
-            if callable(job):
-                job = job.job
-            if job.concurrency_key:
-                cursor.execute(
-                    self._push_concurrency_config_sql(),
-                    self._get_concurrency_params(job)
-                )
-                
             cursor.execute(
                 self._push_job_sql(),
                 self._get_job_params(job),
@@ -757,7 +757,9 @@ class Chancy:
             record = cursor.fetchone()
             references[index] = Reference(record["id"])
 
-        for queue in {job.queue for job in jobs}:
+        for queue in {
+            job.queue if isinstance(job, Job) else job.job.queue for job in jobs
+        }:
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
 
         return references
@@ -1559,21 +1561,28 @@ class Chancy:
                 updated_at = NOW()
             """
         ).format(
-            concurrency_configs=sql.Identifier(f"{self.prefix}concurrency_configs")
+            concurrency_configs=sql.Identifier(
+                f"{self.prefix}concurrency_configs"
+            )
         )
 
     @staticmethod
-    def _get_concurrency_params(job: Job) -> tuple:
+    def _concurrency_params(
+        jobs: list[Job | IsAJob[..., Any]],
+    ) -> list[tuple[str, int]]:
         """
-        Get the parameters for storing concurrency configuration.
-        
-        :param job: The job containing concurrency configuration.
-        :return: A tuple of parameters for the concurrency config.
+        Collect the concurrency configurations of the given jobs, deduplicated
+        by concurrency key and sorted by it, which is the order in which their
+        row locks must be acquired.
         """
-        return (
-            job.evaluate_concurrency_key(),
-            job.concurrency_max
-        )
+        configs = {}
+        for job in jobs:
+            if callable(job):
+                job = job.job
+            if job.concurrency_rule:
+                key = job.evaluate_concurrency_key()
+                configs[key] = (key, job.concurrency_rule.max)
+        return [configs[key] for key in sorted(configs)]
 
     @staticmethod
     def _in_lock_order(
@@ -1603,6 +1612,9 @@ class Chancy:
         :param job: The job to get parameters for.
         :return: A dictionary of parameters for the job.
         """
+        if callable(job):
+            job = job.job
+
         return {
             "id": chancy_uuid(),
             "queue": job.queue,

@@ -901,59 +901,79 @@ class Worker:
                 sql.SQL(
                     """
                     WITH candidate_jobs AS (
-                        SELECT j.id, j.priority, j.concurrency_key,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY j.concurrency_key 
-                            ORDER BY j.priority DESC, j.id ASC
-                        ) as rank_within_key
+                        -- Get a reasonable sample of pending jobs for this queue
+                        SELECT j.id, j.priority, j.concurrency_key
                         FROM {jobs} j
                         WHERE j.queue = %(queue)s
                           AND j.state IN ('pending', 'retrying')
                           AND j.attempts < j.max_attempts
                           AND (j.scheduled_at IS NULL OR j.scheduled_at <= NOW())
-                        ORDER BY priority DESC, id ASC
-                        LIMIT %(scan_limit)s  -- Limit scan to reasonable number
+                        ORDER BY j.priority DESC, j.id ASC
+                        LIMIT %(scan_limit)s
                     ),
-                    locked_configs AS (
+                    relevant_configs AS (
+                        -- Only get configs for concurrency keys that actually have pending jobs
+                        SELECT DISTINCT cj.concurrency_key
+                        FROM candidate_jobs cj
+                        WHERE cj.concurrency_key IS NOT NULL
+                    ),
+                    lockable_configs AS (
+                        -- Lock only the specific configs we need
                         SELECT cc.concurrency_key, cc.concurrency_max
                         FROM {concurrency_configs} cc
-                        WHERE cc.concurrency_key IN (
-                            SELECT DISTINCT cj.concurrency_key 
-                            FROM candidate_jobs cj 
-                            WHERE cj.concurrency_key IS NOT NULL
-                        )
+                        WHERE cc.concurrency_key IN (SELECT rc.concurrency_key FROM relevant_configs rc)
                         FOR UPDATE SKIP LOCKED
                     ),
-                    concurrency_usage AS (
-                        -- Check usage after locking configs
-                        SELECT 
-                            j.concurrency_key,
-                            COUNT(*) as current_count
+                    current_usage AS (
+                        -- Count running jobs only for the locked concurrency keys
+                        SELECT j.concurrency_key, COUNT(*) as running_count
                         FROM {jobs} j
                         WHERE j.state = 'running'
-                            AND j.concurrency_key IN (SELECT concurrency_key FROM locked_configs)
+                          AND j.concurrency_key IN (SELECT lc.concurrency_key FROM lockable_configs lc)
                         GROUP BY j.concurrency_key
                     ),
-                    filtered_jobs AS (
-                        SELECT cj.id, cj.priority
-                        FROM candidate_jobs cj
-                        WHERE cj.concurrency_key IS NULL
-
-                        UNION ALL
-
-                        SELECT cj.id, cj.priority
-                        FROM candidate_jobs cj
-                        INNER JOIN locked_configs lc ON lc.concurrency_key = cj.concurrency_key
-                        LEFT JOIN concurrency_usage cu ON cu.concurrency_key = cj.concurrency_key
-                        WHERE (
-                            (COALESCE(cu.current_count, 0) + cj.rank_within_key) <= lc.concurrency_max
-                        )
+                    available_slots AS (
+                        -- Calculate available slots for locked configs
+                        SELECT 
+                            lc.concurrency_key,
+                            lc.concurrency_max,
+                            COALESCE(cu.running_count, 0) as running_count,
+                            GREATEST(0, lc.concurrency_max - COALESCE(cu.running_count, 0)) as slots_available
+                        FROM lockable_configs lc
+                        LEFT JOIN current_usage cu ON cu.concurrency_key = lc.concurrency_key
                     ),
-                    selected_jobs AS (
-                        SELECT j.id
-                        FROM {jobs} j
-                        INNER JOIN filtered_jobs fj ON j.id = fj.id
-                        ORDER BY j.priority DESC, j.id ASC
+                    ranked_jobs AS (
+                        SELECT 
+                            cj.id, 
+                            cj.priority, 
+                            cj.concurrency_key,
+                            CASE 
+                                WHEN cj.concurrency_key IS NULL THEN 1
+                                ELSE ROW_NUMBER() OVER (
+                                    PARTITION BY cj.concurrency_key 
+                                    ORDER BY cj.priority DESC, cj.id ASC
+                                )
+                            END as job_rank
+                        FROM candidate_jobs cj
+                        LEFT JOIN available_slots AS_ ON cj.concurrency_key = AS_.concurrency_key
+                        WHERE 
+                            -- Include non-constrained jobs
+                            cj.concurrency_key IS NULL
+                            OR 
+                            -- Include constrained jobs only if their config was lockable and has slots
+                            (cj.concurrency_key IS NOT NULL AND AS_.slots_available > 0)
+                    ),
+                    eligible_jobs AS (
+                        SELECT rj.id, rj.priority
+                        FROM ranked_jobs rj
+                        LEFT JOIN available_slots AS_ ON rj.concurrency_key = AS_.concurrency_key
+                        WHERE 
+                            -- Non-constrained jobs are always eligible
+                            rj.concurrency_key IS NULL
+                            OR 
+                            -- Constrained jobs must be within available slots
+                            (rj.concurrency_key IS NOT NULL AND rj.job_rank <= AS_.slots_available)
+                        ORDER BY rj.priority DESC, rj.id ASC
                         LIMIT %(maximum_jobs_to_fetch)s
                         FOR UPDATE SKIP LOCKED
                         )
@@ -962,8 +982,8 @@ class Worker:
                             state = 'running',
                             claim_id = gen_random_uuid(),
                             taken_by = %(worker_id)s
-                        FROM selected_jobs sj
-                        WHERE {jobs}.id = sj.id
+                        FROM eligible_jobs ej
+                        WHERE {jobs}.id = ej.id
                         RETURNING {jobs}.*
                         """
                 ).format(
@@ -973,7 +993,7 @@ class Worker:
                 {
                     "queue": queue.name,
                     "maximum_jobs_to_fetch": up_to,
-                    "scan_limit": max(up_to * 50, 1000),  # Reasonable scan limit
+                    "scan_limit": min(up_to * 20, 1000),  # Reasonable scan limit
                     "worker_id": self.worker_id,
                 },
             )

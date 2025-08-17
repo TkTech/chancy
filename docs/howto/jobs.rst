@@ -171,11 +171,12 @@ Prevent duplicate job execution by assigning a unique key:
 Concurrency
 -----------------------
 
-Control the number of jobs that can run simultaneously using concurrency:
+Control the number of jobs with the same concurrency key that can run
+simultaneously across all workers and queues using with_concurrency():
 
 .. code-block:: python
 
-    from chancy import job
+    from chancy import job, ConcurrencyRule
 
     @job()
     def process_user_data(*, user_id: str, action: str):
@@ -184,8 +185,10 @@ Control the number of jobs that can run simultaneously using concurrency:
     async with Chancy("postgresql://localhost/postgres") as chancy:
         # Limit to 1 concurrent job per user_id
         job_with_limit = process_user_data.job.with_concurrency(
-            max_concurrent=1,
-            key="user_id"
+            ConcurrencyRule(
+                max=1,
+                key="user_id"
+            )
         )
         await chancy.push(job_with_limit.with_kwargs(user_id="123", action="upload"))
 
@@ -196,7 +199,7 @@ The ``key`` parameter determines how jobs are grouped for concurrency limits:
 .. code-block:: python
 
     # Limit by user_id - max 1 job per user
-    job.with_concurrency(1, "user_id")
+    job.with_concurrency(ConcurrencyRule(max=1, key="user_id"))
 
 **Callable keys**: Use a function to compute complex grouping keys:
 
@@ -204,8 +207,10 @@ The ``key`` parameter determines how jobs are grouped for concurrency limits:
 
     # Limit by user + action combination
     job.with_concurrency(
-        max_concurrent=2,
-        key=lambda user_id, action, **kw: f"{user_id}:{action}"
+        ConcurrencyRule(
+            max=2,
+            key=lambda user_id, action, **kw: f"{user_id}:{action}"
+        )
     )
 
 **Function-level limits**: Omit the key to limit all jobs of this type:
@@ -213,7 +218,7 @@ The ``key`` parameter determines how jobs are grouped for concurrency limits:
 .. code-block:: python
 
     # Limit total concurrent jobs of this type to 5
-    job.with_concurrency(5)
+    job.with_concurrency(ConcurrencyRule(max=5))
 
 .. note::
 

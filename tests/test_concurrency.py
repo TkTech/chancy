@@ -3,6 +3,7 @@ import time
 import pytest
 
 from chancy import Chancy, Job, Queue, QueuedJob, Worker, job
+from chancy.job import ConcurrencyRule
 
 
 @job()
@@ -28,7 +29,7 @@ class TestConcurrencyKeyEvaluation:
 
     def test_max_concurrent_only(self):
         """Test job with only max_concurrent (no key specified)"""
-        job = Job.from_func(simple_job).with_concurrency(3)
+        job = Job.from_func(simple_job).with_concurrency(ConcurrencyRule(max=3))
         result = job.evaluate_concurrency_key()
         assert result == "test_concurrency.simple_job"
 
@@ -36,7 +37,7 @@ class TestConcurrencyKeyEvaluation:
         """Test simple field-based concurrency key"""
         job = (
             Job.from_func(simple_job)
-            .with_concurrency(1, "user_id")
+            .with_concurrency(ConcurrencyRule(max=1, key="user_id"))
             .with_kwargs(user_id="123", action="upload")
         )
         result = job.evaluate_concurrency_key()
@@ -47,7 +48,7 @@ class TestConcurrencyKeyEvaluation:
         key_func = lambda user_id, action, **kw: f"{user_id}:{action}"
         job = (
             Job.from_func(simple_job)
-            .with_concurrency(1, key_func)
+            .with_concurrency(ConcurrencyRule(max=1, key=key_func))
             .with_kwargs(user_id="123", action="upload")
         )
         result = job.evaluate_concurrency_key()
@@ -57,7 +58,7 @@ class TestConcurrencyKeyEvaluation:
         """Test that missing field raises an error"""
         job = (
             Job.from_func(simple_job)
-            .with_concurrency(1, "missing_field")
+            .with_concurrency(ConcurrencyRule(max=1, key="missing_field"))
             .with_kwargs(user_id="123")
         )
         with pytest.raises(
@@ -73,7 +74,7 @@ class TestConcurrencyKeyEvaluation:
 
         job = (
             Job.from_func(simple_job)
-            .with_concurrency(1, failing_key)
+            .with_concurrency(ConcurrencyRule(max=1, key=failing_key))
             .with_kwargs(user_id="123")
         )
         with pytest.raises(
@@ -89,7 +90,7 @@ class TestConcurrencyKeyEvaluation:
 
         job = (
             Job.from_func(simple_job)
-            .with_concurrency(1, none_key)
+            .with_concurrency(ConcurrencyRule(max=1, key=none_key))
             .with_kwargs(user_id="123")
         )
         with pytest.raises(
@@ -104,21 +105,20 @@ class TestJobWithConcurrency:
     def test_with_concurrency_method(self):
         """Test the with_concurrency fluent method"""
         # Test simple string key
-        job_with_concurrency = simple_job.job.with_concurrency(3, "user_id")
-        assert job_with_concurrency.concurrency_key == "user_id"
-        assert job_with_concurrency.concurrency_max == 3
+        job_with_concurrency = simple_job.job.with_concurrency(ConcurrencyRule(max=3, key="user_id"))
+        assert job_with_concurrency.concurrency_rule.key == "user_id"
+        assert job_with_concurrency.concurrency_rule.max == 3
 
         # Original job should be unchanged (immutable)
-        assert simple_job.job.concurrency_key is None
-        assert simple_job.job.concurrency_max is None
+        assert simple_job.job.concurrency_rule is None
 
     def test_with_concurrency_callable_key(self):
         """Test with_concurrency with callable key"""
         key_func = lambda user_id, action, **kw: f"{user_id}:{action}"
 
-        job_with_concurrency = simple_job.job.with_concurrency(5, key_func)
-        assert job_with_concurrency.concurrency_key == key_func
-        assert job_with_concurrency.concurrency_max == 5
+        job_with_concurrency = simple_job.job.with_concurrency(ConcurrencyRule(max=5, key=key_func))
+        assert job_with_concurrency.concurrency_rule.key == key_func
+        assert job_with_concurrency.concurrency_rule.max == 5
 
 
 @pytest.mark.asyncio
@@ -132,7 +132,7 @@ class TestConcurrencyIntegration:
         await chancy.declare(Queue("default"))
 
         # Create a job with concurrency limit of 1 per user
-        job_with_concurrency = user_job.job.with_concurrency(1, "user_id")
+        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=1, key="user_id"))
 
         # Push 3 jobs for the same user
         refs = []
@@ -163,7 +163,7 @@ class TestConcurrencyIntegration:
         await chancy.declare(Queue("default"))
 
         # Create jobs with concurrency limit of 1 per user
-        job_with_concurrency = user_job.job.with_concurrency(1, "user_id")
+        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=1, key="user_id"))
 
         # Push jobs for different users
         job1 = job_with_concurrency.with_kwargs(
@@ -209,7 +209,7 @@ class TestConcurrencyIntegration:
 
         # Create job with callable concurrency key
         key_func = lambda user_id, action, **kw: f"{user_id}:{action}"
-        job_with_concurrency = user_job.job.with_concurrency(1, key_func)
+        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=1, key=key_func))
 
         # Push jobs with same composite key
         job1 = job_with_concurrency.with_kwargs(
@@ -249,7 +249,7 @@ class TestConcurrencyIntegration:
 
         # Push a job with concurrency constraints
         job_with_concurrency = user_job.job.with_concurrency(
-            3, "user_id"
+            ConcurrencyRule(max=3, key="user_id")
         ).with_kwargs(user_id="user_123", action="test")
         await chancy.push(job_with_concurrency)
 
@@ -263,9 +263,7 @@ class TestConcurrencyIntegration:
                 result = await cursor.fetchone()
 
                 assert result is not None
-                assert (
-                    result[0] == "test_concurrency.user_job:user_123"
-                )  # concurrency_key
+                assert result[0] == "test_concurrency.user_job:user_123"  # concurrency_key (prefixed)
                 assert result[1] == 3  # concurrency_max
 
 
@@ -280,7 +278,7 @@ class TestConcurrencyEdgeCases:
         await chancy.declare(Queue("default"))
 
         # Create job with high concurrency limit
-        job_with_concurrency = user_job.job.with_concurrency(100, "user_id")
+        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=100, key="user_id"))
 
         # Push only 2 jobs
         job1 = job_with_concurrency.with_kwargs(
@@ -304,13 +302,13 @@ class TestConcurrencyEdgeCases:
         await chancy.migrate()
 
         # Push job with initial concurrency config
-        job_v1 = user_job.job.with_concurrency(1, "user_id").with_kwargs(
+        job_v1 = user_job.job.with_concurrency(ConcurrencyRule(max=1, key="user_id")).with_kwargs(
             user_id="user_123", action="test"
         )
         await chancy.push(job_v1)
 
         # Push job with updated concurrency config
-        job_v2 = user_job.job.with_concurrency(5, "user_id").with_kwargs(
+        job_v2 = user_job.job.with_concurrency(ConcurrencyRule(max=5, key="user_id")).with_kwargs(
             user_id="user_456", action="test"
         )
         await chancy.push(job_v2)
