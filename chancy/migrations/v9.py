@@ -42,35 +42,17 @@ class AddConcurrencySupport(Migration):
             )
         )
 
-        # Add index on concurrency_key for running jobs to speed up concurrency counting
-        await cursor.execute(
-            sql.SQL(
-                """
-                CREATE INDEX {idx_jobs_concurrency_key_running}
-                ON {jobs} (concurrency_key)
-                WHERE state = 'running' AND concurrency_key IS NOT NULL
-                """
-            ).format(
-                idx_jobs_concurrency_key_running=sql.Identifier(
-                    f"idx_{migrator.prefix}jobs_concurrency_key_running"
-                ),
-                jobs=sql.Identifier(f"{migrator.prefix}jobs"),
-            )
-        )
-
     async def down(self, migrator, cursor):
-        # Drop indexes
+        # Drop concurrency configurations table
         await cursor.execute(
-            sql.SQL(
-                "DROP INDEX IF EXISTS {idx_jobs_concurrency_key_running}"
-            ).format(
-                idx_jobs_concurrency_key_running=sql.Identifier(
-                    f"idx_{migrator.prefix}jobs_concurrency_key_running"
+            sql.SQL("DROP TABLE IF EXISTS {concurrency_configs}").format(
+                concurrency_configs=sql.Identifier(
+                    f"{migrator.prefix}concurrency_configs"
                 )
             )
         )
 
-        # Drop concurrency configurations table
+        # Remove concurrency_key column from jobs table
         await cursor.execute(
             sql.SQL("DROP TABLE IF EXISTS {concurrency_configs}").format(
                 concurrency_configs=sql.Identifier(

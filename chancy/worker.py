@@ -825,6 +825,105 @@ class Worker:
         self.outgoing.put_nowait(update)
         return True
 
+    def _fetch_jobs_sql(self, prefix: str) -> sql.SQL:
+        """
+        Build the complete fetch_jobs query.
+        
+        Args:
+            prefix: The table prefix to use (e.g., "chancy_")
+            
+        Returns:
+            sql.SQL query template with parameter placeholders
+        """
+        return sql.SQL(
+            """
+            WITH candidate_jobs AS (
+                -- Get a reasonable sample of pending jobs for this queue
+                SELECT j.id, j.priority, j.concurrency_key
+                FROM {jobs} j
+                WHERE j.queue = %(queue)s
+                  AND j.state IN ('pending', 'retrying')
+                  AND j.attempts < j.max_attempts
+                  AND (j.scheduled_at IS NULL OR j.scheduled_at <= NOW())
+                ORDER BY j.priority DESC, j.id ASC
+                LIMIT %(scan_limit)s
+            ),
+            lockable_configs AS (
+                -- Lock only the specific configs we need
+                SELECT cc.concurrency_key, cc.concurrency_max
+                FROM {concurrency_configs} cc
+                WHERE cc.concurrency_key IN (SELECT DISTINCT cj.concurrency_key
+                                             FROM candidate_jobs cj
+                                             WHERE cj.concurrency_key IS NOT NULL)
+                FOR UPDATE SKIP LOCKED
+            ),
+            current_usage AS (
+                -- Count running jobs only for the locked concurrency keys
+                SELECT j.concurrency_key, COUNT(*) as running_count
+                FROM {jobs} j
+                WHERE j.state = 'running'
+                  AND j.concurrency_key IN (SELECT lc.concurrency_key FROM lockable_configs lc)
+                GROUP BY j.concurrency_key
+            ),
+            available_slots AS (
+                -- Calculate available slots for locked configs
+                SELECT 
+                    lc.concurrency_key,
+                    lc.concurrency_max,
+                    COALESCE(cu.running_count, 0) as running_count,
+                    GREATEST(0, lc.concurrency_max - COALESCE(cu.running_count, 0)) as slots_available
+                FROM lockable_configs lc
+                LEFT JOIN current_usage cu ON cu.concurrency_key = lc.concurrency_key
+            ),
+            ranked_jobs AS (
+                SELECT 
+                    cj.id, 
+                    cj.priority, 
+                    cj.concurrency_key,
+                    CASE 
+                        WHEN cj.concurrency_key IS NULL THEN 1
+                        ELSE ROW_NUMBER() OVER (
+                            PARTITION BY cj.concurrency_key 
+                            ORDER BY cj.priority DESC, cj.id ASC
+                        )
+                    END as job_rank
+                FROM candidate_jobs cj
+                LEFT JOIN available_slots asl ON cj.concurrency_key = asl.concurrency_key
+                WHERE 
+                    -- Include non-constrained jobs
+                    cj.concurrency_key IS NULL
+                    OR 
+                    -- Include constrained jobs only if their config was lockable and has slots
+                    (cj.concurrency_key IS NOT NULL AND asl.slots_available > 0)
+            ),
+            eligible_jobs AS (
+                SELECT rj.id, rj.priority
+                FROM ranked_jobs rj
+                LEFT JOIN available_slots asl ON rj.concurrency_key = asl.concurrency_key
+                WHERE 
+                    -- Non-constrained jobs are always eligible
+                    rj.concurrency_key IS NULL
+                    OR 
+                    -- Constrained jobs must be within available slots
+                    (rj.concurrency_key IS NOT NULL AND rj.job_rank <= asl.slots_available)
+                ORDER BY rj.priority DESC, rj.id ASC
+                LIMIT %(maximum_jobs_to_fetch)s
+                FOR UPDATE SKIP LOCKED
+            )
+            UPDATE {jobs} SET
+                started_at = NOW(),
+                state = 'running',
+                claim_id = gen_random_uuid(),
+                taken_by = %(worker_id)s
+            FROM eligible_jobs ej
+            WHERE {jobs}.id = ej.id
+            RETURNING {jobs}.*
+            """
+        ).format(
+            jobs=sql.Identifier(f"{prefix}jobs"),
+            concurrency_configs=sql.Identifier(f"{prefix}concurrency_configs")
+        )
+        
     async def fetch_jobs(
         self,
         queue: Queue,
@@ -846,7 +945,6 @@ class Worker:
         :param conn: The database connection to use.
         :param up_to: The maximum number of jobs to fetch.
         """
-        jobs_table = sql.Identifier(f"{self.chancy.prefix}jobs")
         rate_limits_table = sql.Identifier(
             f"{self.chancy.prefix}queue_rate_limits"
         )
@@ -897,99 +995,10 @@ class Worker:
                 # Adjust up_to based on remaining rate limit
                 up_to = min(up_to, queue.rate_limit - current_count)
 
+            # Use the centralized query builder method
+            query = self._fetch_jobs_sql(self.chancy.prefix)
             await cursor.execute(
-                sql.SQL(
-                    """
-                    WITH candidate_jobs AS (
-                        -- Get a reasonable sample of pending jobs for this queue
-                        SELECT j.id, j.priority, j.concurrency_key
-                        FROM {jobs} j
-                        WHERE j.queue = %(queue)s
-                          AND j.state IN ('pending', 'retrying')
-                          AND j.attempts < j.max_attempts
-                          AND (j.scheduled_at IS NULL OR j.scheduled_at <= NOW())
-                        ORDER BY j.priority DESC, j.id ASC
-                        LIMIT %(scan_limit)s
-                    ),
-                    relevant_configs AS (
-                        -- Only get configs for concurrency keys that actually have pending jobs
-                        SELECT DISTINCT cj.concurrency_key
-                        FROM candidate_jobs cj
-                        WHERE cj.concurrency_key IS NOT NULL
-                    ),
-                    lockable_configs AS (
-                        -- Lock only the specific configs we need
-                        SELECT cc.concurrency_key, cc.concurrency_max
-                        FROM {concurrency_configs} cc
-                        WHERE cc.concurrency_key IN (SELECT rc.concurrency_key FROM relevant_configs rc)
-                        FOR UPDATE SKIP LOCKED
-                    ),
-                    current_usage AS (
-                        -- Count running jobs only for the locked concurrency keys
-                        SELECT j.concurrency_key, COUNT(*) as running_count
-                        FROM {jobs} j
-                        WHERE j.state = 'running'
-                          AND j.concurrency_key IN (SELECT lc.concurrency_key FROM lockable_configs lc)
-                        GROUP BY j.concurrency_key
-                    ),
-                    available_slots AS (
-                        -- Calculate available slots for locked configs
-                        SELECT 
-                            lc.concurrency_key,
-                            lc.concurrency_max,
-                            COALESCE(cu.running_count, 0) as running_count,
-                            GREATEST(0, lc.concurrency_max - COALESCE(cu.running_count, 0)) as slots_available
-                        FROM lockable_configs lc
-                        LEFT JOIN current_usage cu ON cu.concurrency_key = lc.concurrency_key
-                    ),
-                    ranked_jobs AS (
-                        SELECT 
-                            cj.id, 
-                            cj.priority, 
-                            cj.concurrency_key,
-                            CASE 
-                                WHEN cj.concurrency_key IS NULL THEN 1
-                                ELSE ROW_NUMBER() OVER (
-                                    PARTITION BY cj.concurrency_key 
-                                    ORDER BY cj.priority DESC, cj.id ASC
-                                )
-                            END as job_rank
-                        FROM candidate_jobs cj
-                        LEFT JOIN available_slots AS_ ON cj.concurrency_key = AS_.concurrency_key
-                        WHERE 
-                            -- Include non-constrained jobs
-                            cj.concurrency_key IS NULL
-                            OR 
-                            -- Include constrained jobs only if their config was lockable and has slots
-                            (cj.concurrency_key IS NOT NULL AND AS_.slots_available > 0)
-                    ),
-                    eligible_jobs AS (
-                        SELECT rj.id, rj.priority
-                        FROM ranked_jobs rj
-                        LEFT JOIN available_slots AS_ ON rj.concurrency_key = AS_.concurrency_key
-                        WHERE 
-                            -- Non-constrained jobs are always eligible
-                            rj.concurrency_key IS NULL
-                            OR 
-                            -- Constrained jobs must be within available slots
-                            (rj.concurrency_key IS NOT NULL AND rj.job_rank <= AS_.slots_available)
-                        ORDER BY rj.priority DESC, rj.id ASC
-                        LIMIT %(maximum_jobs_to_fetch)s
-                        FOR UPDATE SKIP LOCKED
-                        )
-                        UPDATE {jobs} SET
-                            started_at = NOW(),
-                            state = 'running',
-                            claim_id = gen_random_uuid(),
-                            taken_by = %(worker_id)s
-                        FROM eligible_jobs ej
-                        WHERE {jobs}.id = ej.id
-                        RETURNING {jobs}.*
-                        """
-                ).format(
-                    jobs=jobs_table,
-                    concurrency_configs=sql.Identifier(f"{self.chancy.prefix}concurrency_configs")
-                ),
+                query,
                 {
                     "queue": queue.name,
                     "maximum_jobs_to_fetch": up_to,
