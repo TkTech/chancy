@@ -786,10 +786,14 @@ class Chancy:
         async with asyncio.timeout(timeout):
             while True:
                 job = await self.get_job(ref)
-                if job is None or job.state in states or {
-                    QueuedJob.State.SUCCEEDED,
-                    QueuedJob.State.FAILED,
-                }:
+                if (
+                    job is None
+                    or job.state in states
+                    or {
+                        QueuedJob.State.SUCCEEDED,
+                        QueuedJob.State.FAILED,
+                    }
+                ):
                     return job
                 await asyncio.sleep(interval)
 
@@ -1080,7 +1084,7 @@ class Chancy:
                     AND state NOT IN ('succeeded', 'failed')
             DO UPDATE
                SET
-                   state = EXCLUDED.state
+                   state = {jobs}.state
             RETURNING id;
             """
         ).format(jobs=sql.Identifier(f"{self.prefix}jobs"))

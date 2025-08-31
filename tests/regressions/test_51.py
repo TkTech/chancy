@@ -34,11 +34,7 @@ async def long_running_job():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "chancy",
-    [{"plugins": [RunCounter()]}],
-    indirect=True
-)
+@pytest.mark.parametrize("chancy", [{"plugins": [RunCounter()]}], indirect=True)
 async def test_regression_51(chancy: Chancy, worker: Worker):
     """
     Test that pushing a job with a unique key while the same job is running
@@ -51,9 +47,13 @@ async def test_regression_51(chancy: Chancy, worker: Worker):
     # If working properly, ref_one and ref_two should be the same. However, if
     # we wait until ref_one is actively running, then ref_two will be allowed
     # to be pushed again, and we'll get a new reference ID.
-    await chancy.push(long_running_job.job.with_unique_key("unique_long_running_job"))
+    await chancy.push(
+        long_running_job.job.with_unique_key("unique_long_running_job")
+    )
     await asyncio.sleep(1)
-    await chancy.push(long_running_job.job.with_unique_key("unique_long_running_job"))
+    await chancy.push(
+        long_running_job.job.with_unique_key("unique_long_running_job")
+    )
     await asyncio.sleep(10)
 
     assert chancy.plugins[RunCounter.get_identifier()].runs == 1
