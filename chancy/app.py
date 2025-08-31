@@ -739,6 +739,31 @@ class Chancy:
                     return None
                 return QueuedJob.unpack(record)
 
+    @_ensure_pool_is_open
+    async def get_jobs(self, refs: list[Reference]) -> list[QueuedJob]:
+        """
+        Resolve multiple references to job instances.
+
+        If a job no longer exists, it will be skipped and not included in
+        the returned list.
+
+        :param refs: The references to the jobs to retrieve.
+        :return: A list of the resolved jobs.
+        """
+        if not refs:
+            return []
+
+        async with self.pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    self._get_jobs_sql(), [[ref.identifier for ref in refs]]
+                )
+                return [
+                    QueuedJob.unpack(record)
+                    async for record in cursor
+                    if record is not None
+                ]
+
     @_ensure_sync_pool_is_open
     def sync_get_job(self, ref: Reference) -> QueuedJob | None:
         """
@@ -783,19 +808,57 @@ class Chancy:
             and the method will return. By default, only the SUCCEEDED and
             FAILED states are considered complete.
         """
+        states = states or {QueuedJob.State.SUCCEEDED, QueuedJob.State.FAILED}
         async with asyncio.timeout(timeout):
             while True:
                 job = await self.get_job(ref)
-                if (
-                    job is None
-                    or job.state in states
-                    or {
-                        QueuedJob.State.SUCCEEDED,
-                        QueuedJob.State.FAILED,
-                    }
-                ):
+                if job is None or job.state in states:
                     return job
                 await asyncio.sleep(interval)
+
+    async def wait_for_jobs(
+        self,
+        refs: list[Reference],
+        *,
+        interval: int = 1,
+        timeout: float | int | None = None,
+        states: set[QueuedJob.State] | None = None,
+    ):
+        """
+        Wait for multiple jobs to complete.
+
+        This method will loop until all jobs referenced by the provided
+        references have completed. The interval parameter controls how often
+        the job status is checked. This will not block the event loop, so
+        other tasks can run while waiting for the jobs to complete.
+
+        If a job no longer exists, it will be skipped and not included in
+        the returned list.
+
+        :param refs: The references to the jobs to wait for.
+        :param interval: The number of seconds to wait between checks.
+        :param timeout: The maximum number of seconds to wait for the jobs to
+            complete. If not provided, the method will wait indefinitely.
+        :param states: A set of additional states to consider as "complete". If
+            a job enters any of these states, it will be considered complete
+            and removed from the list of jobs to wait for. By default, only
+            the SUCCEEDED and FAILED states are considered complete.
+        :return: A list of the completed jobs. Jobs that no longer exist will
+            not be included in the list.
+        """
+        states = states or {QueuedJob.State.SUCCEEDED, QueuedJob.State.FAILED}
+        async with asyncio.timeout(timeout):
+            pending = set(refs)
+            completed = []
+            while pending:
+                jobs = await self.get_jobs(list(pending))
+                for job in jobs:
+                    if job is None or job.state in states:
+                        completed.append(job)
+                        pending.remove(Reference(job.id))
+                if pending:
+                    await asyncio.sleep(interval)
+            return completed
 
     @_ensure_pool_is_open
     async def get_all_queues(self) -> list[Queue]:
@@ -1098,6 +1161,18 @@ class Chancy:
                 {jobs}
             WHERE
                 id = %s
+            """
+        ).format(jobs=sql.Identifier(f"{self.prefix}jobs"))
+
+    def _get_jobs_sql(self):
+        return sql.SQL(
+            """
+            SELECT
+                *
+            FROM
+                {jobs}
+            WHERE
+                id = ANY(%s)
             """
         ).format(jobs=sql.Identifier(f"{self.prefix}jobs"))
 

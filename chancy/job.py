@@ -10,6 +10,7 @@ from typing import (
     Callable,
     Protocol,
 )
+from uuid import UUID
 
 from chancy.utils import importable_name
 
@@ -51,11 +52,19 @@ class Reference:
 
     __slots__ = ("identifier",)
 
-    def __init__(self, identifier: str):
-        self.identifier = identifier
+    def __init__(self, identifier: str | UUID):
+        self.identifier = str(identifier)
 
     def __repr__(self):
         return f"<Reference({self.identifier!r})>"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Reference):
+            return NotImplemented
+        return self.identifier == other.identifier
+
+    def __hash__(self) -> int:
+        return hash(self.identifier)
 
 
 @dataclasses.dataclass

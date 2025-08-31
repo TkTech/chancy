@@ -9,6 +9,9 @@ Changelog
 - `Chancy.wait_for_job()` now accepts a list of states to wait for, so you can
   use it to wait for a job to begin running, retried, etc... instead of just
   finished.
+- `Reference()` objects are now hashable and have equality.
+- `Chancy.wait_for_jobs()` added to wait for multiple jobs to finish.
+- `Chancy.get_jobs()` added to fetch multiple jobs by ID in a single query.
 
 🐛 Fixes
 
