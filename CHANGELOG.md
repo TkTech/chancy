@@ -1,6 +1,21 @@
 Changelog
 =========
 
+0.24.4
+------
+
+✨ Improvements
+
+- `Chancy.wait_for_job()` now accepts a list of states to wait for, so you can
+  use it to wait for a job to begin running, retried, etc... instead of just
+  finished.
+
+🐛 Fixes
+
+- Fixed a bug where a job with a unique_key could run multiple times if
+  pushed again after the job had started running (#51)
+
+
 0.24.3
 ------
 

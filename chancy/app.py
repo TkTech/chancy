@@ -762,6 +762,7 @@ class Chancy:
         *,
         interval: int = 1,
         timeout: float | int | None = None,
+        states: set[QueuedJob.State] | None = None,
     ) -> QueuedJob | None:
         """
         Wait for a job to complete.
@@ -777,11 +778,15 @@ class Chancy:
         :param interval: The number of seconds to wait between checks.
         :param timeout: The maximum number of seconds to wait for the job to
             complete. If not provided, the method will wait indefinitely.
+        :param states: A set of additional states to consider as "complete". If
+            the job enters any of these states, it will be considered complete
+            and the method will return. By default, only the SUCCEEDED and
+            FAILED states are considered complete.
         """
         async with asyncio.timeout(timeout):
             while True:
                 job = await self.get_job(ref)
-                if job is None or job.state in {
+                if job is None or job.state in states or {
                     QueuedJob.State.SUCCEEDED,
                     QueuedJob.State.FAILED,
                 }:
