@@ -13,7 +13,9 @@ Changelog
 🐛 Fixes
 
 - Fixed a bug where a job with a unique_key could run multiple times if
-  pushed again after the job had started running (#51)
+  pushed again after the job had started running (#51), reported by @mrsshr.
+- Remove an unused plugin hook `on_worker_started`, which is available via
+  the `worker.started` event anyway (#47) by @PaulM5406.
 
 
 0.24.3
