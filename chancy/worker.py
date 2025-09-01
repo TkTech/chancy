@@ -282,9 +282,7 @@ class Worker:
             db_queues = {
                 q.name: q
                 for q in await self.chancy.get_all_queues()
-                if any(
-                    re.match(t, tag) for tag in tags for t in q.tags
-                )
+                if any(re.match(t, tag) for tag in tags for t in q.tags)
             }
 
             for queue_name in list(self._queues.keys()):
@@ -803,7 +801,6 @@ class Worker:
         """
         if queue.eager_polling and queue.name in self._queues:
             self.queue_wake_events[queue.name].set()
-
 
     async def stop(self) -> bool:
         """

@@ -454,7 +454,7 @@ class Chancy:
                 "rate_limit": queue.rate_limit,
                 "rate_limit_window": queue.rate_limit_window,
                 "resume_at": queue.resume_at,
-                "eager_polling": queue.eager_polling
+                "eager_polling": queue.eager_polling,
             },
         )
 
@@ -495,7 +495,7 @@ class Chancy:
                 "rate_limit": queue.rate_limit,
                 "rate_limit_window": queue.rate_limit_window,
                 "resume_at": queue.resume_at,
-                "eager_polling": queue.eager_polling
+                "eager_polling": queue.eager_polling,
             },
         )
 
