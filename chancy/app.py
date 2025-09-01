@@ -454,6 +454,7 @@ class Chancy:
                 "rate_limit": queue.rate_limit,
                 "rate_limit_window": queue.rate_limit_window,
                 "resume_at": queue.resume_at,
+                "eager_polling": queue.eager_polling
             },
         )
 
@@ -494,6 +495,7 @@ class Chancy:
                 "rate_limit": queue.rate_limit,
                 "rate_limit_window": queue.rate_limit_window,
                 "resume_at": queue.resume_at,
+                "eager_polling": queue.eager_polling
             },
         )
 
@@ -1195,7 +1197,8 @@ class Chancy:
                     polling_interval = EXCLUDED.polling_interval,
                     rate_limit = EXCLUDED.rate_limit,
                     rate_limit_window = EXCLUDED.rate_limit_window,
-                    resume_at = EXCLUDED.resume_at
+                    resume_at = EXCLUDED.resume_at,
+                    eager_polling = EXCLUDED.eager_polling
                 """
             )
 
@@ -1211,7 +1214,8 @@ class Chancy:
                 polling_interval,
                 rate_limit,
                 rate_limit_window,
-                resume_at
+                resume_at,
+                eager_polling
             ) VALUES (
                 %(name)s,
                 %(state)s,
@@ -1222,7 +1226,8 @@ class Chancy:
                 %(polling_interval)s,
                 %(rate_limit)s,
                 %(rate_limit_window)s,
-                %(resume_at)s
+                %(resume_at)s,
+                %(eager_polling)s
             )
             ON CONFLICT (name) DO
                 {action}
@@ -1235,7 +1240,8 @@ class Chancy:
                 executor_options,
                 rate_limit,
                 rate_limit_window,
-                resume_at
+                resume_at,
+                eager_polling
             """
         ).format(
             queues=sql.Identifier(f"{self.prefix}queues"),

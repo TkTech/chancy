@@ -1,8 +1,15 @@
 Changelog
 =========
 
-0.24.4
+0.25.0
 ------
+
+🚨 This release requires that you run migrations, as it adds a new queue
+setting, `eager_polling`. Call `chancy.migrate()` or use the CLI:
+
+```bash
+chancy --app <your app> misc migrate
+```
 
 ✨ Improvements
 
@@ -12,6 +19,9 @@ Changelog
 - `Reference()` objects are now hashable and have equality.
 - `Chancy.wait_for_jobs()` added to wait for multiple jobs to finish.
 - `Chancy.get_jobs()` added to fetch multiple jobs by ID in a single query.
+- Added the `eager_polling` option to `Queue` to trigger immediate polling
+  whenever an executor slot becomes free. This is useful for low-latency
+  processing of jobs with low concurrency, but may increase database load (#48)
 
 🐛 Fixes
 

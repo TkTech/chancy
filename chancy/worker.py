@@ -275,39 +275,17 @@ class Worker:
         """
         while True:
             self.chancy.log.debug("Polling for queue changes.")
-            async with self.chancy.pool.connection() as conn:
-                async with conn.cursor(row_factory=dict_row) as cursor:
-                    tags = self.worker_tags()
-                    await cursor.execute(
-                        sql.SQL(
-                            """
-                            SELECT 
-                                name,
-                                concurrency,
-                                tags,
-                                state,
-                                executor,
-                                executor_options,
-                                polling_interval,
-                                rate_limit,
-                                rate_limit_window,
-                                resume_at
-                            FROM {queues}
-                        """
-                        ).format(
-                            queues=sql.Identifier(f"{self.chancy.prefix}queues")
-                        ),
-                    )
-                    # Tags in the database is a list of regexes, while the tags
-                    # in the worker are a set of strings. We need to filter the
-                    # queues based on the worker's tags.
-                    db_queues = {
-                        q["name"]: Queue.unpack(q)
-                        for q in await cursor.fetchall()
-                        if any(
-                            re.match(t, tag) for tag in tags for t in q["tags"]
-                        )
-                    }
+            tags = self.worker_tags()
+            # Tags in the database is a list of regexes, while the tags
+            # in the worker are a set of strings. We need to filter the
+            # queues based on the worker's tags.
+            db_queues = {
+                q.name: q
+                for q in await self.chancy.get_all_queues()
+                if any(
+                    re.match(t, tag) for tag in tags for t in q.tags
+                )
+            }
 
             for queue_name in list(self._queues.keys()):
                 if queue_name not in db_queues:
@@ -451,12 +429,6 @@ class Worker:
                                     f" queue {job.queue!r}"
                                 )
                                 await executor.push(job)
-
-                            # If we pulled exactly the maximum number of jobs,
-                            # there's likely more jobs available, so we set the
-                            # event to skip the next sleep.
-                            if len(jobs) == maximum_jobs_to_poll:
-                                self.queue_wake_events[queue.name].set()
                 finally:
                     self._executors.pop(queue.name, None)
 
@@ -821,6 +793,17 @@ class Worker:
 
             self.shutdown_event.set()
             await self.manager.cancel_all()
+
+    async def on_job_completed(self, *, queue: Queue, job: QueuedJob):
+        """
+        Called when a job is completed by an executor.
+
+        If the queue is configured for eager polling, this will set the queue's
+        wake event to immediately poll for more jobs.
+        """
+        if queue.eager_polling and queue.name in self._queues:
+            self.queue_wake_events[queue.name].set()
+
 
     async def stop(self) -> bool:
         """

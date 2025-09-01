@@ -92,6 +92,12 @@ class Queue:
     #: active state. This can be used to implement a "pause for X seconds"
     #: feature for circuit breakers and such.
     resume_at: datetime.datetime | None = None
+    #: If set, the worker will immediately poll for new jobs after a job
+    #: completes, rather than waiting for the polling interval to elapse. This
+    #: can be useful for low-concurrency queues where jobs are expected to be
+    #: continuously available, as it can reduce latency between jobs. However,
+    #: it can also increase load on the database and should be used with care.
+    eager_polling: bool = False
 
     @classmethod
     def unpack(cls, data: dict) -> "Queue":
@@ -109,6 +115,7 @@ class Queue:
             rate_limit=data.get("rate_limit"),
             rate_limit_window=data.get("rate_limit_window"),
             resume_at=data.get("resume_at"),
+            eager_polling=data.get("eager_polling", False),
         )
 
     def pack(self) -> dict:
@@ -127,4 +134,5 @@ class Queue:
             "rate_limit": self.rate_limit,
             "rate_limit_window": self.rate_limit_window,
             "resume_at": self.resume_at,
+            "eager_polling": self.eager_polling,
         }
