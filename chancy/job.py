@@ -9,6 +9,7 @@ from typing import (
     ParamSpec,
     Callable,
     Protocol,
+    Union,
 )
 from uuid import UUID
 
@@ -53,15 +54,23 @@ class Reference:
     __slots__ = ("identifier",)
 
     def __init__(self, identifier: str | UUID):
-        self.identifier = str(identifier)
+        if isinstance(identifier, UUID):
+            self.identifier = identifier
+        else:
+            self.identifier = UUID(identifier)
 
     def __repr__(self):
         return f"<Reference({self.identifier!r})>"
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Reference):
-            return NotImplemented
-        return self.identifier == other.identifier
+    def __eq__(self, other: Union[str, UUID, "Reference"]) -> bool:
+        if isinstance(other, Reference):
+            return self.identifier == other.identifier
+        elif isinstance(other, str):
+            return str(self.identifier) == other
+        elif isinstance(other, UUID):
+            return self.identifier == other
+        else:
+            return super().__eq__(other)
 
     def __hash__(self) -> int:
         return hash(self.identifier)
