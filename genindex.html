@@ -1,0 +1,1708 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="#" /><link rel="search" title="Search" href="search.html" />
+        <link rel="prefetch" href="_static/logo.png" as="image" />
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.07.19 --><title>Index - Chancy</title>
+<link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=25af2a20" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=4c969af8" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #2b2b2b;
+  --color-code-foreground: #f8f8f2;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #2b2b2b;
+  --color-code-foreground: #f8f8f2;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Chancy</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="_static/logo.png" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">Chancy</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="howto/index.html">How To…</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of How To…</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="howto/jobs.html">Make Jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/celery.html">Compare to Celery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/django.html">Use with Django</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/fastapi.html">Use with Fastapi</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/retry.html">Use Advanced Retries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/context.html">Get The Job Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/log.html">Customize Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="chancy.html">Chancy API</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of Chancy API</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="chancy.executors.html">Executors</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Executors</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.base.html">Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.process.html">ProcessExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.asyncex.html">AsyncExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.thread.html">ThreadedExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.sub.html">SubInterpreterExecutor</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="chancy.plugins.html">Plugins</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of Plugins</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.leadership.html">Leadership</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.pruner.html">Pruner</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.recovery.html">Recovery</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.cron.html">Cron</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.api.html">API/Dashboard</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.workflow.html">Workflows</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.retry.html">Retry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.reprioritize.html">Reprioritization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.sentry.html">Sentry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.metrics.html">Metrics</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.app.html">chancy.app module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.job.html">chancy.job module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.queue.html">chancy.queue module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.worker.html">chancy.worker module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugin.html">chancy.plugin module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.migrate.html">chancy.migrate module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.hub.html">chancy.hub module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.rule.html">chancy.plugins.rule module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.utils.html">chancy.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.errors.html">chancy.errors module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="design.html">Design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="similar.html">Similar Projects</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          
+<section class="genindex-section">
+  <h1 id="index">Index</h1>
+  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#H"><strong>H</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#J"><strong>J</strong></a> | <a href="#K"><strong>K</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#N"><strong>N</strong></a> | <a href="#O"><strong>O</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#Q"><strong>Q</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a> | <a href="#V"><strong>V</strong></a> | <a href="#W"><strong>W</strong></a></div>
+</section>
+<section id="A" class="genindex-section">
+  <h2>A</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.State.ACTIVE">ACTIVE (chancy.queue.Queue.State attribute)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Sequence.add">add() (chancy.plugins.workflow.Sequence method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.add">(chancy.plugins.workflow.Workflow method)</a>
+</li>
+          <li><a href="chancy.utils.html#chancy.utils.TaskManager.add">(chancy.utils.TaskManager method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.add_group">add_group() (chancy.plugins.workflow.Workflow method)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.AndCondition">AndCondition (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.announce_worker">announce_worker() (chancy.worker.Worker method)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.Api">Api (class in chancy.plugins.api)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.api_plugin">api_plugin() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.api_plugin">(chancy.plugins.cron.Cron method)</a>
+</li>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.api_plugin">(chancy.plugins.metrics.Metrics method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.api_plugin">(chancy.plugins.workflow.WorkflowPlugin method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.ApiPlugin">ApiPlugin (class in chancy.plugins.api.plugin)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.Executor.Async">Async (chancy.app.Chancy.Executor attribute)</a>
+</li>
+        <li><a href="chancy.executors.asyncex.html#chancy.executors.asyncex.AsyncExecutor">AsyncExecutor (class in chancy.executors.asyncex)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.ErrorT.attempt">attempt (chancy.job.ErrorT attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.attempts">attempts (chancy.job.QueuedJob attribute)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.AuthBackend">AuthBackend (class in chancy.plugins.api)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.SimpleAuthBackend.authenticate">authenticate() (chancy.plugins.api.SimpleAuthBackend method)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="B" class="genindex-section">
+  <h2>B</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.hub.html#chancy.hub.Event.body">body (chancy.hub.Event attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="C" class="genindex-section">
+  <h2>C</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.retry.html#chancy.plugins.retry.RetryPlugin.calculate_next_run">calculate_next_run() (chancy.plugins.retry.RetryPlugin static method)</a>
+</li>
+        <li><a href="chancy.executors.asyncex.html#chancy.executors.asyncex.AsyncExecutor.cancel">cancel() (chancy.executors.asyncex.AsyncExecutor method)</a>
+
+        <ul>
+          <li><a href="chancy.executors.base.html#chancy.executors.base.ConcurrentExecutor.cancel">(chancy.executors.base.ConcurrentExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.cancel">(chancy.executors.base.Executor method)</a>
+</li>
+          <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor.cancel">(chancy.executors.process.ProcessExecutor method)</a>
+</li>
+          <li><a href="chancy.utils.html#chancy.utils.TaskManager.cancel">(chancy.utils.TaskManager method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.utils.html#chancy.utils.TaskManager.cancel_all">cancel_all() (chancy.utils.TaskManager method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.cancel_job">cancel_job() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.chancy">chancy (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy">Chancy (class in chancy.app)</a>
+</li>
+        <li>
+    chancy.app
+
+        <ul>
+          <li><a href="chancy.app.html#module-chancy.app">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.errors
+
+        <ul>
+          <li><a href="chancy.errors.html#module-chancy.errors">module</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.Executor">Chancy.Executor (class in chancy.app)</a>
+</li>
+        <li>
+    chancy.executors
+
+        <ul>
+          <li><a href="chancy.executors.html#module-chancy.executors">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.executors.asyncex
+
+        <ul>
+          <li><a href="chancy.executors.asyncex.html#module-chancy.executors.asyncex">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.executors.base
+
+        <ul>
+          <li><a href="chancy.executors.base.html#module-chancy.executors.base">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.executors.process
+
+        <ul>
+          <li><a href="chancy.executors.process.html#module-chancy.executors.process">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.executors.sub
+
+        <ul>
+          <li><a href="chancy.executors.sub.html#module-chancy.executors.sub">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.executors.thread
+
+        <ul>
+          <li><a href="chancy.executors.thread.html#module-chancy.executors.thread">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.hub
+
+        <ul>
+          <li><a href="chancy.hub.html#module-chancy.hub">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.job
+
+        <ul>
+          <li><a href="chancy.job.html#module-chancy.job">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.migrate
+
+        <ul>
+          <li><a href="chancy.migrate.html#module-chancy.migrate">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugin
+
+        <ul>
+          <li><a href="chancy.plugin.html#module-chancy.plugin">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins
+
+        <ul>
+          <li><a href="chancy.plugins.html#module-chancy.plugins">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.api
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#module-chancy.plugins.api">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.api.core
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#module-chancy.plugins.api.core">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.api.plugin
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#module-chancy.plugins.api.plugin">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.cron
+
+        <ul>
+          <li><a href="chancy.plugins.cron.html#module-chancy.plugins.cron">module</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li>
+    chancy.plugins.cron.api
+
+        <ul>
+          <li><a href="chancy.plugins.cron.html#module-chancy.plugins.cron.api">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.leadership
+
+        <ul>
+          <li><a href="chancy.plugins.leadership.html#module-chancy.plugins.leadership">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.metrics
+
+        <ul>
+          <li><a href="chancy.plugins.metrics.html#module-chancy.plugins.metrics">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.pruner
+
+        <ul>
+          <li><a href="chancy.plugins.pruner.html#module-chancy.plugins.pruner">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.recovery
+
+        <ul>
+          <li><a href="chancy.plugins.recovery.html#module-chancy.plugins.recovery">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.reprioritize
+
+        <ul>
+          <li><a href="chancy.plugins.reprioritize.html#module-chancy.plugins.reprioritize">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.retry
+
+        <ul>
+          <li><a href="chancy.plugins.retry.html#module-chancy.plugins.retry">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.sentry
+
+        <ul>
+          <li><a href="chancy.plugins.sentry.html#module-chancy.plugins.sentry">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.plugins.workflow.api
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#module-chancy.plugins.workflow.api">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.queue
+
+        <ul>
+          <li><a href="chancy.queue.html#module-chancy.queue">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.rule
+
+        <ul>
+          <li><a href="chancy.rule.html#module-chancy.rule">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.utils
+
+        <ul>
+          <li><a href="chancy.utils.html#module-chancy.utils">module</a>
+</li>
+        </ul></li>
+        <li>
+    chancy.worker
+
+        <ul>
+          <li><a href="chancy.worker.html#module-chancy.worker">module</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.utils.html#chancy.utils.chancy_uuid">chancy_uuid() (in module chancy.utils)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.chunked">chunked() (in module chancy.utils)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.cleanup">cleanup() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.cleanup">(chancy.plugins.metrics.Metrics method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.cleanup">(chancy.plugins.workflow.WorkflowPlugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.hub.html#chancy.hub.Hub.clear">clear() (chancy.hub.Hub method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.State.COMPLETED">COMPLETED (chancy.plugins.workflow.Workflow.State attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.completed_at">completed_at (chancy.job.QueuedJob attribute)</a>
+</li>
+        <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.concurrency">concurrency (chancy.executors.base.Executor property)</a>
+
+        <ul>
+          <li><a href="chancy.queue.html#chancy.queue.Queue.concurrency">(chancy.queue.Queue attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.executors.base.html#chancy.executors.base.ConcurrentExecutor">ConcurrentExecutor (class in chancy.executors.base)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.Condition">Condition (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.Rule.contains">contains() (chancy.rule.Rule method)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin">CoreApiPlugin (class in chancy.plugins.api.core)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.created_at">created_at (chancy.job.QueuedJob attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.created_at">(chancy.plugins.workflow.Workflow attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron">Cron (class in chancy.plugins.cron)</a>
+</li>
+        <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.api.CronApiPlugin">CronApiPlugin (class in chancy.plugins.cron.api)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="D" class="genindex-section">
+  <h2>D</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection">DatabaseConnection (class in chancy.utils)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.declare">declare() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.declare_ex">declare_ex() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.delete_queue">delete_queue() (chancy.app.Chancy method)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowStep.dependencies">dependencies (chancy.plugins.workflow.WorkflowStep attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Limit.deserialize">deserialize() (chancy.job.Limit class method)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migrator.discover_all_migrations">discover_all_migrations() (chancy.migrate.Migrator method)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migration.down">down() (chancy.migrate.Migration method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.dsn">dsn (chancy.app.Chancy attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="E" class="genindex-section">
+  <h2>E</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.eager_polling">eager_polling (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.hub.html#chancy.hub.Hub.emit">emit() (chancy.hub.Hub method)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.RouteT.endpoint">endpoint (chancy.plugins.api.plugin.RouteT attribute)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection.ENGINE">ENGINE (chancy.utils.DatabaseConnection attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.errors">errors (chancy.job.QueuedJob attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.ErrorT">ErrorT (class in chancy.job)</a>
+</li>
+        <li><a href="chancy.hub.html#chancy.hub.Event">Event (class in chancy.hub)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.executor">executor (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.executors.base.html#chancy.executors.base.Executor">Executor (class in chancy.executors.base)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.executor_options">executor_options (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.executors">executors (chancy.worker.Worker property)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="F" class="genindex-section">
+  <h2>F</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.State.FAILED">FAILED (chancy.job.QueuedJob.State attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.State.FAILED">(chancy.plugins.workflow.Workflow.State attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.fetch_jobs">fetch_jobs() (chancy.worker.Worker method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.fetch_workflow">fetch_workflow() (chancy.plugins.workflow.WorkflowPlugin class method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.fetch_workflow_ex">fetch_workflow_ex() (chancy.plugins.workflow.WorkflowPlugin class method)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.fetch_workflows">fetch_workflows() (chancy.plugins.workflow.WorkflowPlugin class method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.fetch_workflows_ex">fetch_workflows_ex() (chancy.plugins.workflow.WorkflowPlugin static method)</a>
+</li>
+        <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.free_slots">free_slots (chancy.executors.base.Executor property)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.from_func">from_func() (chancy.job.Job class method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.func">func (chancy.job.Job attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="G" class="genindex-section">
+  <h2>G</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.generate_dot">generate_dot() (chancy.plugins.workflow.WorkflowPlugin static method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.get_all_queues">get_all_queues() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.get_all_workers">get_all_workers() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.get_configuration">get_configuration() (chancy.plugins.api.core.CoreApiPlugin static method)</a>
+</li>
+        <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.api.CronApiPlugin.get_cron">get_cron() (chancy.plugins.cron.api.CronApiPlugin static method)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migrator.get_current_version">get_current_version() (chancy.migrate.Migrator method)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.get_database_dsn">get_database_dsn() (in module chancy.utils)</a>
+</li>
+        <li><a href="chancy.executors.asyncex.html#chancy.executors.asyncex.AsyncExecutor.get_default_concurrency">get_default_concurrency() (chancy.executors.asyncex.AsyncExecutor method)</a>
+
+        <ul>
+          <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.get_default_concurrency">(chancy.executors.base.Executor method)</a>
+</li>
+          <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor.get_default_concurrency">(chancy.executors.process.ProcessExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.sub.html#chancy.executors.sub.SubInterpreterExecutor.get_default_concurrency">(chancy.executors.sub.SubInterpreterExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.thread.html#chancy.executors.thread.ThreadedExecutor.get_default_concurrency">(chancy.executors.thread.ThreadedExecutor method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.get_dependencies">get_dependencies() (chancy.plugin.Plugin static method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.pruner.html#chancy.plugins.pruner.Pruner.get_dependencies">(chancy.plugins.pruner.Pruner static method)</a>
+</li>
+          <li><a href="chancy.plugins.recovery.html#chancy.plugins.recovery.Recovery.get_dependencies">(chancy.plugins.recovery.Recovery static method)</a>
+</li>
+          <li><a href="chancy.plugins.reprioritize.html#chancy.plugins.reprioritize.Reprioritize.get_dependencies">(chancy.plugins.reprioritize.Reprioritize static method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.get_dependencies">(chancy.plugins.workflow.WorkflowPlugin static method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.get_function_and_kwargs">get_function_and_kwargs() (chancy.executors.base.Executor static method)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.get_identifier">get_identifier() (chancy.plugin.Plugin static method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.Api.get_identifier">(chancy.plugins.api.Api static method)</a>
+</li>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.get_identifier">(chancy.plugins.cron.Cron static method)</a>
+</li>
+          <li><a href="chancy.plugins.leadership.html#chancy.plugins.leadership.ImmediateLeadership.get_identifier">(chancy.plugins.leadership.ImmediateLeadership static method)</a>
+</li>
+          <li><a href="chancy.plugins.leadership.html#chancy.plugins.leadership.Leadership.get_identifier">(chancy.plugins.leadership.Leadership static method)</a>
+</li>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.get_identifier">(chancy.plugins.metrics.Metrics static method)</a>
+</li>
+          <li><a href="chancy.plugins.pruner.html#chancy.plugins.pruner.Pruner.get_identifier">(chancy.plugins.pruner.Pruner static method)</a>
+</li>
+          <li><a href="chancy.plugins.recovery.html#chancy.plugins.recovery.Recovery.get_identifier">(chancy.plugins.recovery.Recovery static method)</a>
+</li>
+          <li><a href="chancy.plugins.reprioritize.html#chancy.plugins.reprioritize.Reprioritize.get_identifier">(chancy.plugins.reprioritize.Reprioritize static method)</a>
+</li>
+          <li><a href="chancy.plugins.retry.html#chancy.plugins.retry.RetryPlugin.get_identifier">(chancy.plugins.retry.RetryPlugin static method)</a>
+</li>
+          <li><a href="chancy.plugins.sentry.html#chancy.plugins.sentry.SentryPlugin.get_identifier">(chancy.plugins.sentry.SentryPlugin static method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.get_identifier">(chancy.plugins.workflow.WorkflowPlugin static method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.app.html#chancy.app.Chancy.get_job">get_job() (chancy.app.Chancy method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.get_job">(chancy.plugins.api.core.CoreApiPlugin static method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.get_jobs">get_jobs() (chancy.app.Chancy method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.get_jobs">(chancy.plugins.api.core.CoreApiPlugin static method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.get_metrics">get_metrics() (chancy.plugins.metrics.Metrics method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.get_queue">get_queue() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.get_queues">get_queues() (chancy.plugins.api.core.CoreApiPlugin static method)</a>
+</li>
+        <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.get_schedules">get_schedules() (chancy.plugins.cron.Cron class method)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.get_scope">get_scope() (chancy.plugin.Plugin class method)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.get_tables">get_tables() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.get_tables">(chancy.plugins.cron.Cron method)</a>
+</li>
+          <li><a href="chancy.plugins.leadership.html#chancy.plugins.leadership.Leadership.get_tables">(chancy.plugins.leadership.Leadership method)</a>
+</li>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.get_tables">(chancy.plugins.metrics.Metrics method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.get_tables">(chancy.plugins.workflow.WorkflowPlugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.get_workers">get_workers() (chancy.plugins.api.core.CoreApiPlugin static method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.api.WorkflowApiPlugin.get_workflow">get_workflow() (chancy.plugins.workflow.api.WorkflowApiPlugin static method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.api.WorkflowApiPlugin.get_workflows">get_workflows() (chancy.plugins.workflow.api.WorkflowApiPlugin static method)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="H" class="genindex-section">
+  <h2>H</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.heartbeat_poll_interval">heartbeat_poll_interval (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.heartbeat_timeout">heartbeat_timeout (chancy.worker.Worker attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection.HOST">HOST (chancy.utils.DatabaseConnection attribute)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.hub">hub (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.hub.html#chancy.hub.Hub">Hub (class in chancy.hub)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="I" class="genindex-section">
+  <h2>I</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.id">id (chancy.job.QueuedJob attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.id">(chancy.plugins.workflow.Workflow attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.job.html#chancy.job.Reference.identifier">identifier (chancy.job.Reference attribute)</a>
+</li>
+        <li><a href="chancy.plugins.leadership.html#chancy.plugins.leadership.ImmediateLeadership">ImmediateLeadership (class in chancy.plugins.leadership)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.import_string">import_string() (in module chancy.utils)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.importable_name">importable_name() (in module chancy.utils)</a>
+</li>
+        <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.increment_counter">increment_counter() (chancy.plugins.metrics.Metrics method)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.is_complete">is_complete (chancy.plugins.workflow.Workflow property)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.is_leader">is_leader (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migrator.is_migration_required">is_migration_required() (chancy.migrate.Migrator method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.is_running">is_running (chancy.plugins.workflow.Workflow property)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.is_up_to_date">is_up_to_date() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.RouteT.is_websocket">is_websocket (chancy.plugins.api.plugin.RouteT attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.IsAJob">IsAJob (class in chancy.job)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="J" class="genindex-section">
+  <h2>J</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.IsAJob.job">job (chancy.job.IsAJob attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowStep.job">(chancy.plugins.workflow.WorkflowStep attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.job.html#chancy.job.Job">Job (class in chancy.job)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.job">job() (in module chancy.job)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowStep.job_id">job_id (chancy.plugins.workflow.WorkflowStep attribute)</a>
+</li>
+        <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor.job_signal_handler">job_signal_handler() (chancy.executors.process.ProcessExecutor static method)</a>
+</li>
+        <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor.job_wrapper">job_wrapper() (chancy.executors.process.ProcessExecutor class method)</a>
+
+        <ul>
+          <li><a href="chancy.executors.sub.html#chancy.executors.sub.SubInterpreterExecutor.job_wrapper">(chancy.executors.sub.SubInterpreterExecutor class method)</a>
+</li>
+          <li><a href="chancy.executors.thread.html#chancy.executors.thread.ThreadedExecutor.job_wrapper">(chancy.executors.thread.ThreadedExecutor method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules">JobRules (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules.Age">JobRules.Age (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules.CreatedAt">JobRules.CreatedAt (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules.ID">JobRules.ID (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules.Job">JobRules.Job (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules.Queue">JobRules.Queue (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules.ScheduledAt">JobRules.ScheduledAt (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.JobRules.State">JobRules.State (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.json_dumps">json_dumps() (in module chancy.utils)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="K" class="genindex-section">
+  <h2>K</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.Job.kwargs">kwargs (chancy.job.Job attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="L" class="genindex-section">
+  <h2>L</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.leadership.html#chancy.plugins.leadership.Leadership">Leadership (class in chancy.plugins.leadership)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Limit">Limit (class in chancy.job)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Limit.Type">Limit.Type (class in chancy.job)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.limits">limits (chancy.job.Job attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.log">log (chancy.app.Chancy attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.AuthBackend.login">login() (chancy.plugins.api.AuthBackend method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.login">(chancy.plugins.api.core.CoreApiPlugin method)</a>
+</li>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.SimpleAuthBackend.login">(chancy.plugins.api.SimpleAuthBackend method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.AuthBackend.logout">logout() (chancy.plugins.api.AuthBackend method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.SimpleAuthBackend.logout">(chancy.plugins.api.SimpleAuthBackend method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="M" class="genindex-section">
+  <h2>M</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.manager">manager (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.matches_prefix">matches_prefix() (chancy.plugins.metrics.Metrics static method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.max_attempts">max_attempts (chancy.job.Job attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.max_connection_pool_size">max_connection_pool_size (chancy.app.Chancy attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Limit.Type.MEMORY">MEMORY (chancy.job.Limit.Type attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.meta">meta (chancy.job.Job attribute)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.RouteT.methods">methods (chancy.plugins.api.plugin.RouteT attribute)</a>
+</li>
+        <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics">Metrics (class in chancy.plugins.metrics)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.migrate">migrate() (chancy.app.Chancy method)</a>
+
+        <ul>
+          <li><a href="chancy.migrate.html#chancy.migrate.Migrator.migrate">(chancy.migrate.Migrator method)</a>
+</li>
+          <li><a href="chancy.plugin.html#chancy.plugin.Plugin.migrate">(chancy.plugin.Plugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.migrate_key">migrate_key() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.migrate_key">(chancy.plugins.cron.Cron method)</a>
+</li>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.migrate_key">(chancy.plugins.metrics.Metrics method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.migrate_key">(chancy.plugins.workflow.WorkflowPlugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.migrate_package">migrate_package() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.migrate_package">(chancy.plugins.cron.Cron method)</a>
+</li>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.migrate_package">(chancy.plugins.metrics.Metrics method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.migrate_package">(chancy.plugins.workflow.WorkflowPlugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migration">Migration (class in chancy.migrate)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.MigrationError">MigrationError</a>
+</li>
+        <li><a href="chancy.errors.html#chancy.errors.MigrationsNeededError">MigrationsNeededError</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migrator">Migrator (class in chancy.migrate)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.migrator">migrator() (chancy.plugin.Plugin method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.min_connection_pool_size">min_connection_pool_size (chancy.app.Chancy attribute)</a>
+</li>
+        <li>
+    module
+
+        <ul>
+          <li><a href="chancy.app.html#module-chancy.app">chancy.app</a>
+</li>
+          <li><a href="chancy.errors.html#module-chancy.errors">chancy.errors</a>
+</li>
+          <li><a href="chancy.executors.html#module-chancy.executors">chancy.executors</a>
+</li>
+          <li><a href="chancy.executors.asyncex.html#module-chancy.executors.asyncex">chancy.executors.asyncex</a>
+</li>
+          <li><a href="chancy.executors.base.html#module-chancy.executors.base">chancy.executors.base</a>
+</li>
+          <li><a href="chancy.executors.process.html#module-chancy.executors.process">chancy.executors.process</a>
+</li>
+          <li><a href="chancy.executors.sub.html#module-chancy.executors.sub">chancy.executors.sub</a>
+</li>
+          <li><a href="chancy.executors.thread.html#module-chancy.executors.thread">chancy.executors.thread</a>
+</li>
+          <li><a href="chancy.hub.html#module-chancy.hub">chancy.hub</a>
+</li>
+          <li><a href="chancy.job.html#module-chancy.job">chancy.job</a>
+</li>
+          <li><a href="chancy.migrate.html#module-chancy.migrate">chancy.migrate</a>
+</li>
+          <li><a href="chancy.plugin.html#module-chancy.plugin">chancy.plugin</a>
+</li>
+          <li><a href="chancy.plugins.html#module-chancy.plugins">chancy.plugins</a>
+</li>
+          <li><a href="chancy.plugins.api.html#module-chancy.plugins.api">chancy.plugins.api</a>
+</li>
+          <li><a href="chancy.plugins.api.html#module-chancy.plugins.api.core">chancy.plugins.api.core</a>
+</li>
+          <li><a href="chancy.plugins.api.html#module-chancy.plugins.api.plugin">chancy.plugins.api.plugin</a>
+</li>
+          <li><a href="chancy.plugins.cron.html#module-chancy.plugins.cron">chancy.plugins.cron</a>
+</li>
+          <li><a href="chancy.plugins.cron.html#module-chancy.plugins.cron.api">chancy.plugins.cron.api</a>
+</li>
+          <li><a href="chancy.plugins.leadership.html#module-chancy.plugins.leadership">chancy.plugins.leadership</a>
+</li>
+          <li><a href="chancy.plugins.metrics.html#module-chancy.plugins.metrics">chancy.plugins.metrics</a>
+</li>
+          <li><a href="chancy.plugins.pruner.html#module-chancy.plugins.pruner">chancy.plugins.pruner</a>
+</li>
+          <li><a href="chancy.plugins.recovery.html#module-chancy.plugins.recovery">chancy.plugins.recovery</a>
+</li>
+          <li><a href="chancy.plugins.reprioritize.html#module-chancy.plugins.reprioritize">chancy.plugins.reprioritize</a>
+</li>
+          <li><a href="chancy.plugins.retry.html#module-chancy.plugins.retry">chancy.plugins.retry</a>
+</li>
+          <li><a href="chancy.plugins.sentry.html#module-chancy.plugins.sentry">chancy.plugins.sentry</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#module-chancy.plugins.workflow.api">chancy.plugins.workflow.api</a>
+</li>
+          <li><a href="chancy.queue.html#module-chancy.queue">chancy.queue</a>
+</li>
+          <li><a href="chancy.rule.html#module-chancy.rule">chancy.rule</a>
+</li>
+          <li><a href="chancy.utils.html#module-chancy.utils">chancy.utils</a>
+</li>
+          <li><a href="chancy.worker.html#module-chancy.worker">chancy.worker</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="N" class="genindex-section">
+  <h2>N</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.hub.html#chancy.hub.Event.name">name (chancy.hub.Event attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.RouteT.name">(chancy.plugins.api.plugin.RouteT attribute)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.name">(chancy.plugins.workflow.Workflow attribute)</a>
+</li>
+          <li><a href="chancy.queue.html#chancy.queue.Queue.name">(chancy.queue.Queue attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection.NAME">NAME (chancy.utils.DatabaseConnection attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.name">name() (chancy.plugins.api.core.CoreApiPlugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.ApiPlugin.name">(chancy.plugins.api.plugin.ApiPlugin method)</a>
+</li>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.api.CronApiPlugin.name">(chancy.plugins.cron.api.CronApiPlugin method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.api.WorkflowApiPlugin.name">(chancy.plugins.workflow.api.WorkflowApiPlugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.notifications">notifications (chancy.app.Chancy attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.notify">notify() (chancy.app.Chancy method)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="O" class="genindex-section">
+  <h2>O</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.hub.html#chancy.hub.Hub.on">on() (chancy.hub.Hub method)</a>
+</li>
+        <li><a href="chancy.hub.html#chancy.hub.Hub.on_any">on_any() (chancy.hub.Hub method)</a>
+</li>
+        <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor.on_initialize_worker">on_initialize_worker() (chancy.executors.process.ProcessExecutor class method)</a>
+
+        <ul>
+          <li><a href="chancy.executors.sub.html#chancy.executors.sub.SubInterpreterExecutor.on_initialize_worker">(chancy.executors.sub.SubInterpreterExecutor static method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.on_job_completed">on_job_completed() (chancy.executors.base.Executor method)</a>
+
+        <ul>
+          <li><a href="chancy.plugin.html#chancy.plugin.Plugin.on_job_completed">(chancy.plugin.Plugin method)</a>
+</li>
+          <li><a href="chancy.plugins.retry.html#chancy.plugins.retry.RetryPlugin.on_job_completed">(chancy.plugins.retry.RetryPlugin method)</a>
+</li>
+          <li><a href="chancy.plugins.sentry.html#chancy.plugins.sentry.SentryPlugin.on_job_completed">(chancy.plugins.sentry.SentryPlugin method)</a>
+</li>
+          <li><a href="chancy.worker.html#chancy.worker.Worker.on_job_completed">(chancy.worker.Worker method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.on_job_starting">on_job_starting() (chancy.executors.base.Executor method)</a>
+
+        <ul>
+          <li><a href="chancy.plugin.html#chancy.plugin.Plugin.on_job_starting">(chancy.plugin.Plugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.on_job_updated">on_job_updated() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.on_job_updated">(chancy.plugins.metrics.Metrics method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.on_job_updated">(chancy.plugins.workflow.WorkflowPlugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.on_signal">on_signal() (chancy.worker.Worker method)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection.OPTIONS">OPTIONS (chancy.utils.DatabaseConnection attribute)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.OrCondition">OrCondition (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.outgoing">outgoing (chancy.worker.Worker attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="P" class="genindex-section">
+  <h2>P</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.Job.pack">pack() (chancy.job.Job method)</a>
+
+        <ul>
+          <li><a href="chancy.queue.html#chancy.queue.Queue.pack">(chancy.queue.Queue method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection.PASSWORD">PASSWORD (chancy.utils.DatabaseConnection attribute)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.RouteT.path">path (chancy.plugins.api.plugin.RouteT attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.pause_queue">pause_queue() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.State.PAUSED">PAUSED (chancy.queue.Queue.State attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.State.PENDING">PENDING (chancy.job.QueuedJob.State attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.State.PENDING">(chancy.plugins.workflow.Workflow.State attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin">Plugin (class in chancy.plugin)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.plugins">plugins (chancy.app.Chancy attribute)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.PluginScope">PluginScope (class in chancy.plugin)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.poll_reconnect_timeout">poll_reconnect_timeout (chancy.app.Chancy attribute)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.polling_interval">polling_interval (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.pool">pool (chancy.app.Chancy property)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection.PORT">PORT (chancy.utils.DatabaseConnection attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.prefix">prefix (chancy.app.Chancy attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.priority">priority (chancy.job.Job attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.app.html#chancy.app.Chancy.Executor.Process">Process (chancy.app.Chancy.Executor attribute)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.process_workflow">process_workflow() (chancy.plugins.workflow.WorkflowPlugin static method)</a>
+</li>
+        <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor">ProcessExecutor (class in chancy.executors.process)</a>
+</li>
+        <li><a href="chancy.plugins.pruner.html#chancy.plugins.pruner.Pruner.prune">prune() (chancy.plugins.pruner.Pruner method)</a>
+</li>
+        <li><a href="chancy.plugins.pruner.html#chancy.plugins.pruner.Pruner">Pruner (class in chancy.plugins.pruner)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.push">push() (chancy.app.Chancy method)</a>
+
+        <ul>
+          <li><a href="chancy.executors.asyncex.html#chancy.executors.asyncex.AsyncExecutor.push">(chancy.executors.asyncex.AsyncExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.push">(chancy.executors.base.Executor method)</a>
+</li>
+          <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor.push">(chancy.executors.process.ProcessExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.sub.html#chancy.executors.sub.SubInterpreterExecutor.push">(chancy.executors.sub.SubInterpreterExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.thread.html#chancy.executors.thread.ThreadedExecutor.push">(chancy.executors.thread.ThreadedExecutor method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Sequence.push">(chancy.plugins.workflow.Sequence method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.push">(chancy.plugins.workflow.WorkflowPlugin class method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.push_ex">push_ex() (chancy.app.Chancy method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.push_ex">(chancy.plugins.workflow.WorkflowPlugin static method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.push_many">push_many() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.push_many_ex">push_many_ex() (chancy.app.Chancy method)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="Q" class="genindex-section">
+  <h2>Q</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.Job.queue">queue (chancy.job.Job attribute)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue">Queue (class in chancy.queue)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.State">Queue.State (class in chancy.queue)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.queue_change_poll_interval">queue_change_poll_interval (chancy.worker.Worker attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.queue_update">queue_update() (chancy.worker.Worker method)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.queue_wake_events">queue_wake_events (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob">QueuedJob (class in chancy.job)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.State">QueuedJob.State (class in chancy.job)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="R" class="genindex-section">
+  <h2>R</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.rate_limit">rate_limit (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.rate_limit_window">rate_limit_window (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.record_gauge">record_gauge() (chancy.plugins.metrics.Metrics method)</a>
+</li>
+        <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.record_histogram_value">record_histogram_value() (chancy.plugins.metrics.Metrics method)</a>
+</li>
+        <li><a href="chancy.plugins.recovery.html#chancy.plugins.recovery.Recovery.recover">recover() (chancy.plugins.recovery.Recovery class method)</a>
+</li>
+        <li><a href="chancy.plugins.recovery.html#chancy.plugins.recovery.Recovery">Recovery (class in chancy.plugins.recovery)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Reference">Reference (class in chancy.job)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.register_signal_handlers">register_signal_handlers (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.hub.html#chancy.hub.Hub.remove">remove() (chancy.hub.Hub method)</a>
+</li>
+        <li><a href="chancy.hub.html#chancy.hub.Hub.remove_on_any">remove_on_any() (chancy.hub.Hub method)</a>
+</li>
+        <li><a href="chancy.plugins.reprioritize.html#chancy.plugins.reprioritize.Reprioritize">Reprioritize (class in chancy.plugins.reprioritize)</a>
+</li>
+        <li><a href="chancy.plugins.reprioritize.html#chancy.plugins.reprioritize.Reprioritize.reprioritize_jobs">reprioritize_jobs() (chancy.plugins.reprioritize.Reprioritize method)</a>
+</li>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.resume_at">resume_at (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.resume_queue">resume_queue() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.State.RETRYING">RETRYING (chancy.job.QueuedJob.State attribute)</a>
+</li>
+        <li><a href="chancy.plugins.retry.html#chancy.plugins.retry.RetryPlugin">RetryPlugin (class in chancy.plugins.retry)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.core.CoreApiPlugin.routes">routes() (chancy.plugins.api.core.CoreApiPlugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.ApiPlugin.routes">(chancy.plugins.api.plugin.ApiPlugin method)</a>
+</li>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.api.CronApiPlugin.routes">(chancy.plugins.cron.api.CronApiPlugin method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.api.WorkflowApiPlugin.routes">(chancy.plugins.workflow.api.WorkflowApiPlugin method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.plugin.RouteT">RouteT (class in chancy.plugins.api.plugin)</a>
+</li>
+        <li><a href="chancy.rule.html#chancy.rule.Rule">Rule (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.plugins.pruner.html#chancy.plugins.pruner.Pruner.Rules">Rules (chancy.plugins.pruner.Pruner attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.reprioritize.html#chancy.plugins.reprioritize.Reprioritize.Rules">(chancy.plugins.reprioritize.Reprioritize attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.run">run() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.api.html#chancy.plugins.api.Api.run">(chancy.plugins.api.Api method)</a>
+</li>
+          <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.run">(chancy.plugins.cron.Cron method)</a>
+</li>
+          <li><a href="chancy.plugins.leadership.html#chancy.plugins.leadership.ImmediateLeadership.run">(chancy.plugins.leadership.ImmediateLeadership method)</a>
+</li>
+          <li><a href="chancy.plugins.leadership.html#chancy.plugins.leadership.Leadership.run">(chancy.plugins.leadership.Leadership method)</a>
+</li>
+          <li><a href="chancy.plugins.metrics.html#chancy.plugins.metrics.Metrics.run">(chancy.plugins.metrics.Metrics method)</a>
+</li>
+          <li><a href="chancy.plugins.pruner.html#chancy.plugins.pruner.Pruner.run">(chancy.plugins.pruner.Pruner method)</a>
+</li>
+          <li><a href="chancy.plugins.recovery.html#chancy.plugins.recovery.Recovery.run">(chancy.plugins.recovery.Recovery method)</a>
+</li>
+          <li><a href="chancy.plugins.reprioritize.html#chancy.plugins.reprioritize.Reprioritize.run">(chancy.plugins.reprioritize.Reprioritize method)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.run">(chancy.plugins.workflow.WorkflowPlugin method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.State.RUNNING">RUNNING (chancy.job.QueuedJob.State attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.State.RUNNING">(chancy.plugins.workflow.Workflow.State attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="S" class="genindex-section">
+  <h2>S</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.schedule">schedule() (chancy.plugins.cron.Cron class method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.scheduled_at">scheduled_at (chancy.job.Job attribute)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.send_outgoing_interval">send_outgoing_interval (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.plugins.sentry.html#chancy.plugins.sentry.SentryPlugin">SentryPlugin (class in chancy.plugins.sentry)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Sequence">Sequence (class in chancy.plugins.workflow)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Limit.serialize">serialize() (chancy.job.Limit method)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migrator.set_current_version">set_current_version() (chancy.migrate.Migrator method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.setup_default_logger">setup_default_logger() (in module chancy.app)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.shutdown_event">shutdown_event (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.shutdown_timeout">shutdown_timeout (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.plugins.api.html#chancy.plugins.api.SimpleAuthBackend">SimpleAuthBackend (class in chancy.plugins.api)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.sleep">sleep() (chancy.plugin.Plugin method)</a>
+
+        <ul>
+          <li><a href="chancy.utils.html#chancy.utils.sleep">(in module chancy.utils)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.rule.html#chancy.rule.SQLAble">SQLAble (class in chancy.rule)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.start">start() (chancy.worker.Worker method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.started_at">started_at (chancy.job.QueuedJob attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.state">state (chancy.job.QueuedJob attribute)</a>
+
+        <ul>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.state">(chancy.plugins.workflow.Workflow attribute)</a>
+</li>
+          <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowStep.state">(chancy.plugins.workflow.WorkflowStep attribute)</a>
+</li>
+          <li><a href="chancy.queue.html#chancy.queue.Queue.state">(chancy.queue.Queue attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowStep.step_id">step_id (chancy.plugins.workflow.WorkflowStep attribute)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.steps">steps (chancy.plugins.workflow.Workflow attribute)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.steps_by_state">steps_by_state (chancy.plugins.workflow.Workflow property)</a>
+</li>
+        <li><a href="chancy.executors.asyncex.html#chancy.executors.asyncex.AsyncExecutor.stop">stop() (chancy.executors.asyncex.AsyncExecutor method)</a>
+
+        <ul>
+          <li><a href="chancy.executors.base.html#chancy.executors.base.Executor.stop">(chancy.executors.base.Executor method)</a>
+</li>
+          <li><a href="chancy.executors.process.html#chancy.executors.process.ProcessExecutor.stop">(chancy.executors.process.ProcessExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.sub.html#chancy.executors.sub.SubInterpreterExecutor.stop">(chancy.executors.sub.SubInterpreterExecutor method)</a>
+</li>
+          <li><a href="chancy.executors.thread.html#chancy.executors.thread.ThreadedExecutor.stop">(chancy.executors.thread.ThreadedExecutor method)</a>
+</li>
+          <li><a href="chancy.worker.html#chancy.worker.Worker.stop">(chancy.worker.Worker method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.Executor.SubInterpreter">SubInterpreter (chancy.app.Chancy.Executor attribute)</a>
+</li>
+        <li><a href="chancy.executors.sub.html#chancy.executors.sub.SubInterpreterExecutor">SubInterpreterExecutor (class in chancy.executors.sub)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.QueuedJob.State.SUCCEEDED">SUCCEEDED (chancy.job.QueuedJob.State attribute)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_declare">sync_declare() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_declare_ex">sync_declare_ex() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_get_job">sync_get_job() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_notify">sync_notify() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_pool">sync_pool (chancy.app.Chancy property)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_push">sync_push() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_push_many">sync_push_many() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.sync_push_many_ex">sync_push_many_ex() (chancy.app.Chancy method)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="T" class="genindex-section">
+  <h2>T</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.queue.html#chancy.queue.Queue.tags">tags (chancy.queue.Queue attribute)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.TaskManager">TaskManager (class in chancy.utils)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.Executor.Threaded">Threaded (chancy.app.Chancy.Executor attribute)</a>
+</li>
+        <li><a href="chancy.executors.thread.html#chancy.executors.thread.ThreadedExecutor">ThreadedExecutor (class in chancy.executors.thread)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Limit.Type.TIME">TIME (chancy.job.Limit.Type attribute)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.timed_block">timed_block() (in module chancy.utils)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.Rules.Age.to_sql">to_sql() (chancy.plugins.workflow.WorkflowPlugin.Rules.Age method)</a>
+
+        <ul>
+          <li><a href="chancy.rule.html#chancy.rule.AndCondition.to_sql">(chancy.rule.AndCondition method)</a>
+</li>
+          <li><a href="chancy.rule.html#chancy.rule.Condition.to_sql">(chancy.rule.Condition method)</a>
+</li>
+          <li><a href="chancy.rule.html#chancy.rule.JobRules.Age.to_sql">(chancy.rule.JobRules.Age method)</a>
+</li>
+          <li><a href="chancy.rule.html#chancy.rule.OrCondition.to_sql">(chancy.rule.OrCondition method)</a>
+</li>
+          <li><a href="chancy.rule.html#chancy.rule.Rule.to_sql">(chancy.rule.Rule method)</a>
+</li>
+          <li><a href="chancy.rule.html#chancy.rule.SQLAble.to_sql">(chancy.rule.SQLAble method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.ErrorT.traceback">traceback (chancy.job.ErrorT attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Limit.type_">type_ (chancy.job.Limit attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="U" class="genindex-section">
+  <h2>U</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.Job.unique_key">unique_key (chancy.job.Job attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.unpack">unpack() (chancy.job.Job class method)</a>
+
+        <ul>
+          <li><a href="chancy.job.html#chancy.job.QueuedJob.unpack">(chancy.job.QueuedJob class method)</a>
+</li>
+          <li><a href="chancy.queue.html#chancy.queue.Queue.unpack">(chancy.queue.Queue class method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.plugins.cron.html#chancy.plugins.cron.Cron.unschedule">unschedule() (chancy.plugins.cron.Cron class method)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migration.up">up() (chancy.migrate.Migration method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.updated_at">updated_at (chancy.plugins.workflow.Workflow attribute)</a>
+</li>
+        <li><a href="chancy.migrate.html#chancy.migrate.Migrator.upsert_version_table">upsert_version_table() (chancy.migrate.Migrator method)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.DatabaseConnection.USER">USER (chancy.utils.DatabaseConnection attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="V" class="genindex-section">
+  <h2>V</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.Limit.value">value (chancy.job.Limit attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="W" class="genindex-section">
+  <h2>W</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.hub.html#chancy.hub.Hub.wait_for">wait_for() (chancy.hub.Hub method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.wait_for_job">wait_for_job() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.app.html#chancy.app.Chancy.wait_for_jobs">wait_for_jobs() (chancy.app.Chancy method)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.wait_for_leader">wait_for_leader() (chancy.plugin.Plugin static method)</a>
+</li>
+        <li><a href="chancy.utils.html#chancy.utils.TaskManager.wait_for_shutdown">wait_for_shutdown() (chancy.utils.TaskManager method)</a>
+
+        <ul>
+          <li><a href="chancy.worker.html#chancy.worker.Worker.wait_for_shutdown">(chancy.worker.Worker method)</a>
+</li>
+        </ul></li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.wait_for_workflow">wait_for_workflow() (chancy.plugins.workflow.WorkflowPlugin class method)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.wake_up">wake_up() (chancy.plugin.Plugin method)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.Plugin.wakeup_signal">wakeup_signal (chancy.plugin.Plugin attribute)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.with_kwargs">with_kwargs() (chancy.job.Job method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.with_limits">with_limits() (chancy.job.Job method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.with_max_attempts">with_max_attempts() (chancy.job.Job method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.with_meta">with_meta() (chancy.job.Job method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.with_priority">with_priority() (chancy.job.Job method)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="chancy.job.html#chancy.job.Job.with_queue">with_queue() (chancy.job.Job method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.with_scheduled_at">with_scheduled_at() (chancy.job.Job method)</a>
+</li>
+        <li><a href="chancy.job.html#chancy.job.Job.with_unique_key">with_unique_key() (chancy.job.Job method)</a>
+</li>
+        <li><a href="chancy.plugin.html#chancy.plugin.PluginScope.WORKER">WORKER (chancy.plugin.PluginScope attribute)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker">Worker (class in chancy.worker)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.worker_id">worker_id (chancy.worker.Worker attribute)</a>
+</li>
+        <li><a href="chancy.worker.html#chancy.worker.Worker.worker_tags">worker_tags() (chancy.worker.Worker method)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow">Workflow (class in chancy.plugins.workflow)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.Workflow.State">Workflow.State (class in chancy.plugins.workflow)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.api.WorkflowApiPlugin">WorkflowApiPlugin (class in chancy.plugins.workflow.api)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin">WorkflowPlugin (class in chancy.plugins.workflow)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.Rules">WorkflowPlugin.Rules (class in chancy.plugins.workflow)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowPlugin.Rules.Age">WorkflowPlugin.Rules.Age (class in chancy.plugins.workflow)</a>
+</li>
+        <li><a href="chancy.plugins.workflow.html#chancy.plugins.workflow.WorkflowStep">WorkflowStep (class in chancy.plugins.workflow)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, Tyler Kennedy
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/tabs.js?v=3ee01567"></script>
+    <script data-domain="tkte.ch" defer="defer" src="https://plausible.io/js/script.js"></script>
+    </body>
+</html>

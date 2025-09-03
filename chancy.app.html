@@ -1,0 +1,1126 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="chancy.job module" href="chancy.job.html" /><link rel="prev" title="Metrics" href="chancy.plugins.metrics.html" />
+        <link rel="prefetch" href="_static/logo.png" as="image" />
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.07.19 -->
+        <title>chancy.app module - Chancy</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=25af2a20" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=4c969af8" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #2b2b2b;
+  --color-code-foreground: #f8f8f2;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #2b2b2b;
+  --color-code-foreground: #f8f8f2;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Chancy</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="_static/logo.png" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">Chancy</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 has-children"><a class="reference internal" href="howto/index.html">How To…</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of How To…</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="howto/jobs.html">Make Jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/celery.html">Compare to Celery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/django.html">Use with Django</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/fastapi.html">Use with Fastapi</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/retry.html">Use Advanced Retries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/context.html">Get The Job Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/log.html">Customize Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="chancy.html">Chancy API</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of Chancy API</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 has-children"><a class="reference internal" href="chancy.executors.html">Executors</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Executors</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.base.html">Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.process.html">ProcessExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.asyncex.html">AsyncExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.thread.html">ThreadedExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.sub.html">SubInterpreterExecutor</a></li>
+</ul>
+</li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="chancy.plugins.html">Plugins</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><div class="visually-hidden">Toggle navigation of Plugins</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.leadership.html">Leadership</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.pruner.html">Pruner</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.recovery.html">Recovery</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.cron.html">Cron</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.api.html">API/Dashboard</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.workflow.html">Workflows</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.retry.html">Retry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.reprioritize.html">Reprioritization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.sentry.html">Sentry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.metrics.html">Metrics</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">chancy.app module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.job.html">chancy.job module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.queue.html">chancy.queue module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.worker.html">chancy.worker module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugin.html">chancy.plugin module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.migrate.html">chancy.migrate module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.hub.html">chancy.hub module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.rule.html">chancy.plugins.rule module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.utils.html">chancy.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.errors.html">chancy.errors module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="design.html">Design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="similar.html">Similar Projects</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/chancy.app.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-chancy.app">
+<span id="chancy-app-module"></span><h1>chancy.app module<a class="headerlink" href="#module-chancy.app" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Chancy">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">chancy.app.</span></span><span class="sig-name descname"><span class="pre">Chancy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dsn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="chancy.utils.html#chancy.utils.DatabaseConnection" title="chancy.utils.DatabaseConnection"><span class="pre">DatabaseConnection</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">plugins</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.plugin.html#chancy.plugin.Plugin" title="chancy.plugin.Plugin"><span class="pre">Plugin</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'chancy_'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_connection_pool_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_connection_pool_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poll_reconnect_timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">300</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">notifications</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Logger</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_default_plugins</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A Chancy application, along with all of its configuration and common
+functionality.</p>
+<p>Chancy is asyncio-first, and all of its methods are async by default:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">chancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Chancy</span><span class="p">,</span> <span class="n">Job</span><span class="p">,</span> <span class="n">Queue</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">my_job</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Hello, world!&quot;</span><span class="p">)</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="s2">&quot;postgresql://localhost/chancy&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+        <span class="k">await</span> <span class="n">chancy</span><span class="o">.</span><span class="n">migrate</span><span class="p">()</span>
+        <span class="k">await</span> <span class="n">chancy</span><span class="o">.</span><span class="n">declare</span><span class="p">(</span><span class="n">Queue</span><span class="p">(</span><span class="s2">&quot;default&quot;</span><span class="p">))</span>
+        <span class="k">await</span> <span class="n">chancy</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">Job</span><span class="o">.</span><span class="n">from_func</span><span class="p">(</span><span class="n">my_job</span><span class="p">))</span>
+
+<span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</pre></div>
+</div>
+<p>Chancy does also provide a minimal synchronous interface for pushing jobs
+onto the queue for codebases that are not using asyncio:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">chancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Chancy</span><span class="p">,</span> <span class="n">Job</span><span class="p">,</span> <span class="n">Queue</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">my_job</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Hello, world!&quot;</span><span class="p">)</span>
+
+<span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="s2">&quot;postgresql://localhost/chancy&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="n">chancy</span><span class="o">.</span><span class="n">sync_push</span><span class="p">(</span><span class="n">Job</span><span class="o">.</span><span class="n">from_func</span><span class="p">(</span><span class="n">my_job</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>And of course, it’s just Postgres under the hood, so you can always just
+insert jobs directly into the database if you’re feeling brave.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dsn</strong> – The DSN to connect to the database.</p></li>
+<li><p><strong>plugins</strong> – The plugins to use with the application.</p></li>
+<li><p><strong>prefix</strong> – A prefix appended to all table names, which can be used to
+namespace the tables for multiple applications or tenants.</p></li>
+<li><p><strong>min_connection_pool_size</strong> – The minimum number of connections to keep
+in the pool.</p></li>
+<li><p><strong>max_connection_pool_size</strong> – The maximum number of connections to keep
+in the pool.</p></li>
+<li><p><strong>poll_reconnect_timeout</strong> – The number of seconds to wait before
+attempting to reconnect to the database if a connection is lost.</p></li>
+<li><p><strong>notifications</strong> – Enables or disables emitting notifications using
+postgres’s NOTIFY/LISTEN feature.</p></li>
+<li><p><strong>log</strong> – The logger to use for all application logging. If not provided,
+a default logger will be set up.</p></li>
+<li><p><strong>no_default_plugins</strong> – If <cite>True</cite>, the default plugins will not be
+enabled. Defaults to <cite>False</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.app.Chancy.Executor">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Executor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.Executor" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">StrEnum</span></code></p>
+<p>Shortcuts for the built-in executors.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.Executor.Async">
+<span class="sig-name descname"><span class="pre">Async</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'chancy.executors.asyncex.AsyncExecutor'</span></em><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.Executor.Async" title="Link to this definition">¶</a></dt>
+<dd><p>The asyncio executor, which runs jobs in an asyncio event loop.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.Executor.Process">
+<span class="sig-name descname"><span class="pre">Process</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'chancy.executors.process.ProcessExecutor'</span></em><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.Executor.Process" title="Link to this definition">¶</a></dt>
+<dd><p>The default executor, which runs jobs in a process pool.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.Executor.SubInterpreter">
+<span class="sig-name descname"><span class="pre">SubInterpreter</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'chancy.executors.sub.SubInterpreterExecutor'</span></em><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.Executor.SubInterpreter" title="Link to this definition">¶</a></dt>
+<dd><p>The subprocess executor, which runs jobs in an experimental
+subinterpreter.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.Executor.Threaded">
+<span class="sig-name descname"><span class="pre">Threaded</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'chancy.executors.thread.ThreadedExecutor'</span></em><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.Executor.Threaded" title="Link to this definition">¶</a></dt>
+<dd><p>The threaded executor, which runs jobs in a thread pool.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.cancel_job">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cancel_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ref</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.cancel_job" title="Link to this definition">¶</a></dt>
+<dd><p>Cancel a job by reference.</p>
+<p>This will attempt to cancel a job that is currently running, if it
+is possible to do so. Notifications must be enabled for this to work.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ref</strong> – The reference to the job to cancel.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.declare">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">declare</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">upsert</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.declare" title="Link to this definition">¶</a></dt>
+<dd><p>Declare a queue in the database.</p>
+<p>Queues in Chancy are the primary mechanism for organizing and
+executing jobs. They can be configured with various options to
+control how jobs are processed, including the concurrency level,
+rate limiting, and tags to restrict which workers can process jobs
+from the queue.</p>
+<p>Queues exist globally, configured at runtime via the database and
+can be updated, reassigned, or deleted at any time without requiring
+a restart of the workers.</p>
+<p>This will create a new queue in the database with the provided
+configuration. If the queue already exists, no changes will be
+made unless the <code class="docutils literal notranslate"><span class="pre">upsert</span></code> parameter is also set to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="s2">&quot;postgresql://localhost/chancy&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="k">await</span> <span class="n">chancy</span><span class="o">.</span><span class="n">declare</span><span class="p">(</span><span class="n">Queue</span><span class="p">(</span><span class="s2">&quot;default&quot;</span><span class="p">))</span>
+</pre></div>
+</div>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.sync_declare" title="chancy.app.Chancy.sync_declare"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_declare()</span></code></a> for a synchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>queue</strong> – The queue to declare.</p></li>
+<li><p><strong>upsert</strong> – If <cite>True</cite>, the queue will be updated if it already
+exists. Defaults to <cite>False</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The queue as it exists in the database.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.declare_ex">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">declare_ex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">AsyncCursor</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">upsert</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.declare_ex" title="Link to this definition">¶</a></dt>
+<dd><p>Declare a queue in the database using a specific cursor.</p>
+<p>This is a low-level method that allows for more control over the
+database connection and transaction management. It is recommended to
+use the higher-level <cite>declare</cite> method in most cases.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cursor</strong> – The cursor to use for the operation.</p></li>
+<li><p><strong>queue</strong> – The queue to declare.</p></li>
+<li><p><strong>upsert</strong> – If <cite>True</cite>, the queue will be updated if it already
+exists. Defaults to <cite>False</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.delete_queue">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">delete_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">purge_jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.delete_queue" title="Link to this definition">¶</a></dt>
+<dd><p>Delete a queue by name.</p>
+<p>By default, also deletes all jobs in the queue. If you want to keep
+the jobs, set <cite>purge_jobs</cite> to <cite>False</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – The name of the queue to delete.</p></li>
+<li><p><strong>purge_jobs</strong> – If <cite>True</cite>, all jobs in the queue will be deleted
+along with the queue. If <cite>False</cite>, the jobs will be left in the
+database.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.dsn">
+<span class="sig-name descname"><span class="pre">dsn</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.dsn" title="Link to this definition">¶</a></dt>
+<dd><p>The DSN to connect to the database.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.get_all_queues">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_all_queues</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.get_all_queues" title="Link to this definition">¶</a></dt>
+<dd><p>Get all queues known to the cluster, regardless of their status
+or if they’re assigned to any workers.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.get_all_workers">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_all_workers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.get_all_workers" title="Link to this definition">¶</a></dt>
+<dd><p>Get all workers known to the cluster, regardless of their status.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.get_job">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ref</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.job.html#chancy.job.QueuedJob" title="chancy.job.QueuedJob"><span class="pre">QueuedJob</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.get_job" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve a reference to a job instance.</p>
+<p>If the job no longer exists, returns <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ref</strong> – The reference to the job to retrieve.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.get_jobs">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_jobs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">refs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.QueuedJob" title="chancy.job.QueuedJob"><span class="pre">QueuedJob</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.get_jobs" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve multiple references to job instances.</p>
+<p>If a job no longer exists, it will be skipped and not included in
+the returned list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>refs</strong> – The references to the jobs to retrieve.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of the resolved jobs.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.get_queue">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">get_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.get_queue" title="Link to this definition">¶</a></dt>
+<dd><p>Get a specific queue by name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The name of the queue to retrieve.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.is_up_to_date">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_up_to_date</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.is_up_to_date" title="Link to this definition">¶</a></dt>
+<dd><p>Check if the database is up to date.</p>
+<p>This will check if the database schema is up to date with the latest
+available migrations. If the database is up to date, returns <cite>True</cite>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.log">
+<span class="sig-name descname"><span class="pre">log</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.log" title="Link to this definition">¶</a></dt>
+<dd><p>The logger to use for all application logging.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.max_connection_pool_size">
+<span class="sig-name descname"><span class="pre">max_connection_pool_size</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.max_connection_pool_size" title="Link to this definition">¶</a></dt>
+<dd><p>The maximum number of connections to keep in the pool.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.migrate">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">migrate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_version</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.migrate" title="Link to this definition">¶</a></dt>
+<dd><p>Migrate the database to the latest version.</p>
+<p>This will migrate the core database tables as well as any enabled
+plugins. If a version is provided, the database will be migrated up
+_or_ down to that version as necessary.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="s2">&quot;postgresql://localhost/chancy&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="k">await</span> <span class="n">chancy</span><span class="o">.</span><span class="n">migrate</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Can also be run with the CLI:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>chancy<span class="w"> </span>--app<span class="w"> </span>worker.chancy<span class="w"> </span>misc<span class="w"> </span>migrate
+</pre></div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>You should never run migrations in production without first testing
+them in a development environment. Migrations can be destructive and
+may cause data loss if not written carefully, or take a long time to
+complete if the database is large.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>to_version</strong> – The version to migrate to. If not provided, the
+database will be migrated to the latest version.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.min_connection_pool_size">
+<span class="sig-name descname"><span class="pre">min_connection_pool_size</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.min_connection_pool_size" title="Link to this definition">¶</a></dt>
+<dd><p>The minimum number of connections to keep in the pool.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.notifications">
+<span class="sig-name descname"><span class="pre">notifications</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.notifications" title="Link to this definition">¶</a></dt>
+<dd><p>Enables or disables emitting notifications using postgres’s
+NOTIFY/LISTEN feature.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.notify">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">notify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">AsyncCursor</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.notify" title="Link to this definition">¶</a></dt>
+<dd><p>Send a notification via Postgres NOTIFY/LISTEN to all other listening
+workers.</p>
+<p>If notifications are disabled on the associated Chancy app, this
+method will do nothing.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.sync_notify" title="chancy.app.Chancy.sync_notify"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_notify()</span></code></a> for a synchronous version of this method.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.pause_queue">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pause_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">resume_at</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">datetime</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">timedelta</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.pause_queue" title="Link to this definition">¶</a></dt>
+<dd><p>Pause a queue by name.</p>
+<p>This will prevent workers from picking up new jobs from the queue,
+but will not affect jobs that are already running.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It may take a few seconds for all workers to notice the change.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> – The name of the queue to pause.</p></li>
+<li><p><strong>resume_at</strong> – A datetime at which the queue should automatically
+resume, or a timedelta from the current time.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.plugins">
+<span class="sig-name descname"><span class="pre">plugins</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.plugins" title="Link to this definition">¶</a></dt>
+<dd><p>The plugins to use with the application.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.poll_reconnect_timeout">
+<span class="sig-name descname"><span class="pre">poll_reconnect_timeout</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.poll_reconnect_timeout" title="Link to this definition">¶</a></dt>
+<dd><p>The number of seconds to wait before attempting to reconnect to the
+database if a connection is lost.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="chancy.app.Chancy.pool">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pool</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">AsyncConnectionPool</span></em><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.pool" title="Link to this definition">¶</a></dt>
+<dd><p>The asyncio connection pool used to interact with the database.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.app.Chancy.prefix">
+<span class="sig-name descname"><span class="pre">prefix</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.prefix" title="Link to this definition">¶</a></dt>
+<dd><p>A prefix appended to all table names, which can be used to
+namespace the tables for multiple applications or tenants.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.push">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">push</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.job.html#chancy.job.Job" title="chancy.job.Job"><span class="pre">Job</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="chancy.job.html#chancy.job.IsAJob" title="chancy.job.IsAJob"><span class="pre">IsAJob</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.push" title="Link to this definition">¶</a></dt>
+<dd><p>Push a job onto the queue.</p>
+<p>This method will push a job onto the queue, making it available for
+processing by workers. A <code class="xref py py-class docutils literal notranslate"><span class="pre">Reference</span></code> object is returned that
+can be used to track the progress of the job and retrieve the result
+when it is complete.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">chancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Chancy</span><span class="p">,</span> <span class="n">Job</span>
+
+<span class="nd">@job</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_job</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Hello, world!&quot;</span><span class="p">)</span>
+
+<span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="s2">&quot;postgresql://localhost/chancy&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="k">await</span> <span class="n">chancy</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">my_job</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.sync_push" title="chancy.app.Chancy.sync_push"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_push()</span></code></a> for a synchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>job</strong> – The job to push onto the queue.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A reference to the job in the queue.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.push_ex">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">push_ex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">AsyncCursor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.job.html#chancy.job.Job" title="chancy.job.Job"><span class="pre">Job</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="chancy.job.html#chancy.job.IsAJob" title="chancy.job.IsAJob"><span class="pre">IsAJob</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.push_ex" title="Link to this definition">¶</a></dt>
+<dd><p>Push a job onto the queue using a specific cursor.</p>
+<p>This is a low-level method that allows for more control over the
+database connection and transaction management. It is recommended to
+use the higher-level <cite>push</cite> method in most cases.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cursor</strong> – The cursor to use for the operation.</p></li>
+<li><p><strong>job</strong> – The job to push onto the queue.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A reference to the job in the queue.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.push_many">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">push_many</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Job" title="chancy.job.Job"><span class="pre">Job</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">AsyncGenerator</span><span class="p"><span class="pre">[</span></span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.push_many" title="Link to this definition">¶</a></dt>
+<dd><p>Push multiple jobs onto the queue.</p>
+<p>This method will push multiple jobs onto the queue, making them
+available for processing by workers. Jobs are committed in batches,
+with the size of each batch controlled by the <cite>batch_size</cite> parameter.
+Each batch is committed within its own transaction to limit peak
+memory usage.</p>
+<p>Returns an iterator of lists of references to the jobs in the queue,
+one list per batch:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">for</span> <span class="n">references</span> <span class="ow">in</span> <span class="n">chancy</span><span class="o">.</span><span class="n">push_many</span><span class="p">(</span><span class="n">jobs</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">references</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.sync_push_many" title="chancy.app.Chancy.sync_push_many"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_push_many()</span></code></a> for a synchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>jobs</strong> – The jobs to push onto the queue.</p></li>
+<li><p><strong>batch_size</strong> – The number of jobs to push in each batch. Defaults
+to 1000.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An iterator of lists of references to the jobs in the queue.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.push_many_ex">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">push_many_ex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">AsyncCursor</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Job" title="chancy.job.Job"><span class="pre">Job</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="chancy.job.html#chancy.job.IsAJob" title="chancy.job.IsAJob"><span class="pre">IsAJob</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.push_many_ex" title="Link to this definition">¶</a></dt>
+<dd><p>Push multiple jobs onto the queue using a specific cursor.</p>
+<p>This is a low-level method that allows for more control over the
+database connection and transaction management. It is recommended to
+use the higher-level <cite>push_many</cite> method in most cases.</p>
+<p>The main advantage of using this function is to ensure your jobs are
+only pushed if some other operation is successful. For example, you
+only want to send an email confirmation if account creation actually
+succeeds. For example:</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.sync_push_many_ex" title="chancy.app.Chancy.sync_push_many_ex"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_push_many_ex()</span></code></a> for a synchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cursor</strong> – The cursor to use for the operation.</p></li>
+<li><p><strong>jobs</strong> – The jobs to push onto the queue.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of references to the jobs in the queue.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.resume_queue">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">resume_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.resume_queue" title="Link to this definition">¶</a></dt>
+<dd><p>Resume a queue by name.</p>
+<p>This will allow workers to pick up new jobs from the queue.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It may take a few seconds for all workers to notice the change.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – The name of the queue to resume.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_declare">
+<span class="sig-name descname"><span class="pre">sync_declare</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">upsert</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_declare" title="Link to this definition">¶</a></dt>
+<dd><p>Synchronously declare a queue in the database. See <a class="reference internal" href="#chancy.app.Chancy.declare" title="chancy.app.Chancy.declare"><code class="xref py py-func docutils literal notranslate"><span class="pre">declare()</span></code></a> for
+more information.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="s2">&quot;postgresql://localhost/chancy&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="n">chancy</span><span class="o">.</span><span class="n">sync_declare</span><span class="p">(</span><span class="n">Queue</span><span class="p">(</span><span class="s2">&quot;default&quot;</span><span class="p">))</span>
+</pre></div>
+</div>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.declare" title="chancy.app.Chancy.declare"><code class="xref py py-meth docutils literal notranslate"><span class="pre">declare()</span></code></a> for an asynchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>queue</strong> – The queue to declare.</p></li>
+<li><p><strong>upsert</strong> – If <cite>True</cite>, the queue will be updated if it already
+exists. Defaults to <cite>False</cite>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The queue as it exists in the database.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_declare_ex">
+<span class="sig-name descname"><span class="pre">sync_declare_ex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Cursor</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">upsert</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><span class="pre">Queue</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_declare_ex" title="Link to this definition">¶</a></dt>
+<dd><p>Synchronously declare a queue in the database using a specific cursor.
+See <a class="reference internal" href="#chancy.app.Chancy.declare_ex" title="chancy.app.Chancy.declare_ex"><code class="xref py py-func docutils literal notranslate"><span class="pre">declare_ex()</span></code></a> for more information.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.declare_ex" title="chancy.app.Chancy.declare_ex"><code class="xref py py-meth docutils literal notranslate"><span class="pre">declare_ex()</span></code></a> for an asynchronous version of this method.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_get_job">
+<span class="sig-name descname"><span class="pre">sync_get_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ref</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.job.html#chancy.job.QueuedJob" title="chancy.job.QueuedJob"><span class="pre">QueuedJob</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_get_job" title="Link to this definition">¶</a></dt>
+<dd><p>Synchronously resolve a reference to a job instance.</p>
+<p>If the job no longer exists, returns <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ref</strong> – The reference to the job to retrieve.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_notify">
+<span class="sig-name descname"><span class="pre">sync_notify</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Cursor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_notify" title="Link to this definition">¶</a></dt>
+<dd><p>Send a notification via Postgres NOTIFY/LISTEN to all other listening
+workers.</p>
+<p>If notifications are disabled on the associated Chancy app, this
+method will do nothing.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.notify" title="chancy.app.Chancy.notify"><code class="xref py py-meth docutils literal notranslate"><span class="pre">notify()</span></code></a> for an asynchronous version of this method.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_pool">
+<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">sync_pool</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ConnectionPool</span></em><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_pool" title="Link to this definition">¶</a></dt>
+<dd><p>The synchronous connection pool used to interact with the database.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_push">
+<span class="sig-name descname"><span class="pre">sync_push</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.job.html#chancy.job.Job" title="chancy.job.Job"><span class="pre">Job</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_push" title="Link to this definition">¶</a></dt>
+<dd><p>Synchronously push a job onto the queue.</p>
+<p>This method provides a synchronous interface to push a job onto the
+queue.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">chancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Chancy</span><span class="p">,</span> <span class="n">Job</span>
+
+<span class="nd">@job</span><span class="p">()</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_job</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Hello, world!&quot;</span><span class="p">)</span>
+
+<span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="s2">&quot;postgresql://localhost/chancy&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="n">chancy</span><span class="o">.</span><span class="n">sync_push</span><span class="p">(</span><span class="n">my_job</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.push" title="chancy.app.Chancy.push"><code class="xref py py-meth docutils literal notranslate"><span class="pre">push()</span></code></a> for an asynchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>job</strong> – The job to push onto the queue.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A reference to the job in the queue.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_push_many">
+<span class="sig-name descname"><span class="pre">sync_push_many</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Job" title="chancy.job.Job"><span class="pre">Job</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="chancy.job.html#chancy.job.IsAJob" title="chancy.job.IsAJob"><span class="pre">IsAJob</span></a><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">...</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_push_many" title="Link to this definition">¶</a></dt>
+<dd><p>Synchronously push multiple jobs onto the queue.</p>
+<p>This method provides a synchronous interface to push multiple jobs onto
+the queue.</p>
+<p>Returns an iterator of lists of references to the jobs in the queue,
+one list per batch.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.push_many" title="chancy.app.Chancy.push_many"><code class="xref py py-meth docutils literal notranslate"><span class="pre">push_many()</span></code></a> for an asynchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>jobs</strong> – The jobs to push onto the queue.</p></li>
+<li><p><strong>batch_size</strong> – The number of jobs to push in each batch. Defaults
+to 1000.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>An iterator of lists of references to the jobs in the queue.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.sync_push_many_ex">
+<span class="sig-name descname"><span class="pre">sync_push_many_ex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursor</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Cursor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">jobs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Job" title="chancy.job.Job"><span class="pre">Job</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.sync_push_many_ex" title="Link to this definition">¶</a></dt>
+<dd><p>Synchronously push multiple jobs onto the queue using a specific cursor.</p>
+<p>This is a low-level method that allows for more control over the
+database connection and transaction management. It is recommended to
+use the higher-level <cite>sync_push_many</cite> method in most cases.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#chancy.app.Chancy.push_many_ex" title="chancy.app.Chancy.push_many_ex"><code class="xref py py-meth docutils literal notranslate"><span class="pre">push_many_ex()</span></code></a> for an asynchronous version of this method.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cursor</strong> – The cursor to use for the operation.</p></li>
+<li><p><strong>jobs</strong> – The jobs to push onto the queue.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of references to the jobs in the queue.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.wait_for_job">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">wait_for_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ref</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">interval</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">states</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">set</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.QueuedJob.State" title="chancy.job.QueuedJob.State"><span class="pre">State</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="chancy.job.html#chancy.job.QueuedJob" title="chancy.job.QueuedJob"><span class="pre">QueuedJob</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.wait_for_job" title="Link to this definition">¶</a></dt>
+<dd><p>Wait for a job to complete.</p>
+<p>This method will loop until the job referenced by the provided
+reference has completed. The interval parameter controls how often
+the job status is checked. This will not block the event loop, so
+other tasks can run while waiting for the job to complete.</p>
+<p>If the job no longer exists, returns <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ref</strong> – The reference to the job to wait for.</p></li>
+<li><p><strong>interval</strong> – The number of seconds to wait between checks.</p></li>
+<li><p><strong>timeout</strong> – The maximum number of seconds to wait for the job to
+complete. If not provided, the method will wait indefinitely.</p></li>
+<li><p><strong>states</strong> – A set of additional states to consider as “complete”. If
+the job enters any of these states, it will be considered complete
+and the method will return. By default, only the SUCCEEDED and
+FAILED states are considered complete.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.app.Chancy.wait_for_jobs">
+<em class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">wait_for_jobs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">refs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.Reference" title="chancy.job.Reference"><span class="pre">Reference</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">interval</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">states</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">set</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="chancy.job.html#chancy.job.QueuedJob.State" title="chancy.job.QueuedJob.State"><span class="pre">State</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.Chancy.wait_for_jobs" title="Link to this definition">¶</a></dt>
+<dd><p>Wait for multiple jobs to complete.</p>
+<p>This method will loop until all jobs referenced by the provided
+references have completed. The interval parameter controls how often
+the job status is checked. This will not block the event loop, so
+other tasks can run while waiting for the jobs to complete.</p>
+<p>If a job no longer exists, it will be skipped and not included in
+the returned list.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>refs</strong> – The references to the jobs to wait for.</p></li>
+<li><p><strong>interval</strong> – The number of seconds to wait between checks.</p></li>
+<li><p><strong>timeout</strong> – The maximum number of seconds to wait for the jobs to
+complete. If not provided, the method will wait indefinitely.</p></li>
+<li><p><strong>states</strong> – A set of additional states to consider as “complete”. If
+a job enters any of these states, it will be considered complete
+and removed from the list of jobs to wait for. By default, only
+the SUCCEEDED and FAILED states are considered complete.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of the completed jobs. Jobs that no longer exist will
+not be included in the list.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="chancy.app.setup_default_logger">
+<span class="sig-prename descclassname"><span class="pre">chancy.app.</span></span><span class="sig-name descname"><span class="pre">setup_default_logger</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">level</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">20</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/app.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.app.setup_default_logger" title="Link to this definition">¶</a></dt>
+<dd><p>Set up the default logger for the application.</p>
+<p>This method will configure the logger for the application, setting the
+log level and adding a stream handler to log to the console.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>level</strong> – The log level to set on the logger. Defaults to DEBUG.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="chancy.job.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">chancy.job module</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="chancy.plugins.metrics.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Metrics</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, Tyler Kennedy
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">chancy.app module</a><ul>
+<li><a class="reference internal" href="#chancy.app.Chancy"><code class="docutils literal notranslate"><span class="pre">Chancy</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Chancy.Executor"><code class="docutils literal notranslate"><span class="pre">Chancy.Executor</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.app.Chancy.Executor.Async"><code class="docutils literal notranslate"><span class="pre">Chancy.Executor.Async</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.Executor.Process"><code class="docutils literal notranslate"><span class="pre">Chancy.Executor.Process</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.Executor.SubInterpreter"><code class="docutils literal notranslate"><span class="pre">Chancy.Executor.SubInterpreter</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.Executor.Threaded"><code class="docutils literal notranslate"><span class="pre">Chancy.Executor.Threaded</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.Chancy.cancel_job"><code class="docutils literal notranslate"><span class="pre">Chancy.cancel_job()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.declare"><code class="docutils literal notranslate"><span class="pre">Chancy.declare()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.declare_ex"><code class="docutils literal notranslate"><span class="pre">Chancy.declare_ex()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.delete_queue"><code class="docutils literal notranslate"><span class="pre">Chancy.delete_queue()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.dsn"><code class="docutils literal notranslate"><span class="pre">Chancy.dsn</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.get_all_queues"><code class="docutils literal notranslate"><span class="pre">Chancy.get_all_queues()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.get_all_workers"><code class="docutils literal notranslate"><span class="pre">Chancy.get_all_workers()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.get_job"><code class="docutils literal notranslate"><span class="pre">Chancy.get_job()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.get_jobs"><code class="docutils literal notranslate"><span class="pre">Chancy.get_jobs()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.get_queue"><code class="docutils literal notranslate"><span class="pre">Chancy.get_queue()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.is_up_to_date"><code class="docutils literal notranslate"><span class="pre">Chancy.is_up_to_date()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.log"><code class="docutils literal notranslate"><span class="pre">Chancy.log</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.max_connection_pool_size"><code class="docutils literal notranslate"><span class="pre">Chancy.max_connection_pool_size</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.migrate"><code class="docutils literal notranslate"><span class="pre">Chancy.migrate()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.min_connection_pool_size"><code class="docutils literal notranslate"><span class="pre">Chancy.min_connection_pool_size</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.notifications"><code class="docutils literal notranslate"><span class="pre">Chancy.notifications</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.notify"><code class="docutils literal notranslate"><span class="pre">Chancy.notify()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.pause_queue"><code class="docutils literal notranslate"><span class="pre">Chancy.pause_queue()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.plugins"><code class="docutils literal notranslate"><span class="pre">Chancy.plugins</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.poll_reconnect_timeout"><code class="docutils literal notranslate"><span class="pre">Chancy.poll_reconnect_timeout</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.pool"><code class="docutils literal notranslate"><span class="pre">Chancy.pool</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.prefix"><code class="docutils literal notranslate"><span class="pre">Chancy.prefix</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.push"><code class="docutils literal notranslate"><span class="pre">Chancy.push()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.push_ex"><code class="docutils literal notranslate"><span class="pre">Chancy.push_ex()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.push_many"><code class="docutils literal notranslate"><span class="pre">Chancy.push_many()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.push_many_ex"><code class="docutils literal notranslate"><span class="pre">Chancy.push_many_ex()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.resume_queue"><code class="docutils literal notranslate"><span class="pre">Chancy.resume_queue()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_declare"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_declare()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_declare_ex"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_declare_ex()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_get_job"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_get_job()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_notify"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_notify()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_pool"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_pool</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_push"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_push()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_push_many"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_push_many()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.sync_push_many_ex"><code class="docutils literal notranslate"><span class="pre">Chancy.sync_push_many_ex()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.wait_for_job"><code class="docutils literal notranslate"><span class="pre">Chancy.wait_for_job()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.app.Chancy.wait_for_jobs"><code class="docutils literal notranslate"><span class="pre">Chancy.wait_for_jobs()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.app.setup_default_logger"><code class="docutils literal notranslate"><span class="pre">setup_default_logger()</span></code></a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/tabs.js?v=3ee01567"></script>
+    <script data-domain="tkte.ch" defer="defer" src="https://plausible.io/js/script.js"></script>
+    </body>
+</html>
