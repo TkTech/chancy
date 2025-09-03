@@ -1,6 +1,36 @@
 Changelog
 =========
 
+0.25.0
+------
+
+🚨 This release requires that you run migrations, as it adds a new queue
+setting, `eager_polling`. Call `chancy.migrate()` or use the CLI:
+
+```bash
+chancy --app <your app> misc migrate
+```
+
+✨ Improvements
+
+- `Chancy.wait_for_job()` now accepts a list of states to wait for, so you can
+  use it to wait for a job to begin running, retried, etc... instead of just
+  finished.
+- `Reference()` objects are now hashable and have equality.
+- `Chancy.wait_for_jobs()` added to wait for multiple jobs to finish.
+- `Chancy.get_jobs()` added to fetch multiple jobs by ID in a single query.
+- Added the `eager_polling` option to `Queue` to trigger immediate polling
+  whenever an executor slot becomes free. This is useful for low-latency
+  processing of jobs with low concurrency, but may increase database load (#48)
+
+🐛 Fixes
+
+- Fixed a bug where a job with a unique_key could run multiple times if
+  pushed again after the job had started running (#51), reported by @mrsshr.
+- Remove an unused plugin hook `on_worker_started`, which is available via
+  the `worker.started` event anyway (#47) by @PaulM5406.
+
+
 0.24.3
 ------
 

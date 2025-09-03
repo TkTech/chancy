@@ -24,7 +24,7 @@ async def test_chancy_job_django_query(chancy, worker):
 
     orm_job = await Job.objects.aget(id=j.identifier)
 
-    assert orm_job.id == j.identifier
+    assert orm_job.id == j
     assert orm_job.queue == "default"
     assert orm_job.func.endswith("test_job")
 

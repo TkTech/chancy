@@ -126,6 +126,7 @@ class Executor(abc.ABC):
                 continue
 
         await self.worker.queue_update(new_instance)
+        await self.worker.on_job_completed(queue=self.queue, job=new_instance)
 
     @staticmethod
     def get_function_and_kwargs(job: QueuedJob) -> tuple[Callable, dict]:
