@@ -10,7 +10,7 @@ Postgres.
 ![PyPI Version](https://img.shields.io/pypi/v/chancy)
 ![Python Version](https://img.shields.io/pypi/pyversions/chancy)
 ![OS Platforms](https://img.shields.io/badge/OS-Linux%20|%20macOS%20|%20Windows-blue)
-![PostgreSQL Versions](https://img.shields.io/badge/PostgreSQL-%2014%20|%2015%20|%2016%20|%2017-blue)
+![PostgreSQL Versions](https://img.shields.io/badge/PostgreSQL-%2014%20|%2015%20|%2016%20|%2017%20|%2018-blue)
 
 ## Key Features
 
