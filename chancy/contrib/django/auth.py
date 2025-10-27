@@ -14,12 +14,18 @@ class DjangoAuthBackend(AuthBackend):
             username=username, password=password
         )
         if user is not None and user.is_superuser:
-            request.session["username"] = username
+            try:
+                request.session["username"] = username
+            except Exception:
+                pass
             return True
         return False
 
     async def logout(self, request: Request) -> None:
-        request.session.pop("username", None)
+        try:
+            request.session.pop("username", None)
+        except Exception:
+            pass
 
     async def authenticate(
         self, conn: HTTPConnection

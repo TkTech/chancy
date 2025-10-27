@@ -6,3 +6,35 @@ repos:
     - id: ruff-check
       args: [ --fix ]
     - id: ruff-format
+  
+
+  # UI: ESLint (Flat config) with autofix
+- repo: https://github.com/pre-commit/mirrors-eslint
+  rev: v9.9.0
+  hooks:
+    - id: eslint
+      name: ESLint (UI)
+      files: ^chancy/plugins/api/ui/.*\.(ts|tsx|js|jsx)$
+      args:
+        - "-c"
+        - "chancy/plugins/api/ui/eslint.config.js"
+        - "--max-warnings=0"
+        - "--fix"
+      additional_dependencies:
+        - "eslint@9.9.0"
+        - "@eslint/js@9.9.0"
+        - "typescript-eslint@8.0.1"
+        - "eslint-plugin-react-hooks@5.1.0-rc.0"
+        - "eslint-plugin-react-refresh@0.4.9"
+        - "globals@15.9.0"
+        - "typescript@5.5.3"
+
+  # UI: TypeScript type-check on pre-push
+- repo: local
+  hooks:
+    - id: ts-typecheck-ui
+      name: TypeScript type-check (UI)
+      language: system
+      entry: bash -lc 'npm --prefix chancy/plugins/api/ui exec -s tsc -- --noEmit'
+      pass_filenames: false
+      stages: [pre-push]

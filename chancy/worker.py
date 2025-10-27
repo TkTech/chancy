@@ -870,6 +870,54 @@ class Worker:
         """
         return self._executors
 
+    async def increment_counter(self, metric_key: str, value: float):
+        """
+        Increment a counter metric by the specified value.
+
+        This method emits a metrics.counter event that metrics plugins can
+        subscribe to. If no metrics plugin is active, the event is simply
+        ignored with no overhead.
+
+        :param metric_key: The hierarchical key for the metric (e.g.,
+            "workflow:created", "queue:default:throughput")
+        :param value: The value to increment the counter by
+        """
+        await self.hub.emit(
+            "metrics.counter", {"key": metric_key, "value": value}
+        )
+
+    async def record_gauge(self, metric_key: str, value: float):
+        """
+        Record a gauge metric value.
+
+        This method emits a metrics.gauge event that metrics plugins can
+        subscribe to. If no metrics plugin is active, the event is simply
+        ignored with no overhead.
+
+        :param metric_key: The hierarchical key for the metric (e.g.,
+            "workflow:active_count", "queue:default:size")
+        :param value: The current gauge value
+        """
+        await self.hub.emit(
+            "metrics.gauge", {"key": metric_key, "value": value}
+        )
+
+    async def record_histogram_value(self, metric_key: str, value: float):
+        """
+        Record a value for a histogram metric.
+
+        This method emits a metrics.histogram event that metrics plugins can
+        subscribe to. If no metrics plugin is active, the event is simply
+        ignored with no overhead.
+
+        :param metric_key: The hierarchical key for the metric (e.g.,
+            "workflow:execution_time", "job:my_function:duration")
+        :param value: The value to record in the histogram
+        """
+        await self.hub.emit(
+            "metrics.histogram", {"key": metric_key, "value": value}
+        )
+
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"
 

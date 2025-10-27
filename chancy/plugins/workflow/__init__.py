@@ -371,6 +371,9 @@ class WorkflowPlugin(Plugin):
         while await self.sleep(self.polling_interval):
             await self.wait_for_leader(worker)
 
+            # Record that a poll run is happening
+            await worker.increment_counter("workflows:poll_runs", 1)
+
             async with chancy.pool.connection() as conn:
                 async with conn.cursor(row_factory=dict_row) as cursor:
                     # Grab the workflow IDs of workflows that are pending or
@@ -405,9 +408,9 @@ class WorkflowPlugin(Plugin):
                     )
                     for workflow in workflows:
                         if await self.process_workflow(
-                            cursor, chancy, workflow
+                            cursor, chancy, workflow, worker
                         ):
-                            await self.push_ex(cursor, chancy, workflow)
+                            await self.push_ex(cursor, chancy, workflow, worker)
 
     async def _on_single_step_completed(
         self, event: Event, chancy: Chancy, worker: Worker
@@ -448,8 +451,10 @@ class WorkflowPlugin(Plugin):
                     cursor, chancy, event.body["workflow_id"]
                 )
                 if workflow is not None:
-                    if await self.process_workflow(cursor, chancy, workflow):
-                        await self.push_ex(cursor, chancy, workflow)
+                    if await self.process_workflow(
+                        cursor, chancy, workflow, worker
+                    ):
+                        await self.push_ex(cursor, chancy, workflow, worker)
 
     async def on_job_updated(
         self,
@@ -617,7 +622,10 @@ class WorkflowPlugin(Plugin):
 
     @staticmethod
     async def process_workflow(
-        cursor: AsyncCursor, chancy: Chancy, workflow: Workflow
+        cursor: AsyncCursor,
+        chancy: Chancy,
+        workflow: Workflow,
+        worker: "Worker",
     ) -> bool:
         """
         Process a single iteration of the given workflow, progressing the
@@ -626,6 +634,7 @@ class WorkflowPlugin(Plugin):
         :param cursor: The cursor to use for the query.
         :param chancy: The Chancy application.
         :param workflow: The workflow to process.
+        :param worker: The worker processing the workflow.
         :return: True if the workflow was updated, False otherwise.
         """
         # If the workflow is already in a terminal state, there's no further
@@ -668,14 +677,56 @@ class WorkflowPlugin(Plugin):
                         )
                     ).identifier
                     has_change = True
+                    # Record that a step was queued
+                    await worker.increment_counter("workflows:steps:queued", 1)
+
+        # Transition from PENDING to RUNNING once any step has been queued
+        if workflow.state == Workflow.State.PENDING:
+            if any(step.job_id is not None for step in workflow.steps.values()):
+                workflow.state = Workflow.State.RUNNING
+                # Record workflow started (global and per-workflow)
+                await worker.increment_counter("workflows:state:running", 1)
+                await worker.increment_counter(
+                    f"workflow:{workflow.name}:started", 1
+                )
 
         # Are all jobs complete, or any jobs failed? If so, we can mark the
         # workflow as completed or failed.
         states = workflow.steps_by_state
         if len(states.get(QueuedJob.State.SUCCEEDED, [])) == len(workflow):
             workflow.state = Workflow.State.COMPLETED
+            # Record workflow completion and execution time (global and per-workflow)
+            await worker.increment_counter("workflows:state:completed", 1)
+            await worker.increment_counter(
+                f"workflow:{workflow.name}:completed", 1
+            )
+            if workflow.created_at and workflow.updated_at:
+                execution_time = (
+                    workflow.updated_at - workflow.created_at
+                ).total_seconds()
+                await worker.record_histogram_value(
+                    "workflows:execution_time", execution_time
+                )
+                await worker.record_histogram_value(
+                    f"workflow:{workflow.name}:execution_time", execution_time
+                )
         elif states.get(QueuedJob.State.FAILED):
             workflow.state = Workflow.State.FAILED
+            # Record workflow failure and execution time (global and per-workflow)
+            await worker.increment_counter("workflows:state:failed", 1)
+            await worker.increment_counter(
+                f"workflow:{workflow.name}:failed", 1
+            )
+            if workflow.created_at and workflow.updated_at:
+                execution_time = (
+                    workflow.updated_at - workflow.created_at
+                ).total_seconds()
+                await worker.record_histogram_value(
+                    "workflows:execution_time", execution_time
+                )
+                await worker.record_histogram_value(
+                    f"workflow:{workflow.name}:execution_time", execution_time
+                )
 
         return starting_state != workflow.state or has_change
 
@@ -698,7 +749,10 @@ class WorkflowPlugin(Plugin):
 
     @staticmethod
     async def push_ex(
-        cursor: AsyncCursor[DictRow], chancy: Chancy, workflow: Workflow
+        cursor: AsyncCursor[DictRow],
+        chancy: Chancy,
+        workflow: Workflow,
+        worker: "Worker" = None,
     ) -> str:
         """
         Push new workflow to the database.
@@ -712,6 +766,7 @@ class WorkflowPlugin(Plugin):
         :param cursor: The cursor to use for the query.
         :param chancy: The Chancy application.
         :param workflow: The workflow to push.
+        :param worker: Optional worker for emitting metrics.
         :return: The UUID of the newly created workflow.
         :raises CircularDependencyError: If a circular dependency is detected.
         :raises InvalidDependencyError: If a dependency references a non-existent step.
@@ -789,6 +844,13 @@ class WorkflowPlugin(Plugin):
                 "name": workflow.name,
             },
         )
+
+        # Record metrics if worker is available and workflow was just created
+        if worker and inserted:
+            await worker.increment_counter("workflows:state:pending", 1)
+            await worker.increment_counter(
+                f"workflow:{workflow.name}:created", 1
+            )
 
         return workflow.id
 

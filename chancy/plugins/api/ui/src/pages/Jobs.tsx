@@ -1,160 +1,27 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Loading} from '../components/Loading.tsx';
-import {useJob, useJobs} from '../hooks/useJobs.tsx';
-import {Link, useParams, useSearchParams} from 'react-router-dom';
-import {statusToColor} from '../utils.tsx';
+import {useJobs, FilterTriple} from '../hooks/useJobs.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import React from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useJobActions } from '../hooks/useJobActions.tsx';
+import { useConfirm } from '../components/common/ConfirmDialog.tsx';
+import { JobDetailsView } from '../features/jobs/JobDetailsView';
+import { useDrawer } from '../components/common/DrawerProvider';
+import { PageHeader } from '../components/common/PageHeader';
+import { StatusBadge } from '../components/common/StatusBadge';
+import { DataTable } from '../components/common/DataTable';
+import { SearchFilter, FieldConfig } from '../components/common/SearchFilter';
+import { useQueues } from '../hooks/useQueues';
+import { useFunctions } from '../hooks/useFunctions';
+import { JobStateBarGraph } from '../components/JobStateBarGraph';
 
 export function Job() {
-  const { url } = useServerConfiguration();
   const { job_id } = useParams<{job_id: string}>();
-
-  const { data: job, isLoading } = useJob({
-    url: url,
-    job_id: job_id
-  });
-
-  if (isLoading) return <Loading />;
-
-  if (!job || job.id === undefined) {
-    return (
-      <div className={"container-fluid"}>
-        <h2 className={"mb-4"}>Job - {job_id}</h2>
-        <div className={"alert alert-danger"}>Job not found.</div>
-      </div>
-    );
-  }
-
   return (
     <div className={"container-fluid"}>
       <h2 className={"mb-4"}>Job - {job_id}</h2>
-      <table className={"table table-hover border mb-0"}>
-        <tbody>
-        <tr>
-          <th>Function</th>
-          <td>
-            <code>{job.func}</code>
-          </td>
-        </tr>
-        <tr>
-          <th>Queue</th>
-          <td>
-            <Link to={`/queues/${job.queue}`}>
-              {job.queue}
-            </Link>
-          </td>
-        </tr>
-        <tr>
-          <th>State</th>
-          <td>
-              <span className={`badge bg-${statusToColor(job.state)}`}>
-                {job.state}
-              </span>
-          </td>
-        </tr>
-        <tr>
-          <th>Attempts</th>
-          <td>
-            {job.attempts} / {job.max_attempts}
-          </td>
-        </tr>
-        <tr>
-          <th>Created At</th>
-          <td>
-            {job.created_at}
-          </td>
-        </tr>
-        <tr>
-          <th>Scheduled At</th>
-          <td>
-            {job.scheduled_at}
-          </td>
-        </tr>
-        <tr>
-          <th>Started At</th>
-          <td>
-            {job.started_at}
-          </td>
-        </tr>
-        <tr>
-          <th>Completed At</th>
-          <td>
-            {job.completed_at}
-          </td>
-        </tr>
-        {job.unique_key && (
-          <tr>
-            <th>Unique Key</th>
-            <td>
-              <code>{job.unique_key}</code>
-            </td>
-          </tr>
-        )}
-        <tr>
-          <th>Priority</th>
-          <td>
-            {job.priority}
-            <small className={'text-muted d-block'}>
-              Higher values run first.
-            </small>
-          </td>
-        </tr>
-        <tr>
-          <th>Limits</th>
-          <td>
-            {job.limits.length === 0 ? (
-              <div className={'alert alert-info mb-0'}>
-                No resource limits defined.
-              </div>
-            ) : (
-              <table className={'table table-sm mb-0'}>
-                <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Value</th>
-                </tr>
-                </thead>
-                <tbody>
-                {job.limits.map(limit => (
-                  <tr key={limit.key}>
-                    <td>{limit.key}</td>
-                    <td>{limit.value}</td>
-                  </tr>
-                ))}
-                </tbody>
-              </table>
-            )}
-          </td>
-        </tr>
-        </tbody>
-      </table>
-      <h3 className={"mt-4"}>Arguments</h3>
-      <div className={"border p-4"}>
-        <pre className={"mb-0"}><code>{JSON.stringify(job.kwargs, null, 2)}</code></pre>
-      </div>
-      <h3 className={"mt-4"}>Meta</h3>
-      <div className={"border p-4"}>
-        <pre className={"mb-0"}><code>{JSON.stringify(job.meta, null, 2)}</code></pre>
-      </div>
-      {job.errors.length !== 0 && (
-        <>
-          <h3 className={'mt-4 text-danger'}>Errors</h3>
-          <p>
-            The job encountered the following errors during execution.
-          </p>
-          {job.errors.map((error) => (
-            <div className={'card mt-4 border-danger-subtle'}>
-              <div className={'card-header bg-danger-subtle'}>
-                <strong>Attempt #{error.attempt}</strong>
-              </div>
-              <div className={'card-body'}>
-                <pre><code>{error.traceback}</code></pre>
-              </div>
-            </div>
-          ))}
-        </>
-      )}
+      {job_id && <JobDetailsView job_id={job_id} />}
     </div>
   );
 }
@@ -162,99 +29,188 @@ export function Job() {
 export function Jobs() {
   const {url} = useServerConfiguration();
   const [searchParams, setSearchParams] = useSearchParams();
-  const location = window.location.pathname;
-  const pathParts = location.split('/');
-  const state = pathParts.length > 2 && ['pending', 'running', 'succeeded', 'failed', 'retrying'].includes(pathParts[2])
-    ? pathParts[2]
-    : 'pending';
-    
-  const func = searchParams.get('func') || undefined;
-  const [funcInput, setFuncInput] = React.useState(func || '');
 
-  const { data: jobs, isLoading, dataUpdatedAt } = useJobs({
-    url: url,
-    state: state,
-    func: func
-  });
-  
-  const updateFuncFilter = (value: string) => {
-    setFuncInput(value);
-    const newParams = {...Object.fromEntries(searchParams.entries())};
-    if (value) {
-      newParams.func = value;
-    } else {
-      delete newParams.func;
+  const [selected, setSelected] = React.useState<Record<string, boolean>>({});
+  const selectedIds = Object.keys(selected).filter(k => selected[k]);
+  const freezeUpdates = selectedIds.length > 0;
+
+  // Parse filters from URL or use default
+  const filtersFromUrl = React.useMemo(() => {
+    const filtersParam = searchParams.get('filters');
+    if (!filtersParam) return [['state', '=', 'pending'] as FilterTriple];
+    try {
+      const parsed = JSON.parse(filtersParam);
+      return Array.isArray(parsed) ? parsed as FilterTriple[] : [['state', '=', 'pending'] as FilterTriple];
+    } catch {
+      return [['state', '=', 'pending'] as FilterTriple];
     }
-    setSearchParams(newParams);
+  }, [searchParams]);
+
+  const [filters, setFilters] = React.useState<FilterTriple[]>(filtersFromUrl);
+
+  // Sync filters to URL
+  React.useEffect(() => {
+    const newParams = new URLSearchParams(searchParams);
+    if (filters.length > 0) {
+      newParams.set('filters', JSON.stringify(filters));
+    } else {
+      newParams.delete('filters');
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [filters]);
+
+  // Fetch queues and functions for autocomplete
+  const { data: queues } = useQueues(url);
+  const { data: functions } = useFunctions(url);
+
+  // Define filter field configuration
+  const jobFilterFields: Record<string, FieldConfig> = React.useMemo(() => ({
+    state: {
+      label: 'State',
+      description: 'Filter jobs by their current state',
+      type: 'autocomplete',
+      operators: ['='],
+      getSuggestions: async (query) => {
+        const states = ['pending', 'running', 'succeeded', 'failed', 'retrying'];
+        if (!query) return states;
+        return states.filter(s => s.toLowerCase().includes(query.toLowerCase()));
+      }
+    },
+    queue: {
+      label: 'Queue',
+      description: 'Filter jobs by the queue they belong to',
+      type: 'autocomplete',
+      operators: ['='],
+      getSuggestions: async (query) => {
+        const queueNames = queues?.map(q => q.name) || [];
+        if (!query) return queueNames;
+        return queueNames.filter(name => name.toLowerCase().includes(query.toLowerCase()));
+      }
+    },
+    func: {
+      label: 'Function',
+      description: 'Filter jobs by their function name',
+      type: 'autocomplete',
+      operators: ['=', '~'],
+      getSuggestions: async (query) => {
+        const funcNames = functions || [];
+        if (!query) return funcNames;
+        return funcNames.filter(name => name.toLowerCase().includes(query.toLowerCase()));
+      }
+    },
+    priority: {
+      label: 'Priority',
+      description: 'Filter jobs by priority level (higher = more important)',
+      type: 'numeric',
+      operators: ['=', '>', '<', '>=', '<=']
+    },
+    attempts: {
+      label: 'Attempts',
+      description: 'Filter jobs by number of execution attempts',
+      type: 'numeric',
+      operators: ['=', '>', '<', '>=', '<=']
+    }
+  }), [queues, functions]);
+
+  const { data: jobs, dataUpdatedAt } = useJobs({
+    url: url,
+    state: undefined,
+    filters: filters,
+    enabled: url !== null && !freezeUpdates,
+  });
+
+  const allSelected = jobs && jobs.length > 0 && jobs.every(j => selected[j.id]);
+  const toggleAll = () => {
+    if (!jobs) return;
+    const next: Record<string, boolean> = {};
+    if (!allSelected) jobs.forEach(j => next[j.id] = true);
+    setSelected(next);
   }
 
-  if (isLoading) return <Loading />;
+  const { retry, cancel, purge } = useJobActions();
+  const { confirm, dialog } = useConfirm();
+  const drawer = useDrawer();
+
+  // Avoid showing the global loader during background refetches
+  // which causes visible flicker. Only show it before first data.
+  if (!jobs) return <Loading />;
 
   return (
     <div className={"container-fluid"}>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2 className="mb-0">
-          <span className={`text-${statusToColor(state)}`}>
-            {state.charAt(0).toUpperCase() + state.slice(1)} Jobs
-          </span>
-        </h2>
-        <div className="d-flex align-items-center">
-          <small className="text-muted me-2">
-            Last updated: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}
-          </small>
-          <div className="input-group input-group-sm me-2" style={{ width: "250px" }}>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Search by function name"
-              value={funcInput}
-              onChange={(e) => updateFuncFilter(e.target.value)}
-            />
-            {func && (
-              <button 
-                className="btn btn-outline-secondary" 
-                type="button"
-                onClick={() => updateFuncFilter('')}
-              >
-                ×
-              </button>
-            )}
+      <PageHeader
+        title="Jobs"
+        description={`Last updated: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}`}
+      />
+
+      <JobStateBarGraph />
+
+      <SearchFilter
+        fields={jobFilterFields}
+        value={filters}
+        onChange={setFilters}
+        placeholder="Add filter... (state, queue, func, priority, attempts)"
+      />
+
+      {selectedIds.length > 0 && (
+        <div className="alert alert-primary d-flex justify-content-between align-items-center py-2 mb-3">
+          <div className="fw-medium">
+            <span className="badge bg-primary me-2">{selectedIds.length}</span>
+            {selectedIds.length === 1 ? 'job' : 'jobs'} selected
+          </div>
+          <div className="btn-group btn-group-sm">
+            <button className="btn btn-primary" onClick={() => retry.mutate(selectedIds)}>Retry</button>
+            <button className="btn btn-danger" onClick={async () => {
+              const ok = await confirm({ title: 'Purge Jobs', message: `Permanently delete ${selectedIds.length} job(s)?` });
+              if (ok) purge.mutate(selectedIds);
+            }}>Purge</button>
+            <button className="btn btn-warning" onClick={async () => {
+              const ok = await confirm({ title: 'Cancel Jobs', message: `Cancel ${selectedIds.length} job(s)? They must be pending or running.` });
+              if (!ok) return;
+              for (const id of selectedIds) await cancel.mutateAsync(id);
+            }}>Cancel</button>
           </div>
         </div>
-      </div>
+      )}
 
-      <table className={'table table-hover mb-0'}>
+      <DataTable>
         <thead>
         <tr>
+          <th style={{width: '1%'}}>
+            <input type="checkbox" checked={!!allSelected} onChange={toggleAll} />
+          </th>
           <th className={"w-100"}>Job</th>
+          <th className={'text-center'}>State</th>
           <th className={'text-center'}>Queue</th>
           <th className={"text-center"}>Attempts</th>
-          <th className={"text-center"}>
-            {{
-              "pending": "Created",
-              "running": "Started",
-              "succeeded": "Completed",
-              "failed": "Completed",
-              "retrying": "Started",
-            }[state]}
-          </th>
+          <th className={"text-center"}>Time</th>
         </tr>
         </thead>
         <tbody>
         {jobs?.length === 0 && (
           <tr>
-            <td colSpan={4} className={'text-center'}>
+            <td colSpan={6} className={'text-center'}>
               No matching jobs found.
             </td>
           </tr>
         )}
         {jobs?.map((job) => (
           <tr key={job.id}>
+            <td>
+              <input type="checkbox" checked={!!selected[job.id]} onChange={e => setSelected(s => ({...s, [job.id]: e.target.checked}))} />
+            </td>
             <td className={"text-break"}>
-              <span className={`text-${statusToColor(job.state)} me-2`} title={job.state}>⬤</span>
-              <Link to={`/jobs/${job.id}`}>
+              <Link to={`/jobs/${job.id}`}
+                onClick={(e) => {
+                  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  drawer.open(<JobDetailsView job_id={job.id} />, { title: 'Job Details' });
+                }}
+              >
                 {job.func}
               </Link>
+            </td>
+            <td className={"text-center"}>
+              <StatusBadge status={job.state} />
             </td>
             <td className={"text-center"}>
               <Link to={`/queues/${job.queue}`}>
@@ -264,7 +220,7 @@ export function Jobs() {
             <td className={"text-center"}>
               {job.attempts} / {job.max_attempts}
             </td>
-            <td className={"text-center"}>
+            <td className={"text-center"} style={{fontFamily: 'monospace'}}>
               <CountdownTimer date={{
                 "pending": job.created_at,
                 "running": job.started_at,
@@ -276,7 +232,13 @@ export function Jobs() {
           </tr>
         ))}
         </tbody>
-      </table>
+      </DataTable>
+      {jobs && jobs.length >= 100 && (
+        <div className="text-muted text-center mt-2" style={{fontSize: '0.875rem'}}>
+          Only showing the first 100 results...
+        </div>
+      )}
+      {dialog}
     </div>
   )
 }

@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { visualizer } from "rollup-plugin-visualizer";
+import svgr from 'vite-plugin-svgr';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), visualizer()],
+  plugins: [react(), svgr(), visualizer()],
   build: {
     outDir: '../dist',
     // Since our dist directory is outside the vite root,
@@ -13,7 +14,17 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:8000'
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        ws: true,
+      },
+      // Explicit WS route (optional, '/api' above already covers it)
+      '/api/v1/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+        changeOrigin: true,
+      }
     }
   }
 })

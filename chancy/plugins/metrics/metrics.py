@@ -78,6 +78,28 @@ class Metrics(Plugin):
     The metrics are stored in a compact time-series format, with data points
     aggregated at different resolutions (1 minute, 5 minutes, 1 hour, 1 day).
 
+    **Default Retention Policy:**
+
+    .. list-table::
+       :header-rows: 1
+       :widths: 20 20 30
+
+       * - Resolution
+         - Points Retained
+         - Total Time Period
+       * - 1 minute
+         - 60
+         - 1 hour
+       * - 5 minutes
+         - 288
+         - 1 day (24 hours)
+       * - 1 hour
+         - 168
+         - 1 week (7 days)
+       * - 1 day
+         - 90
+         - 90 days (3 months)
+
     .. note::
 
         While you can use this plugin to record your own arbitrary metrics,
@@ -161,6 +183,11 @@ class Metrics(Plugin):
             await self._get_raw_metrics(chancy)
         )
 
+        # Subscribe to generic metric events from the hub
+        worker.hub.on("metrics.counter", self._handle_counter_event)
+        worker.hub.on("metrics.gauge", self._handle_gauge_event)
+        worker.hub.on("metrics.histogram", self._handle_histogram_event)
+
         # Start a task to collect table size metrics
         worker.manager.add(
             f"metrics_table_sizes_{self.worker_id}",
@@ -223,6 +250,20 @@ class Metrics(Plugin):
 
                 await cursor.execute(query)
                 return cursor.rowcount if cursor.rowcount > 0 else None
+
+    async def _handle_counter_event(self, event):
+        """Handle counter metric events from the hub."""
+        await self.increment_counter(event.body["key"], event.body["value"])
+
+    async def _handle_gauge_event(self, event):
+        """Handle gauge metric events from the hub."""
+        await self.record_gauge(event.body["key"], event.body["value"])
+
+    async def _handle_histogram_event(self, event):
+        """Handle histogram metric events from the hub."""
+        await self.record_histogram_value(
+            event.body["key"], event.body["value"]
+        )
 
     async def _get_metric_lock(self, metric_key: str) -> asyncio.Lock:
         """Get a lock for a specific metric to prevent race conditions."""

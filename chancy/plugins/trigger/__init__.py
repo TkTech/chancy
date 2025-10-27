@@ -32,6 +32,11 @@ class Trigger(Plugin):
     Install database triggers on non-Chancy tables that create jobs when rows
     change.
 
+    .. warning::
+
+        This plugin is still considered experimental and its API may change in
+        future releases. Feedback is welcome!
+
     The Trigger plugin allows you to automatically create jobs in response to
     database changes on any table. It uses PostgreSQL statement-level triggers
     for optimal performance with bulk operations. Since these triggers are run

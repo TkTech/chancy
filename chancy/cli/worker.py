@@ -84,6 +84,11 @@ async def web_command(
     async with chancy:
         worker = Worker(chancy, tags=set())
 
+        # Add infrastructure tasks needed for hub events (LISTEN/NOTIFY)
+        # and job updates, without running full queue processing.
+        worker.manager.add("notifications", worker._maintain_notifications())
+        worker.manager.add("updates", worker._maintain_updates())
+
         # The metrics plugin needs to be running to pull in cluster-wide
         # metrics.
         if metrics := chancy.plugins.get("chancy.metrics"):

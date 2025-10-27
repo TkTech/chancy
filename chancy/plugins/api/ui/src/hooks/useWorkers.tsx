@@ -1,4 +1,5 @@
 import {useQuery} from '@tanstack/react-query';
+import { request } from '../services/http';
 
 export interface Worker {
   worker_id: string;
@@ -13,8 +14,7 @@ export function useWorkers(url: string | null) {
   return useQuery<Worker[]>({
     queryKey: ['workers', url],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/workers`);
-      return await response.json();
+      return await request<Worker[]>(url as string, `/api/v1/workers`);
     },
     refetchInterval: 10000,
     enabled: url !== null

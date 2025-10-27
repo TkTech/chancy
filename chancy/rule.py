@@ -46,6 +46,12 @@ class Rule(SQLAble):
         """
         return Condition(self.to_sql(), "ILIKE", f"%{value}%")
 
+    def ilike(self, value: str) -> "Condition":
+        """
+        String ILIKE match (case-insensitive pattern matching).
+        """
+        return Condition(self.to_sql(), "ILIKE", value)
+
     def to_sql(self) -> sql.Composable:
         return sql.Identifier(self.field)
 
@@ -139,3 +145,11 @@ class JobRules:
     class ID(Rule):
         def __init__(self):
             super().__init__("id")
+
+    class Priority(Rule):
+        def __init__(self):
+            super().__init__("priority")
+
+    class Attempts(Rule):
+        def __init__(self):
+            super().__init__("attempts")
