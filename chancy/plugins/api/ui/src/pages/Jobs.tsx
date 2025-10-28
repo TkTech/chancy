@@ -34,15 +34,15 @@ export function Jobs() {
   const selectedIds = Object.keys(selected).filter(k => selected[k]);
   const freezeUpdates = selectedIds.length > 0;
 
-  // Parse filters from URL or use default
+  // Parse filters from URL
   const filtersFromUrl = React.useMemo(() => {
     const filtersParam = searchParams.get('filters');
-    if (!filtersParam) return [['state', '=', 'pending'] as FilterTriple];
+    if (!filtersParam) return [];
     try {
       const parsed = JSON.parse(filtersParam);
-      return Array.isArray(parsed) ? parsed as FilterTriple[] : [['state', '=', 'pending'] as FilterTriple];
+      return Array.isArray(parsed) ? parsed as FilterTriple[] : [];
     } catch {
-      return [['state', '=', 'pending'] as FilterTriple];
+      return [];
     }
   }, [searchParams]);
 

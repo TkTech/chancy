@@ -81,11 +81,20 @@ export function useJob ({
   url: string | null,
   job_id: string | undefined
 }) {
-  return useQuery<Job>({
+  const query = useQuery<Job>({
     queryKey: ['job', url, job_id],
     queryFn: async () => {
       return await request<Job>(url as string, `/api/v1/jobs/${job_id}`);
     },
-    enabled: url !== null && job_id !== undefined
+    enabled: url !== null && job_id !== undefined,
+    refetchInterval: (query) => {
+      // Only refetch if the job is not in a terminal state
+      const job = query.state.data;
+      if (!job) return false;
+      const terminalStates = ['succeeded', 'failed'];
+      return terminalStates.includes(job.state) ? false : 5000;
+    }
   });
+
+  return query;
 }
