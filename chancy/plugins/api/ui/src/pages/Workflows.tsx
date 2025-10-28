@@ -15,11 +15,15 @@ import { StatusBadge } from '../components/common/StatusBadge';
 import { DataTable } from '../components/common/DataTable';
 import { SearchFilter, FieldConfig } from '../components/common/SearchFilter';
 import { PackedJobDetails } from '../components/PackedJobDetails';
+import { MetricStatCard } from '../components/dashboard/MetricStatCard';
+import { MetricSuccessRateCard } from '../components/dashboard/MetricSuccessRateCard';
+import { MetricHistogramCard } from '../components/dashboard/MetricHistogramCard';
 
 
 export function Workflow() {
   const { url } = useServerConfiguration();
   const { workflow_id } = useParams<{workflow_id: string}>();
+  const resolution = '5min';
   // const location = useLocation();
   const { data: workflow, isLoading } = useWorkflow({ url, workflow_id, options: {refetchInterval: 5000 } });
   const drawer = useDrawer();
@@ -59,6 +63,61 @@ export function Workflow() {
   return (
     <div className={"container-fluid"}>
       <h2 className={"mb-4"}>Workflow - {workflow_id}</h2>
+
+      {/* Per-Workflow Type Metrics */}
+      <div className="alert alert-info mb-3">
+        Statistics for all <strong>{workflow.name}</strong> workflows
+      </div>
+      <div className="row g-3 mb-4">
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricStatCard
+            title="Started"
+            metricKey={`workflow:${workflow.name}:started`}
+            url={url!}
+            resolution={resolution}
+            subtitle="last 24 hours"
+            showSparkline={true}
+            sparklineColor="#3b82f6"
+            formatValue={(v) => v.toString()}
+          />
+        </div>
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricStatCard
+            title="Completed"
+            metricKey={`workflow:${workflow.name}:completed`}
+            url={url!}
+            resolution={resolution}
+            subtitle="last 24 hours"
+            showSparkline={true}
+            sparklineColor="#10b981"
+            formatValue={(v) => v.toString()}
+          />
+        </div>
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricStatCard
+            title="Failed"
+            metricKey={`workflow:${workflow.name}:failed`}
+            url={url!}
+            resolution={resolution}
+            subtitle="last 24 hours"
+            showSparkline={true}
+            sparklineColor="#ef4444"
+            formatValue={(v) => v.toString()}
+          />
+        </div>
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricHistogramCard
+            title="Avg Execution Time"
+            metricKey={`workflow:${workflow.name}:execution_time`}
+            url={url!}
+            resolution={resolution}
+            stat="avg"
+            formatValue={(v) => `${v.toFixed(1)}s`}
+            sparklineColor="#8b5cf6"
+          />
+        </div>
+      </div>
+
       <div className="card mb-3">
         <div className="card-header">Details</div>
         <table className={"table border mb-0"}>
@@ -170,6 +229,7 @@ export function Workflow() {
 export function Workflows() {
   const {url} = useServerConfiguration();
   const [searchParams, setSearchParams] = useSearchParams();
+  const resolution = '5min';
 
   // Parse filters from URL or use default
   const filtersFromUrl = React.useMemo(() => {
@@ -228,6 +288,55 @@ export function Workflows() {
         title="Workflows"
         description={`Multi-step job workflows with dependencies • Last updated: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'Never'}`}
       />
+
+      {/* Workflow Metrics */}
+      <div className="row g-3 mb-4">
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricStatCard
+            title="Workflows Completed"
+            metricKey="workflows:state:completed"
+            url={url!}
+            resolution={resolution}
+            subtitle="last 24 hours"
+            showSparkline={true}
+            sparklineColor="#10b981"
+            formatValue={(v) => v.toString()}
+          />
+        </div>
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricStatCard
+            title="Workflows Failed"
+            metricKey="workflows:state:failed"
+            url={url!}
+            resolution={resolution}
+            subtitle="last 24 hours"
+            showSparkline={true}
+            sparklineColor="#ef4444"
+            formatValue={(v) => v.toString()}
+          />
+        </div>
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricSuccessRateCard
+            title="Success Rate"
+            succeededKey="workflows:state:completed"
+            failedKey="workflows:state:failed"
+            url={url!}
+            resolution={resolution}
+          />
+        </div>
+        <div className="col-12 col-md-6 col-xl-3">
+          <MetricStatCard
+            title="Steps Queued"
+            metricKey="workflows:steps:queued"
+            url={url!}
+            resolution={resolution}
+            subtitle="last 24 hours"
+            showSparkline={true}
+            sparklineColor="#3b82f6"
+            formatValue={(v) => v.toString()}
+          />
+        </div>
+      </div>
 
       <SearchFilter
         fields={workflowFilterFields}
