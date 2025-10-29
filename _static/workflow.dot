@@ -1,0 +1,14 @@
+digraph "example" {
+  rankdir=TB;
+  node [shape=box, style="rounded,filled", fontname="Arial"];
+  "top" [label="top\n(pending)", fillcolor=lightblue];
+  "left" [label="left\n(pending)", fillcolor=lightblue];
+  "right" [label="right\n(pending)", fillcolor=lightblue];
+  "bottom" [label="bottom\n(pending)", fillcolor=lightblue];
+  "top" -> "left";
+  "top" -> "right";
+  "left" -> "bottom";
+  "right" -> "bottom";
+  labelloc="t";
+  label="Workflow: example\nState: pending";
+}
