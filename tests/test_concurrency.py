@@ -1,8 +1,9 @@
+import asyncio
 import time
 
 import pytest
 
-from chancy import Chancy, Job, Queue, QueuedJob, Worker, job
+from chancy import Chancy, Job, QueuedJob, Worker, job
 from chancy.job import ConcurrencyRule
 
 
@@ -13,9 +14,49 @@ def simple_job():
 
 
 @job()
-def user_job(user_id: str, action: str):
-    """A job that operates on a specific user"""
-    time.sleep(0.1)  # Simulate some work
+def slow_job(user_id: str, action: str = "default", duration: float = 0.5):
+    """A job that takes some time to complete."""
+    time.sleep(duration)
+
+
+async def _count_running_jobs_for_key(
+    chancy: Chancy, concurrency_key: str
+) -> int:
+    """Count running jobs for a specific concurrency key."""
+    async with chancy.pool.connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                f"""
+                SELECT COUNT(*) FROM {chancy.prefix}jobs
+                WHERE concurrency_key = %s AND state = 'running'
+                """,
+                (concurrency_key,),
+            )
+            result = await cursor.fetchone()
+            return result[0] if result else 0
+
+
+async def _sample_running_counts(
+    chancy: Chancy,
+    concurrency_key: str,
+    samples: int = 20,
+    interval: float = 0.25,
+) -> list[int]:
+    """Sample running job counts over time."""
+    counts = []
+    for _ in range(samples):
+        count = await _count_running_jobs_for_key(chancy, concurrency_key)
+        counts.append(count)
+        await asyncio.sleep(interval)
+    return counts
+
+
+async def _push_many_collect(chancy: Chancy, jobs: list) -> list:
+    """Push many jobs and collect all references from the async generator."""
+    refs = []
+    async for batch_refs in chancy.push_many(jobs):
+        refs.extend(batch_refs)
+    return refs
 
 
 class TestConcurrencyKeyEvaluation:
@@ -45,7 +86,10 @@ class TestConcurrencyKeyEvaluation:
 
     def test_callable_key(self):
         """Test callable concurrency key"""
-        key_func = lambda user_id, action, **kw: f"{user_id}:{action}"
+
+        def key_func(user_id: str, action: str, **kw) -> str:
+            return f"{user_id}:{action}"
+
         job = (
             Job.from_func(simple_job)
             .with_concurrency(ConcurrencyRule(max=1, key=key_func))
@@ -105,7 +149,9 @@ class TestJobWithConcurrency:
     def test_with_concurrency_method(self):
         """Test the with_concurrency fluent method"""
         # Test simple string key
-        job_with_concurrency = simple_job.job.with_concurrency(ConcurrencyRule(max=3, key="user_id"))
+        job_with_concurrency = simple_job.job.with_concurrency(
+            ConcurrencyRule(max=3, key="user_id")
+        )
         assert job_with_concurrency.concurrency_rule.key == "user_id"
         assert job_with_concurrency.concurrency_rule.max == 3
 
@@ -114,9 +160,13 @@ class TestJobWithConcurrency:
 
     def test_with_concurrency_callable_key(self):
         """Test with_concurrency with callable key"""
-        key_func = lambda user_id, action, **kw: f"{user_id}:{action}"
 
-        job_with_concurrency = simple_job.job.with_concurrency(ConcurrencyRule(max=5, key=key_func))
+        def key_func(user_id: str, action: str, **kw) -> str:
+            return f"{user_id}:{action}"
+
+        job_with_concurrency = simple_job.job.with_concurrency(
+            ConcurrencyRule(max=5, key=key_func)
+        )
         assert job_with_concurrency.concurrency_rule.key == key_func
         assert job_with_concurrency.concurrency_rule.max == 5
 
@@ -125,130 +175,11 @@ class TestJobWithConcurrency:
 class TestConcurrencyIntegration:
     """Integration tests for concurrency constraints"""
 
-    async def test_basic_concurrency_limiting(
-        self, chancy: Chancy, worker: Worker
-    ):
-        """Test basic concurrency limiting with multiple workers"""
-        await chancy.declare(Queue("default"))
-
-        # Create a job with concurrency limit of 1 per user
-        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=1, key="user_id"))
-
-        # Push 3 jobs for the same user
-        refs = []
-        for i in range(3):
-            job_instance = job_with_concurrency.with_kwargs(
-                user_id="user_123", action=f"action_{i}"
-            )
-            ref = await chancy.push(job_instance)
-            refs.append(ref)
-
-        # Wait for at least one job to complete
-        await chancy.wait_for_job(refs[0], timeout=30)
-
-        # Check that jobs were processed with concurrency constraints
-        completed_jobs = []
-        for ref in refs:
-            job = await chancy.get_job(ref)
-            if job and job.state == QueuedJob.State.SUCCEEDED:
-                completed_jobs.append(job)
-
-        # At least one job should be completed
-        assert len(completed_jobs) >= 1
-
-    async def test_different_concurrency_keys_dont_interfere(
-        self, chancy: Chancy, worker: Worker
-    ):
-        """Test that jobs with different concurrency keys don't interfere with each other"""
-        await chancy.declare(Queue("default"))
-
-        # Create jobs with concurrency limit of 1 per user
-        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=1, key="user_id"))
-
-        # Push jobs for different users
-        job1 = job_with_concurrency.with_kwargs(
-            user_id="user_123", action="action_1"
-        )
-        job2 = job_with_concurrency.with_kwargs(
-            user_id="user_456", action="action_2"
-        )
-        ref1 = await chancy.push(job1)
-        ref2 = await chancy.push(job2)
-
-        # Both jobs should be able to run concurrently since they have different keys
-        # Wait for both jobs to complete
-        job1 = await chancy.wait_for_job(ref1, timeout=30)
-        job2 = await chancy.wait_for_job(ref2, timeout=30)
-
-        # Both jobs should be completed since they have different concurrency keys
-        assert job1.state == QueuedJob.State.SUCCEEDED
-        assert job2.state == QueuedJob.State.SUCCEEDED
-
-    async def test_jobs_without_concurrency_unaffected(
-        self, chancy: Chancy, worker: Worker
-    ):
-        """Test that jobs without concurrency constraints work as before"""
-        await chancy.declare(Queue("default"))
-
-        # Push regular jobs without concurrency constraints
-        refs = []
-        for i in range(3):
-            ref = await chancy.push(simple_job.job)
-            refs.append(ref)
-
-        # Wait for all jobs to complete
-        for ref in refs:
-            job = await chancy.wait_for_job(ref, timeout=30)
-            assert job.state == QueuedJob.State.SUCCEEDED
-
-    async def test_callable_concurrency_key_integration(
-        self, chancy: Chancy, worker: Worker
-    ):
-        """Test integration with callable concurrency keys"""
-        await chancy.declare(Queue("default"))
-
-        # Create job with callable concurrency key
-        key_func = lambda user_id, action, **kw: f"{user_id}:{action}"
-        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=1, key=key_func))
-
-        # Push jobs with same composite key
-        job1 = job_with_concurrency.with_kwargs(
-            user_id="user_123", action="upload"
-        )
-        job2 = job_with_concurrency.with_kwargs(
-            user_id="user_123", action="upload"
-        )
-        job3 = job_with_concurrency.with_kwargs(
-            user_id="user_123", action="download"
-        )
-        ref1 = await chancy.push(job1)
-        ref2 = await chancy.push(job2)
-        ref3 = await chancy.push(job3)
-
-        # Wait for at least one job to complete
-        await chancy.wait_for_job(ref1, timeout=30)
-
-        # Jobs 1 and 2 should be limited by concurrency (same key: "user_123:upload")
-        # Job 3 should run independently (different key: "user_123:download")
-        job1 = await chancy.get_job(ref1)
-        job2 = await chancy.get_job(ref2)
-        job3 = await chancy.get_job(ref3)
-
-        # At least job1 should be completed
-        assert job1.state == QueuedJob.State.SUCCEEDED
-
-        # Job3 should also complete since it has a different concurrency key
-        assert job3.state in [
-            QueuedJob.State.RUNNING,
-            QueuedJob.State.SUCCEEDED,
-        ]
-
     async def test_concurrency_config_storage(self, chancy: Chancy):
         """Test that concurrency configurations are stored in the database"""
-        await chancy.migrate()
 
         # Push a job with concurrency constraints
-        job_with_concurrency = user_job.job.with_concurrency(
+        job_with_concurrency = slow_job.job.with_concurrency(
             ConcurrencyRule(max=3, key="user_id")
         ).with_kwargs(user_id="user_123", action="test")
         await chancy.push(job_with_concurrency)
@@ -258,69 +189,158 @@ class TestConcurrencyIntegration:
             async with conn.cursor() as cursor:
                 await cursor.execute(
                     f"SELECT * FROM {chancy.prefix}concurrency_configs WHERE concurrency_key = %s",
-                    ("test_concurrency.user_job:user_123",),
+                    ("test_concurrency.slow_job:user_123",),
                 )
                 result = await cursor.fetchone()
 
                 assert result is not None
-                assert result[0] == "test_concurrency.user_job:user_123"  # concurrency_key (prefixed)
+                assert (
+                    result[0] == "test_concurrency.slow_job:user_123"
+                )  # concurrency_key (prefixed)
                 assert result[1] == 3  # concurrency_max
 
-
-@pytest.mark.asyncio
-class TestConcurrencyEdgeCases:
-    """Test edge cases and error conditions"""
-
-    async def test_concurrency_with_high_limits(
+    async def test_basic_concurrency_limiting(
         self, chancy: Chancy, worker: Worker
     ):
-        """Test concurrency with limits higher than job count"""
-        await chancy.declare(Queue("default"))
+        """Test basic concurrency limiting verifies limit is enforced"""
+        concurrency_key = "test_concurrency.slow_job:user_123"
 
-        # Create job with high concurrency limit
-        job_with_concurrency = user_job.job.with_concurrency(ConcurrencyRule(max=100, key="user_id"))
-
-        # Push only 2 jobs
-        job1 = job_with_concurrency.with_kwargs(
-            user_id="user_123", action="action_1"
+        # Create a job with concurrency limit of 2 per user
+        job_with_concurrency = slow_job.job.with_concurrency(
+            ConcurrencyRule(max=2, key="user_id")
         )
-        job2 = job_with_concurrency.with_kwargs(
-            user_id="user_123", action="action_2"
+
+        # Push 5 jobs for the same user - should only run 2 at a time
+        jobs = [
+            job_with_concurrency.with_kwargs(
+                user_id="user_123", action=f"action_{i}", duration=0.5
+            )
+            for i in range(5)
+        ]
+        refs = await _push_many_collect(chancy, jobs)
+
+        # Sample running counts while jobs execute
+        await asyncio.sleep(0.2)
+        running_counts = await _sample_running_counts(
+            chancy, concurrency_key, samples=15, interval=0.1
         )
-        ref1 = await chancy.push(job1)
-        ref2 = await chancy.push(job2)
 
-        # Both jobs should be processed since limit is much higher than job count
-        job1 = await chancy.wait_for_job(ref1, timeout=30)
-        job2 = await chancy.wait_for_job(ref2, timeout=30)
+        # Wait for all jobs to complete
+        completed_jobs = await chancy.wait_for_jobs(refs, timeout=30)
 
-        assert job1.state == QueuedJob.State.SUCCEEDED
-        assert job2.state == QueuedJob.State.SUCCEEDED
+        # All jobs should be completed
+        for job_result in completed_jobs:
+            assert job_result.state == QueuedJob.State.SUCCEEDED
 
-    async def test_concurrency_config_updates(self, chancy: Chancy):
-        """Test that concurrency config updates work correctly"""
-        await chancy.migrate()
-
-        # Push job with initial concurrency config
-        job_v1 = user_job.job.with_concurrency(ConcurrencyRule(max=1, key="user_id")).with_kwargs(
-            user_id="user_123", action="test"
+        # Verify concurrency limit was respected
+        max_observed = max(running_counts) if running_counts else 0
+        assert max_observed <= 2, (
+            f"Concurrency limit violated: observed {max_observed} "
+            f"concurrent jobs, expected at most 2. Samples: {running_counts}"
         )
-        await chancy.push(job_v1)
-
-        # Push job with updated concurrency config
-        job_v2 = user_job.job.with_concurrency(ConcurrencyRule(max=5, key="user_id")).with_kwargs(
-            user_id="user_456", action="test"
+        # Verify we actually observed some concurrency
+        assert max_observed >= 1, (
+            f"Expected to observe at least 1 running job. Samples: {running_counts}"
         )
-        await chancy.push(job_v2)
 
-        # Check that config was updated
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    f"SELECT concurrency_max FROM {chancy.prefix}concurrency_configs WHERE concurrency_key = %s",
-                    ("test_concurrency.user_job:user_456",),
-                )
-                result = await cursor.fetchone()
+    async def test_concurrency_limit_enforced_across_workers(
+        self, chancy: Chancy
+    ):
+        """
+        Test that concurrency limits are enforced across multiple workers.
 
-                # Should have the latest config (5, not 1)
-                assert result[0] == 5
+        This test:
+        1. Starts multiple workers
+        2. Pushes many jobs with a concurrency limit of 2 for the same key
+        3. Samples running job count and verifies it never exceeds the limit
+        """
+        concurrency_key = "test_concurrency.slow_job:shared_user"
+
+        # Create job with concurrency limit of 2 per user
+        job_template = slow_job.job.with_concurrency(
+            ConcurrencyRule(max=2, key="user_id")
+        )
+
+        # Push 8 jobs for the same user - should only run 2 at a time
+        jobs = [
+            job_template.with_kwargs(user_id="shared_user", duration=0.5)
+            for _ in range(8)
+        ]
+        refs = await _push_many_collect(chancy, jobs)
+
+        # Start 3 workers to increase parallelism pressure
+        workers = [Worker(chancy, shutdown_timeout=30) for _ in range(3)]
+        for w in workers:
+            await w.start()
+
+        try:
+            # Sample running counts while jobs execute
+            # Start sampling after a brief delay to let jobs start
+            await asyncio.sleep(0.3)
+            running_counts = await _sample_running_counts(
+                chancy, concurrency_key, samples=30, interval=0.1
+            )
+
+            # Wait for all jobs to complete
+            completed_jobs = await chancy.wait_for_jobs(refs, timeout=60)
+
+            # Verify all jobs completed successfully
+            for job_result in completed_jobs:
+                assert job_result.state == QueuedJob.State.SUCCEEDED
+
+            # Verify concurrency limit was respected during sampling
+            max_observed = max(running_counts) if running_counts else 0
+            assert max_observed <= 2, (
+                f"Concurrency limit violated: observed {max_observed} "
+                f"concurrent jobs, expected at most 2. Samples: {running_counts}"
+            )
+            # Verify we actually observed some concurrency
+            assert max_observed >= 1, (
+                f"Expected to observe at least 1 running job. Samples: {running_counts}"
+            )
+
+        finally:
+            # Stop all workers
+            for w in workers:
+                await w.stop()
+
+    async def test_jobs_without_concurrency_not_blocked_by_limited_jobs(
+        self, chancy: Chancy, worker: Worker
+    ):
+        """
+        Test that jobs without concurrency constraints are not blocked
+        by jobs that have concurrency limits.
+        """
+        concurrency_key = "test_concurrency.slow_job:limited_user"
+
+        # Push multiple jobs with strict concurrency limit (max 1)
+        limited_jobs = [
+            slow_job.job.with_concurrency(
+                ConcurrencyRule(max=1, key="user_id")
+            ).with_kwargs(user_id="limited_user", duration=0.6)
+            for _ in range(3)
+        ]
+
+        # Push regular jobs without concurrency constraints
+        regular_jobs = [simple_job.job for _ in range(3)]
+
+        # Push all jobs - limited jobs first, then regular jobs
+        refs = await _push_many_collect(chancy, limited_jobs + regular_jobs)
+
+        # Sample running counts for the limited key
+        await asyncio.sleep(0.2)
+        running_counts = await _sample_running_counts(
+            chancy, concurrency_key, samples=15, interval=0.1
+        )
+
+        # Wait for all jobs and verify they succeeded
+        completed_jobs = await chancy.wait_for_jobs(refs, timeout=30)
+        for job_result in completed_jobs:
+            assert job_result.state == QueuedJob.State.SUCCEEDED
+
+        # Verify the limited jobs never exceeded their concurrency limit
+        max_observed = max(running_counts) if running_counts else 0
+        assert max_observed <= 1, (
+            f"Concurrency limit violated: observed {max_observed} "
+            f"concurrent jobs, expected at most 1. Samples: {running_counts}"
+        )

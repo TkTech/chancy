@@ -219,7 +219,7 @@ async def test_concurrency_rule_pruning_orphaned(
 
     # Also add a config that will have a corresponding job
     await chancy.declare(Queue("test_queue"))
-    ref = await chancy.push(
+    await chancy.push(
         job_with_concurrency.job.with_queue("test_queue").with_kwargs(
             user_id=789
         )
@@ -237,9 +237,9 @@ async def test_concurrency_rule_pruning_orphaned(
     # Verify only orphaned concurrency rule was pruned
     assert rows_removed == 1, "Should have removed 1 orphaned concurrency rule"
     final_count = await _count_concurrency_rules(chancy)
-    assert (
-        final_count == 1
-    ), "Should have 1 concurrency rule remaining (non-orphaned)"
+    assert final_count == 1, (
+        "Should have 1 concurrency rule remaining (non-orphaned)"
+    )
 
 
 @pytest.mark.parametrize(
@@ -286,7 +286,7 @@ async def test_concurrency_rule_pruning_combined_rules(
 
     # Add a fresh concurrency rule with corresponding job
     await chancy.declare(Queue("test_queue"))
-    ref = await chancy.push(
+    await chancy.push(
         job_with_concurrency.job.with_queue("test_queue").with_kwargs(
             user_id=333
         )
@@ -302,10 +302,10 @@ async def test_concurrency_rule_pruning_combined_rules(
             rows_removed = await p.prune_concurrency_rules(chancy, cursor)
 
     # Verify old and orphaned concurrency rules were pruned, but fresh one with job remains
-    assert (
-        rows_removed == 2
-    ), "Should have removed 2 concurrency rules (old + orphaned)"
+    assert rows_removed == 2, (
+        "Should have removed 2 concurrency rules (old + orphaned)"
+    )
     final_count = await _count_concurrency_rules(chancy)
-    assert (
-        final_count == 1
-    ), "Should have 1 concurrency rule remaining (fresh with job)"
+    assert final_count == 1, (
+        "Should have 1 concurrency rule remaining (fresh with job)"
+    )
