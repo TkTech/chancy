@@ -237,8 +237,6 @@ class Job(BaseJob):
     #: The concurrency rule for this job. This determines how many instances of
     #: this job can run concurrently across all workers.
     concurrency_rule: ConcurrencyRule | None = None
-    #: Cached computed_concurrency_key
-    _computed_concurrency_key: str | None = None
 
     def with_concurrency(
         self,
@@ -264,24 +262,16 @@ class Job(BaseJob):
         kwargs to compute the actual concurrency key that will be used
         for concurrency limiting. The key is prefixed with the function name.
 
-        :return: The computed concurrency key string (prefixed with func_name), 
+        :return: The computed concurrency key string (prefixed with func_name),
                  or None if no concurrency rule is configured.
         """
         if self.concurrency_rule is None:
             return None
-        
-        if self._computed_concurrency_key is not None:
-            return self._computed_concurrency_key
 
         computed_key = self.concurrency_rule.compute_key(**(self.kwargs or {}))
         if computed_key is not None:
-            computed_key = f"{self.func}:{computed_key}"
-        else:
-            computed_key = self.func
-            
-        # Use object.__setattr__ to bypass frozen dataclass restriction
-        object.__setattr__(self, '_computed_concurrency_key', computed_key)
-        return computed_key
+            return f"{self.func}:{computed_key}"
+        return self.func
 
     def pack(self) -> dict:
         """
