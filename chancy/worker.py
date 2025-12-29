@@ -828,10 +828,10 @@ class Worker:
     def _fetch_jobs_sql(self, prefix: str) -> sql.SQL:
         """
         Build the complete fetch_jobs query.
-        
+
         Args:
             prefix: The table prefix to use (e.g., "chancy_")
-            
+
         Returns:
             sql.SQL query template with parameter placeholders
         """
@@ -921,9 +921,9 @@ class Worker:
             """
         ).format(
             jobs=sql.Identifier(f"{prefix}jobs"),
-            concurrency_configs=sql.Identifier(f"{prefix}concurrency_configs")
+            concurrency_configs=sql.Identifier(f"{prefix}concurrency_configs"),
         )
-        
+
     async def fetch_jobs(
         self,
         queue: Queue,
@@ -1002,7 +1002,9 @@ class Worker:
                 {
                     "queue": queue.name,
                     "maximum_jobs_to_fetch": up_to,
-                    "scan_limit": min(up_to * 20, 1000),  # Reasonable scan limit
+                    "scan_limit": min(
+                        up_to * 20, 1000
+                    ),  # Reasonable scan limit
                     "worker_id": self.worker_id,
                 },
             )
