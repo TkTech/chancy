@@ -877,35 +877,35 @@ class Worker:
             ),
             ranked_jobs AS (
                 SELECT 
-                    cj.id, 
-                    cj.priority, 
+                    cj.id,
+                    cj.priority,
                     cj.concurrency_key,
-                    CASE 
+                    asl.slots_available,
+                    CASE
                         WHEN cj.concurrency_key IS NULL THEN 1
                         ELSE ROW_NUMBER() OVER (
-                            PARTITION BY cj.concurrency_key 
+                            PARTITION BY cj.concurrency_key
                             ORDER BY cj.priority DESC, cj.id ASC
                         )
                     END as job_rank
                 FROM candidate_jobs cj
                 LEFT JOIN available_slots asl ON cj.concurrency_key = asl.concurrency_key
-                WHERE 
+                WHERE
                     -- Include non-constrained jobs
                     cj.concurrency_key IS NULL
-                    OR 
+                    OR
                     -- Include constrained jobs only if their config was lockable and has slots
                     (cj.concurrency_key IS NOT NULL AND asl.slots_available > 0)
             ),
             eligible_jobs AS (
                 SELECT rj.id, rj.priority
                 FROM ranked_jobs rj
-                LEFT JOIN available_slots asl ON rj.concurrency_key = asl.concurrency_key
-                WHERE 
+                WHERE
                     -- Non-constrained jobs are always eligible
                     rj.concurrency_key IS NULL
-                    OR 
+                    OR
                     -- Constrained jobs must be within available slots
-                    (rj.concurrency_key IS NOT NULL AND rj.job_rank <= asl.slots_available)
+                    (rj.concurrency_key IS NOT NULL AND rj.job_rank <= rj.slots_available)
                 ORDER BY rj.priority DESC, rj.id ASC
                 LIMIT %(maximum_jobs_to_fetch)s
                 FOR UPDATE SKIP LOCKED
