@@ -7,9 +7,10 @@ __all__ = (
     "Limit",
     "Reference",
     "job",
+    "ConcurrencyRule",
 )
 
 from chancy.app import Chancy
 from chancy.queue import Queue
 from chancy.worker import Worker
-from chancy.job import Limit, Job, QueuedJob, Reference, job
+from chancy.job import Limit, Job, QueuedJob, Reference, job, ConcurrencyRule

@@ -98,6 +98,14 @@ class Queue:
     #: continuously available, as it can reduce latency between jobs. However,
     #: it can also increase load on the database and should be used with care.
     eager_polling: bool = False
+    #: The multiplier used to calculate the scan limit when fetching jobs.
+    #: The scan limit is calculated as `min(batch_size * scan_factor, scan_limit_upper_bound)`.
+    #: Higher values reduce the chance of starvation when many jobs are blocked
+    #: by concurrency limits, but increase query cost.
+    scan_factor: int = 20
+    #: The maximum number of jobs to scan when fetching work, regardless of
+    #: the scan_factor calculation.
+    scan_limit_upper_bound: int = 1000
 
     @classmethod
     def unpack(cls, data: dict) -> "Queue":
@@ -116,6 +124,8 @@ class Queue:
             rate_limit_window=data.get("rate_limit_window"),
             resume_at=data.get("resume_at"),
             eager_polling=data.get("eager_polling", False),
+            scan_factor=data.get("scan_factor", 20),
+            scan_limit_upper_bound=data.get("scan_limit_upper_bound", 1000),
         )
 
     def pack(self) -> dict:
@@ -135,4 +145,6 @@ class Queue:
             "rate_limit_window": self.rate_limit_window,
             "resume_at": self.resume_at,
             "eager_polling": self.eager_polling,
+            "scan_factor": self.scan_factor,
+            "scan_limit_upper_bound": self.scan_limit_upper_bound,
         }

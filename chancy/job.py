@@ -97,8 +97,69 @@ class Limit:
         return {"t": self.type_.value, "v": self.value}
 
 
+@dataclasses.dataclass
+class ConcurrencyRule:
+    """
+    A concurrency that can be applied to a job and partition id.
+    """
+
+    #: The maximum number of jobs with the same concurrency key that can run
+    #: simultaneously across all workers.
+    max: int
+    #: The concurrency key specification for this job. Can be a field name string
+    #: or a callable that computes the key from job arguments.
+    key: str | Callable | None = None
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "ConcurrencyRule":
+        return cls(max=data["v"], key=data["k"])
+
+    def serialize(self) -> dict:
+        # Would be great to access global logger here to warn about callable not being serializable
+        return {
+            "k": self.key if not callable(self.key) else None,
+            "v": self.max,
+        }
+
+    def compute_key(self, **job_kwargs) -> str | None:
+        """
+        Compute the concurrency key from concurrency rule and jobs kwargs.
+
+        This function takes the job's kwargs to compute the actual concurrency key
+        that will be used for concurrency limiting.
+
+        :return: The computed concurrency key string, or None if no concurrency
+                rule is configured.
+        """
+        if self.key is None:
+            return None
+
+        try:
+            if callable(self.key):
+                key = self.key(**job_kwargs)
+                if key is None:
+                    raise ValueError(
+                        "Concurrency key function evaluated to None"
+                    )
+            elif isinstance(self.key, str):
+                # For string field names, look up the value in kwargs
+                key = job_kwargs.get(self.key)
+                if key is None:
+                    raise ValueError(
+                        f"Concurrency key '{self.key}' not found in job kwargs or evaluated to None"
+                    )
+            else:
+                raise TypeError(
+                    f"Invalid concurrency key type '{type(self.key)}'."
+                )
+        except Exception as e:
+            raise ValueError("Failed to evaluate concurrency key") from e
+
+        return key
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class Job:
+class BaseJob:
     """
     A job is an immutable, stateless unit of work that can be pushed onto a
     Chancy queue and executed elsewhere.
@@ -146,29 +207,71 @@ class Job:
         """
         return cls(func=importable_name(func), **kwargs)
 
-    def with_priority(self, priority: int) -> "Job":
+    def with_priority(self, priority: int) -> "BaseJob":
         return dataclasses.replace(self, priority=priority)
 
-    def with_max_attempts(self, max_attempts: int) -> "Job":
+    def with_max_attempts(self, max_attempts: int) -> "BaseJob":
         return dataclasses.replace(self, max_attempts=max_attempts)
 
-    def with_scheduled_at(self, scheduled_at: datetime) -> "Job":
+    def with_scheduled_at(self, scheduled_at: datetime) -> "BaseJob":
         return dataclasses.replace(self, scheduled_at=scheduled_at)
 
-    def with_limits(self, limits: list[Limit]) -> "Job":
+    def with_limits(self, limits: list[Limit]) -> "BaseJob":
         return dataclasses.replace(self, limits=limits)
 
-    def with_kwargs(self, **kwargs) -> "Job":
+    def with_kwargs(self, **kwargs) -> "BaseJob":
         return dataclasses.replace(self, kwargs=kwargs)
 
-    def with_unique_key(self, unique_key: str) -> "Job":
+    def with_unique_key(self, unique_key: str) -> "BaseJob":
         return dataclasses.replace(self, unique_key=unique_key)
 
-    def with_queue(self, queue: str) -> "Job":
+    def with_queue(self, queue: str) -> "BaseJob":
         return dataclasses.replace(self, queue=queue)
 
-    def with_meta(self, meta: dict[str, Any]) -> "Job":
+    def with_meta(self, meta: dict[str, Any]) -> "BaseJob":
         return dataclasses.replace(self, meta=meta)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class Job(BaseJob):
+    #: The concurrency rule for this job. This determines how many instances of
+    #: this job can run concurrently across all workers.
+    concurrency_rule: ConcurrencyRule | None = None
+
+    def with_concurrency(
+        self,
+        concurrency_rule: ConcurrencyRule,
+    ) -> "Job":
+        """
+        Add concurrency constraints to this job.
+
+        :param concurrency_rule: The concurrency rule for this job. This determines how many instances of
+            this job can run concurrently across all workers.
+        :return: A new Job instance with concurrency constraints.
+        """
+        return dataclasses.replace(
+            self,
+            concurrency_rule=concurrency_rule,
+        )
+
+    def evaluate_concurrency_key(self) -> str | None:
+        """
+        Evaluate the concurrency key from concurrency rule and jobs kwargs.
+
+        This function takes a job's concurrency_rule specification and the job's
+        kwargs to compute the actual concurrency key that will be used
+        for concurrency limiting. The key is prefixed with the function name.
+
+        :return: The computed concurrency key string (prefixed with func_name),
+                 or None if no concurrency rule is configured.
+        """
+        if self.concurrency_rule is None:
+            return None
+
+        computed_key = self.concurrency_rule.compute_key(**(self.kwargs or {}))
+        if computed_key is not None:
+            return f"{self.func}:{computed_key}"
+        return self.func
 
     def pack(self) -> dict:
         """
@@ -185,6 +288,9 @@ class Job:
             "u": self.unique_key,
             "q": self.queue,
             "m": self.meta,
+            "c": self.concurrency_rule.serialize()
+            if self.concurrency_rule
+            else None,
         }
 
     @classmethod
@@ -202,11 +308,14 @@ class Job:
             unique_key=data["u"],
             queue=data["q"],
             meta=data["m"],
+            concurrency_rule=ConcurrencyRule.deserialize(data["c"])
+            if data["c"]
+            else None,
         )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class QueuedJob(Job):
+class QueuedJob(BaseJob):
     """
     A job instance is a job that has been pushed onto a queue and now has
     stateful information associated with it, such as the number of attempts
@@ -234,6 +343,10 @@ class QueuedJob(Job):
     state: State = State.PENDING
     #: A list of errors that occurred during the execution of this job.
     errors: list[ErrorT] = dataclasses.field(default_factory=list)
+    #: The computed concurrency key for this specific job instance. This is
+    #: derived from the job's concurrency_rule specification and job arguments.
+    #: It is computed on job push.
+    computed_concurrency_key: str | None = None
 
     @classmethod
     def unpack(cls, data: dict) -> "QueuedJob":
@@ -254,6 +367,7 @@ class QueuedJob(Job):
             errors=data["errors"],
             limits=[Limit.deserialize(limit) for limit in data["limits"]],
             meta=data["meta"],
+            computed_concurrency_key=data.get("concurrency_key"),
         )
 
 
