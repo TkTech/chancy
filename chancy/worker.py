@@ -1003,8 +1003,9 @@ class Worker:
                     "queue": queue.name,
                     "maximum_jobs_to_fetch": up_to,
                     "scan_limit": min(
-                        up_to * 20, 1000
-                    ),  # Reasonable scan limit
+                        up_to * queue.scan_factor,
+                        queue.scan_limit_upper_bound,
+                    ),
                     "worker_id": self.worker_id,
                 },
             )
