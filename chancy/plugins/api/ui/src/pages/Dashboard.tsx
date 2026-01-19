@@ -7,6 +7,7 @@ import { MetricStatCard } from '../components/dashboard/MetricStatCard';
 import { MetricSuccessRateCard } from '../components/dashboard/MetricSuccessRateCard';
 import { MetricTableSizeCard } from '../components/dashboard/MetricTableSizeCard';
 import { QueueMetrics } from '../components/dashboard/QueueMetrics';
+import { withBasePath } from '../config';
 
 const formatNumber = (num: number) => {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -17,6 +18,7 @@ const formatNumber = (num: number) => {
 export function Dashboard() {
   const { url } = useServerConfiguration();
   const resolution = '5min';
+  const logoPath = withBasePath('/logo_small.png');
 
   // Fetch worker and queue counts
   const { data: workers } = useWorkers(url);
@@ -101,7 +103,7 @@ export function Dashboard() {
           />
         </div>
         <div className="col-xl-3 d-none d-xl-flex align-items-center justify-content-center">
-          <img src="/logo_small.png" alt="Chancy" width={"128px"} height={"128px"}/>
+          <img src={logoPath} alt="Chancy" width={"128px"} height={"128px"}/>
         </div>
       </div>
 
