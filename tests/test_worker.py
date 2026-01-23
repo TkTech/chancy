@@ -133,13 +133,20 @@ async def test_immediate_processing(chancy: Chancy, worker: Worker):
 
 
 @pytest.mark.asyncio
-async def test_notification_connection_cleanup(chancy: Chancy):
+async def test_notification_connection_cleanup():
     """
     Test that the LISTEN/NOTIFY connection is properly closed when the worker
     stops, preventing connection leaks.
+    
+    This test doesn't use the chancy fixture to ensure we have full control
+    over connection lifecycle and can properly detect leaks.
     """
-    # Get initial connection count for this database and application name
-    async with chancy.pool.connection() as conn:
+    from psycopg import AsyncConnection
+    
+    dsn = "postgresql://postgres:localtest@localhost:8190/postgres"
+    
+    # Get initial connection count using a separate connection
+    async with await AsyncConnection.connect(dsn) as conn:
         result = await conn.execute(
             """
             SELECT COUNT(*) as count 
@@ -150,17 +157,23 @@ async def test_notification_connection_cleanup(chancy: Chancy):
         )
         initial_count = (await result.fetchone())[0]
 
-    # Start and stop a worker
-    async with Worker(chancy) as worker:
-        # Wait for the worker to fully initialize
-        await asyncio.sleep(1)
-        
-        # Verify the notification connection exists
-        assert worker._notification_connection is not None
-        assert not worker._notification_connection.closed
-        
-    # After the worker stops, verify the connection is closed
-    async with chancy.pool.connection() as conn:
+    # Create, start, and stop a worker with its own Chancy instance
+    async with Chancy(dsn) as chancy:
+        await chancy.migrate()
+        async with Worker(chancy) as worker:
+            # Wait for the worker to fully initialize
+            await asyncio.sleep(1)
+            
+            # Verify the notification connection exists
+            assert worker._notification_connection is not None
+            assert not worker._notification_connection.closed
+    
+    # Give a moment for connections to fully close
+    await asyncio.sleep(0.5)
+    
+    # After everything is stopped, verify no connection leak
+    # Use a completely separate connection
+    async with await AsyncConnection.connect(dsn) as conn:
         result = await conn.execute(
             """
             SELECT COUNT(*) as count 
@@ -172,8 +185,8 @@ async def test_notification_connection_cleanup(chancy: Chancy):
         final_count = (await result.fetchone())[0]
     
     # The connection count should be back to the initial count (or less)
-    # We allow for <= to account for pool connections that may have been
-    # released
+    # We allow for <= to account for the single connection we just created
+    # to check the count
     assert final_count <= initial_count + 1, (
         f"Connection leak detected: initial={initial_count}, "
         f"final={final_count}"
