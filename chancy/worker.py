@@ -186,6 +186,8 @@ class Worker:
         self._queues: dict[str, Queue] = {}
         # The executors that the worker is currently using.
         self._executors: dict[str, Executor] = {}
+        # The connection used for LISTEN/NOTIFY, if notifications are enabled.
+        self._notification_connection: AsyncConnection | None = None
 
     async def start(self):
         """
@@ -455,17 +457,17 @@ class Worker:
             separate from the shared connection pool and is not counted against
             the pool's connection limit.
         """
-        connection = await AsyncConnection.connect(
+        self._notification_connection = await AsyncConnection.connect(
             self.chancy.dsn, autocommit=True
         )
-        await connection.execute(
+        await self._notification_connection.execute(
             sql.SQL("LISTEN {channel};").format(
                 channel=sql.Identifier(f"{self.chancy.prefix}events")
             )
         )
         self.chancy.log.info("Started listening for realtime notifications.")
         self._notifications_ready_event.set()
-        async for notification in connection.notifies():
+        async for notification in self._notification_connection.notifies():
             j = json.loads(notification.payload)
             await self.hub.emit(j.pop("t"), j)
 
@@ -825,6 +827,10 @@ class Worker:
                 self._queues.clear()
                 while self._executors:
                     await asyncio.sleep(0.1)
+                # Close the notification connection if it exists
+                if self._notification_connection:
+                    await self._notification_connection.close()
+                    self._notification_connection = None
                 # And finally axe everything else started by this worker.
                 await self.manager.cancel_all()
         except TimeoutError:

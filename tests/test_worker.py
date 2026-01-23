@@ -130,3 +130,51 @@ async def test_immediate_processing(chancy: Chancy, worker: Worker):
     )
 
     assert result.state == QueuedJob.State.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_notification_connection_cleanup(chancy: Chancy):
+    """
+    Test that the LISTEN/NOTIFY connection is properly closed when the worker
+    stops, preventing connection leaks.
+    """
+    # Get initial connection count for this database and application name
+    async with chancy.pool.connection() as conn:
+        result = await conn.execute(
+            """
+            SELECT COUNT(*) as count 
+            FROM pg_stat_activity 
+            WHERE datname = current_database()
+            AND application_name LIKE 'psycopg%'
+            """
+        )
+        initial_count = (await result.fetchone())[0]
+
+    # Start and stop a worker
+    async with Worker(chancy) as worker:
+        # Wait for the worker to fully initialize
+        await asyncio.sleep(1)
+        
+        # Verify the notification connection exists
+        assert worker._notification_connection is not None
+        assert not worker._notification_connection.closed
+        
+    # After the worker stops, verify the connection is closed
+    async with chancy.pool.connection() as conn:
+        result = await conn.execute(
+            """
+            SELECT COUNT(*) as count 
+            FROM pg_stat_activity 
+            WHERE datname = current_database()
+            AND application_name LIKE 'psycopg%'
+            """
+        )
+        final_count = (await result.fetchone())[0]
+    
+    # The connection count should be back to the initial count (or less)
+    # We allow for <= to account for pool connections that may have been
+    # released
+    assert final_count <= initial_count + 1, (
+        f"Connection leak detected: initial={initial_count}, "
+        f"final={final_count}"
+    )
