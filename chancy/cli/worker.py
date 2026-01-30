@@ -1,6 +1,7 @@
 import secrets
 
 import click
+from click.core import ParameterSource
 
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
@@ -111,6 +112,19 @@ async def web_command(
                 f"No username or password was provided for the API, defaulting"
                 f" to 'admin' with a random password: {auth.users['admin']}"
             )
+        else:
+            # Override API plugin settings only if CLI flags were explicitly provided
+            if ctx.get_parameter_source("host") != ParameterSource.DEFAULT:
+                api.host = host
+            if ctx.get_parameter_source("port") != ParameterSource.DEFAULT:
+                api.port = port
+            if ctx.get_parameter_source("debug") != ParameterSource.DEFAULT:
+                api.debug = debug
+            if (
+                ctx.get_parameter_source("allow_origin")
+                != ParameterSource.DEFAULT
+            ):
+                api.allow_origins = allow_origin
 
         worker.manager.add("api", api.run(worker, chancy))
         await worker.wait_for_shutdown()
