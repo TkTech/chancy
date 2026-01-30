@@ -110,6 +110,43 @@ jobs:
           verbose: true
           slug: TkTech/chancy
 
+  test-django6:
+    name: "Django 6 Tests (Ubuntu, Py3.12)"
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4.1.6
+
+      - uses: ikalnytskyi/action-setup-postgres@v8
+        with:
+          username: postgres
+          password: localtest
+          database: postgres
+          port: 8190
+          postgres-version: "18"
+        id: postgres
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Installing uv
+        run: pip install uv
+
+      - name: Installing dependencies (Python)
+        run: uv sync --all-extras
+
+      - name: Installing Django 6
+        run: uv pip install 'django>=6.0'
+
+      - name: Running Django Tasks tests
+        run: |
+          uv run pytest tests/contrib/django/ -s -v
+
   docs:
     name: Building Documentation
     needs: [build]
