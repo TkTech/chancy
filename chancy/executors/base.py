@@ -188,6 +188,35 @@ class Executor(abc.ABC):
         :param ref: The reference to the job to cancel.
         """
 
+    def get_running_job(self, ref: Reference) -> QueuedJob | None:
+        """
+        Get a running job by its reference.
+
+        :param ref: The reference to the job to find.
+        :return: The job if found, None otherwise.
+        """
+        for job in self.get_running_jobs():
+            if job.id == ref.identifier:
+                return job
+        return None
+
+    @abc.abstractmethod
+    def get_running_jobs(self) -> list[QueuedJob]:
+        """
+        Get all jobs currently running in this executor.
+
+        :return: A list of running jobs.
+        """
+
+    def is_job_running(self, ref: Reference) -> bool:
+        """
+        Check if a job is currently running in this executor.
+
+        :param ref: The reference to the job to check.
+        :return: True if the job is running, False otherwise.
+        """
+        return self.get_running_job(ref) is not None
+
     @abc.abstractmethod
     def get_default_concurrency(self) -> int:
         """
@@ -243,6 +272,9 @@ class ConcurrentExecutor(Executor, ABC):
             if job.id == ref.identifier:
                 future.cancel()
                 return
+
+    def get_running_jobs(self) -> list[QueuedJob]:
+        return list(self.jobs.values())
 
     def __len__(self):
         return len(self.jobs)

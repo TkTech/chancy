@@ -221,7 +221,7 @@ class QueuedJob(Job):
         SUCCEEDED = "succeeded"
 
     #: The unique identifier for this job instance.
-    id: str
+    id: UUID
     #: The time at which this job was created.
     created_at: datetime
     #: The time at which this job was started, if it has been started.
@@ -237,8 +237,9 @@ class QueuedJob(Job):
 
     @classmethod
     def unpack(cls, data: dict) -> "QueuedJob":
+        id_ = data["id"]
         return cls(
-            id=str(data["id"]),
+            id=id_ if isinstance(id_, UUID) else UUID(id_),
             func=data["func"],
             kwargs=data["kwargs"],
             priority=data["priority"],

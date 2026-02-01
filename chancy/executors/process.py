@@ -15,6 +15,7 @@ import signal
 from asyncio import Future, CancelledError
 from concurrent.futures import ProcessPoolExecutor
 from typing import Callable, Any
+from uuid import UUID
 
 from chancy import Reference
 from chancy.executors.base import ConcurrentExecutor
@@ -138,7 +139,7 @@ class ProcessExecutor(ConcurrentExecutor):
 
         return future
 
-    async def _handle_timeout(self, job_id: str, time_limit: int):
+    async def _handle_timeout(self, job_id: UUID, time_limit: int):
         try:
             await asyncio.sleep(time_limit)
             pid = self.pids_for_job.get(job_id)

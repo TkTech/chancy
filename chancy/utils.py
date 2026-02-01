@@ -121,7 +121,7 @@ def import_string(name):
     return getattr(module, func_name)
 
 
-def chancy_uuid() -> str:
+def chancy_uuid() -> uuid.UUID:
     """
     Generate a UUID suitable for use as a job ID.
 
@@ -129,12 +129,12 @@ def chancy_uuid() -> str:
 
         It's UUID7, kinda, since the draft keeps changing.
 
-    :return: str
+    :return: UUID
     """
     t = (time.time_ns() // 100) & 0xFFFFFFFFFFFFFF
     rand = secrets.randbits(62)
     uuid7 = (t << 68) | (7 << 64) | (2 << 62) | rand
-    return f"{uuid7:032x}"
+    return uuid.UUID(f"{uuid7:032x}")
 
 
 def json_dumps(obj, **kwargs):

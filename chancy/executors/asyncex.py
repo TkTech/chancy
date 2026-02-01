@@ -75,6 +75,9 @@ class AsyncExecutor(Executor):
                 task.cancel()
                 return
 
+    def get_running_jobs(self) -> list["QueuedJob"]:
+        return list(self.jobs.values())
+
     async def stop(self):
         """
         Stop the executor, giving it a chance to clean up any resources it
