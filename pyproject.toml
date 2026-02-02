@@ -57,6 +57,7 @@ dev = [
     "pytest-django>=4.8.0",
     "pre-commit>=4.3.0",
     "ruff>=0.14.2",
+    "pytest-xdist>=3.8.0",
 ]
 
 [project.scripts]

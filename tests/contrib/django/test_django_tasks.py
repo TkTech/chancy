@@ -55,7 +55,7 @@ async def async_add(a: int, b: int) -> int:
 
 
 @pytest.fixture
-def django_tasks_settings(settings):
+def django_tasks_settings(settings, chancy):
     """Configure Django Tasks to use the Chancy backend."""
     settings.TASKS = {
         "default": {
@@ -63,7 +63,7 @@ def django_tasks_settings(settings):
             "QUEUES": ["default", "async_queue"],
             "OPTIONS": {
                 "dsn": "postgresql://postgres:localtest@localhost:8190/postgres",
-                "prefix": "chancy_",
+                "prefix": chancy.prefix,
             },
         },
     }
