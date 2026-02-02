@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from asyncio import CancelledError
 
 from chancy import Reference
@@ -47,7 +48,7 @@ class AsyncExecutor(Executor):
     async def _job_wrapper(self, job: QueuedJob):
         try:
             func, kwargs = Executor.get_function_and_kwargs(job)
-            if not asyncio.iscoroutinefunction(func):
+            if not inspect.iscoroutinefunction(func):
                 raise ValueError(
                     f"Function {job.func!r} is not an async function, which is"
                     f" required for the AsyncExecutor. Please use the"

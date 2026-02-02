@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import inspect
 import multiprocessing
 import os
 import warnings
@@ -191,7 +192,7 @@ class ProcessExecutor(ConcurrentExecutor):
                                 )
                             )
 
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:

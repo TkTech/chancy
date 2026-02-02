@@ -1,3 +1,4 @@
+import inspect
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
@@ -77,7 +78,7 @@ class ThreadedExecutor(ConcurrentExecutor):
             timer.start()
 
         try:
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
