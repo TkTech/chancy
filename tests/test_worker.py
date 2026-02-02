@@ -93,8 +93,10 @@ async def test_queue_removal(chancy: Chancy, worker: Worker):
     await chancy.delete_queue("test_removal", purge_jobs=True)
     await worker.hub.wait_for("worker.queue.removed", timeout=30)
 
-    # Give the executor time to clean up
-    await asyncio.sleep(5)
+    # Wait for the executor to clean up
+    async with asyncio.timeout(10):
+        while "test_removal" in worker.executors:
+            await asyncio.sleep(0.1)
 
     assert "test_removal" not in worker.executors
 
@@ -119,7 +121,6 @@ async def test_immediate_processing(chancy: Chancy, worker: Worker):
     """
     await chancy.declare(Queue("test_immediate", polling_interval=60))
     await worker.hub.wait_for("worker.queue.started")
-    await asyncio.sleep(5)
 
     j = await chancy.push(job_to_run.job.with_queue("test_immediate"))
 

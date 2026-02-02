@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job, Job
+from chancy import Chancy, Worker, Queue, QueuedJob, job, Job
 from test_worker import job_that_fails
 
 
@@ -172,30 +172,6 @@ async def test_async_job_instance_kwarg_on_sync_executor(
 
 
 @pytest.mark.asyncio
-async def test_job_cancellation(chancy: Chancy, worker: Worker):
-    """
-    Test that jobs can be cancelled on supporting executors.
-    """
-
-    async def cancel_in_a_bit(to_cancel: Reference):
-        await asyncio.sleep(10)
-        await chancy.cancel_job(to_cancel)
-
-    await chancy.declare(Queue("async", executor=Chancy.Executor.Async))
-    await chancy.declare(Queue("sync", executor=Chancy.Executor.Process))
-
-    ref = await chancy.push(very_long_job.job.with_queue("async"))
-    asyncio.create_task(cancel_in_a_bit(ref))
-    j = await chancy.wait_for_job(ref, timeout=30)
-    assert j.state == j.State.FAILED
-
-    ref = await chancy.push(sync_very_long_job.job.with_queue("sync"))
-    asyncio.create_task(cancel_in_a_bit(ref))
-    j = await chancy.wait_for_job(ref, timeout=30)
-    assert j.state == j.State.FAILED
-
-
-@pytest.mark.asyncio
 async def test_job_signature_with_kwarg_marker(chancy, worker):
     """
     Ensures that a job with a kwarg-only marker and a generic can have its type
@@ -315,3 +291,55 @@ async def test_purge_jobs(chancy: Chancy, worker: Worker, sync_executor: str):
     await chancy.purge_jobs([ref_ok, ref_fail])
     assert await chancy.get_job(ref_ok) is None
     assert await chancy.get_job(ref_fail) is None
+
+
+@pytest.mark.asyncio
+async def test_process_executor_job_cancellation(
+    chancy: Chancy, worker: Worker
+):
+    """
+    Test that jobs can be cancelled on the ProcessExecutor.
+    """
+    await chancy.declare(Queue("cancel_test", executor=Chancy.Executor.Process))
+
+    ref = await chancy.push(sync_very_long_job.job.with_queue("cancel_test"))
+    j = await chancy.wait_for_job(
+        ref, timeout=10, states={QueuedJob.State.RUNNING}
+    )
+    assert j.state == j.State.RUNNING
+
+    await chancy.cancel_job(ref)
+
+    executor = worker._executors.get("cancel_test")
+    async with asyncio.timeout(10):
+        while executor.is_job_running(ref):
+            await asyncio.sleep(0.1)
+
+    j = await chancy.wait_for_job(ref, timeout=10)
+    assert j.state == j.State.FAILED
+
+
+@pytest.mark.asyncio
+async def test_async_executor_job_cancellation(chancy: Chancy, worker: Worker):
+    """
+    Test that jobs can be cancelled on the AsyncExecutor.
+    """
+    await chancy.declare(
+        Queue("async_cancel_test", executor=Chancy.Executor.Async)
+    )
+
+    ref = await chancy.push(very_long_job.job.with_queue("async_cancel_test"))
+    j = await chancy.wait_for_job(
+        ref, timeout=10, states={QueuedJob.State.RUNNING}
+    )
+    assert j.state == j.State.RUNNING
+
+    await chancy.cancel_job(ref)
+
+    executor = worker._executors.get("async_cancel_test")
+    async with asyncio.timeout(10):
+        while executor.is_job_running(ref):
+            await asyncio.sleep(0.1)
+
+    j = await chancy.wait_for_job(ref, timeout=10)
+    assert j.state == j.State.FAILED
