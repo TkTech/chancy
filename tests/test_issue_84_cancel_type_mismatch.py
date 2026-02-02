@@ -21,6 +21,11 @@ def long_running_job():
     time.sleep(120)
 
 
+@job()
+async def async_long_running_job():
+    await asyncio.sleep(120)
+
+
 @pytest.mark.asyncio
 async def test_process_executor_job_cancellation(
     chancy: Chancy, worker: Worker
@@ -39,6 +44,34 @@ async def test_process_executor_job_cancellation(
     await chancy.cancel_job(ref)
 
     executor = worker._executors.get("cancel_test")
+    async with asyncio.timeout(10):
+        while executor.is_job_running(ref):
+            await asyncio.sleep(0.1)
+
+    j = await chancy.wait_for_job(ref, timeout=10)
+    assert j.state == j.State.FAILED
+
+
+@pytest.mark.asyncio
+async def test_async_executor_job_cancellation(chancy: Chancy, worker: Worker):
+    """
+    Push an async job, verify it's running, cancel it, verify it's cancelled.
+    """
+    await chancy.declare(
+        Queue("async_cancel_test", executor=Chancy.Executor.Async)
+    )
+
+    ref = await chancy.push(
+        async_long_running_job.job.with_queue("async_cancel_test")
+    )
+    j = await chancy.wait_for_job(
+        ref, timeout=10, states={QueuedJob.State.RUNNING}
+    )
+    assert j.state == j.State.RUNNING
+
+    await chancy.cancel_job(ref)
+
+    executor = worker._executors.get("async_cancel_test")
     async with asyncio.timeout(10):
         while executor.is_job_running(ref):
             await asyncio.sleep(0.1)
