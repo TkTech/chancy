@@ -1,3 +1,4 @@
+import sys
 import time
 import asyncio
 
@@ -294,6 +295,9 @@ async def test_purge_jobs(chancy: Chancy, worker: Worker, sync_executor: str):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="SIGUSR1 not available on Windows"
+)
 async def test_process_executor_job_cancellation(
     chancy: Chancy, worker: Worker
 ):
