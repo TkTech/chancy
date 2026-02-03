@@ -96,9 +96,13 @@ jobs:
       - name: Installing dependencies (Python)
         run: uv sync --all-extras
 
-      - name: Running tests
+      - name: Running tests (parallel)
         run: |
-          uv run pytest -s -v --cov=chancy --cov-report=xml
+          uv run pytest -n auto -v --cov=chancy --cov-report=xml
+
+      - name: Running Django ORM tests (sequential)
+        run: |
+          uv run pytest tests/contrib/django/test_models.py -v --cov=chancy --cov-report=xml --cov-append
 
       - name: Uploading coverage
         uses: codecov/codecov-action@v4

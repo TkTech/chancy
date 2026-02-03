@@ -1,5 +1,6 @@
-import os
 import asyncio
+import inspect
+import os
 import threading
 import functools
 from concurrent.futures import Future
@@ -122,7 +123,7 @@ class SubInterpreterExecutor(ConcurrentExecutor):
             timer.start()
 
         try:
-            if asyncio.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:

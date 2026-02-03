@@ -12,7 +12,7 @@ from chancy.plugins.trigger import Trigger
 def handle_insert(*, j: QueuedJob):
     """Test job for INSERT operations"""
     assert j.meta["trigger"]["operation"] == "INSERT"
-    assert j.meta["trigger"]["table_name"] == "test_users"
+    assert j.meta["trigger"]["table_name"].startswith("test_users")
     assert j.meta["trigger"]["schema_name"] == "public"
 
 
@@ -37,7 +37,7 @@ def handle_any_change(*, j: QueuedJob):
 @job(queue="trigger_events", priority=10)
 def handle_with_priority(*, j: QueuedJob):
     """Test job with priority"""
-    assert j.meta["trigger"]["table_name"] == "test_users"
+    assert j.meta["trigger"]["table_name"].startswith("test_users")
 
 
 # Keep old name for backward compatibility with existing test
@@ -45,8 +45,9 @@ handle_table_change = handle_insert
 
 
 @pytest_asyncio.fixture
-async def test_table(chancy):
-    table_name = "test_users"
+async def test_table(chancy, test_suffix):
+    # Use unique table name per xdist worker to avoid conflicts
+    table_name = f"test_users{test_suffix}"
 
     async with chancy.pool.connection() as conn:
         async with conn.cursor() as cursor:
@@ -65,7 +66,7 @@ async def test_table(chancy):
     async with chancy.pool.connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
-                sql.SQL("DROP TABLE IF EXISTS {table}").format(
+                sql.SQL("DROP TABLE IF EXISTS {table} CASCADE").format(
                     table=sql.Identifier(table_name)
                 )
             )
@@ -710,9 +711,11 @@ async def test_trigger_disabled_at_registration(
 
 
 @pytest_asyncio.fixture
-async def test_schema(chancy):
+async def test_schema(chancy, test_suffix):
     """Create a test schema for schema-specific tests"""
-    schema_name = "test_schema"
+    # Use unique schema/table names per xdist worker
+    schema_name = f"test_schema{test_suffix}"
+    table_name = f"test_users{test_suffix}"
 
     async with chancy.pool.connection() as conn:
         async with conn.cursor() as cursor:
@@ -730,11 +733,11 @@ async def test_schema(chancy):
                     )
                 """).format(
                     schema=sql.Identifier(schema_name),
-                    table=sql.Identifier("test_users"),
+                    table=sql.Identifier(table_name),
                 )
             )
 
-    yield schema_name
+    yield (schema_name, table_name)
 
     async with chancy.pool.connection() as conn:
         async with conn.cursor() as cursor:
@@ -753,14 +756,15 @@ async def test_schema(chancy):
 @pytest.mark.asyncio
 async def test_trigger_different_schema(chancy: Chancy, worker, test_schema):
     """Test trigger on a table in a non-public schema"""
+    schema_name, table_name = test_schema
     await chancy.declare(Queue("trigger_events"))
 
     await Trigger.register_trigger(
         chancy,
-        table_name="test_users",
+        table_name=table_name,
         operations=["INSERT"],
         job_template=handle_insert,
-        schema_name=test_schema,
+        schema_name=schema_name,
     )
 
     async with chancy.pool.connection() as conn:
@@ -771,8 +775,8 @@ async def test_trigger_different_schema(chancy: Chancy, worker, test_schema):
                         INSERT INTO {schema}.{table} (name, email)
                         VALUES ('Schema User', 'schema@example.com')
                     """).format(
-                        schema=sql.Identifier(test_schema),
-                        table=sql.Identifier("test_users"),
+                        schema=sql.Identifier(schema_name),
+                        table=sql.Identifier(table_name),
                     )
                 )
 

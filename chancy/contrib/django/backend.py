@@ -31,7 +31,7 @@ and run workers, as Django Tasks does not handle that part. See the
 Chancy documentation for details.
 """
 
-import asyncio
+import inspect
 from datetime import datetime, timezone
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
@@ -192,7 +192,7 @@ class ChancyBackend(BaseTaskBackend):
 
         wrapper_func = (
             ASYNC_WRAPPER_FUNC
-            if asyncio.iscoroutinefunction(task.func)
+            if inspect.iscoroutinefunction(task.func)
             else WRAPPER_FUNC
         )
 
