@@ -149,17 +149,36 @@ class Executor(abc.ABC):
         # We take a look at the type signature for the function to see if the
         # user has specified that the job instance should be passed as a
         # keyword argument.
+        #
+        # `typing.get_type_hints` resolves string annotations (PEP 563 /
+        # `from __future__ import annotations`) to their underlying
+        # classes. Without this, `param.annotation` is the bare string
+        # `"QueuedJob"`, and the `issubclass` check below raises
+        # TypeError on a string — silently swallowed — so the QueuedJob
+        # context is never injected. The decorated job then gets called
+        # without the required `context` keyword arg, and the resulting
+        # TypeError surfaces only via `_job_wrapper`'s except branch
+        # logged at DEBUG (see issue #57).
         sig = inspect.signature(func)
+        try:
+            type_hints = typing.get_type_hints(func)
+        except Exception:
+            # `get_type_hints` can fail when an annotation references a
+            # name not visible in the function's globals (forward refs
+            # resolved elsewhere). Fall back to raw `param.annotation`
+            # so non-stringified annotations keep working.
+            type_hints = {}
         kwargs = job.kwargs or {}
         for param_name, param in sig.parameters.items():
             if not param.kind == param.KEYWORD_ONLY:
                 continue
 
-            if not param.annotation:
+            annotation = type_hints.get(param_name, param.annotation)
+            if not annotation or annotation is inspect.Parameter.empty:
                 continue
 
             try:
-                if issubclass(param.annotation, QueuedJob):
+                if issubclass(annotation, QueuedJob):
                     kwargs[param_name] = job
             except TypeError:
                 continue
