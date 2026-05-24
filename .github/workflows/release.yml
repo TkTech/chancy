@@ -28,7 +28,7 @@ jobs:
 
     - name: Installing dependencies (Node)
       working-directory: chancy/plugins/api/ui
-      run: npm install
+      run: npm ci
 
     - name: Building UI
       working-directory: chancy/plugins/api/ui

@@ -30,7 +30,10 @@ export function useEntityForm<TSchema extends z.ZodType, TMutationData, TError =
   const form = useForm({
     defaultValues,
     validators: {
-      onChange: schema,
+      // Zod schemas implement Standard Schema, which react-form accepts at
+      // runtime, but the generic TSchema can't be narrowed through useForm's
+      // inference here.
+      onChange: schema as never,
     },
     onSubmit: async ({ value }) => {
       try {
