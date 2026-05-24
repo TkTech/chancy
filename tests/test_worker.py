@@ -189,10 +189,9 @@ async def test_immediate_processing(chancy: Chancy, worker: Worker):
 
     j = await chancy.push(job_to_run.job.with_queue("test_immediate"))
 
-    result = await chancy.wait_for_job(
-        j,
-        interval=1,
-        timeout=5,  # Short timeout since we expect immediate processing
-    )
+    # Generous compared to the polling_interval=60 we're trying to bypass,
+    # but enough headroom for slow CI runners (process spawn, update
+    # batching, scheduling).
+    result = await chancy.wait_for_job(j, interval=1, timeout=15)
 
     assert result.state == QueuedJob.State.SUCCEEDED
