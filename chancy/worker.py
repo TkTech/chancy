@@ -277,7 +277,7 @@ class Worker:
             for sig in {signal.SIGTERM, signal.SIGINT}:
                 loop.add_signal_handler(
                     sig,
-                    lambda: asyncio.create_task(self.on_signal(sig)),
+                    lambda s=sig: asyncio.create_task(self.on_signal(s)),
                 )
 
         await self.chancy.declare(Queue(name="default"))
@@ -962,7 +962,7 @@ class Worker:
         if queue.eager_polling and queue.name in self._queues:
             self.queue_wake_events[queue.name].set()
 
-    async def stop(self) -> bool:
+    async def stop(self, *, timeout: int | None = None) -> bool:
         """
         Stop the worker.
 
@@ -972,9 +972,15 @@ class Worker:
 
         Returns True if the worker was stopped cleanly, or False if the worker
         returned due to the timeout expiring.
+
+        :param timeout: An optional timeout in seconds to wait for the worker to
+            stop before forcing a shutdown. If not provided, the worker's
+            `shutdown_timeout` attribute will be used.
         """
+        timeout = timeout if timeout is not None else self.shutdown_timeout
+
         try:
-            async with asyncio.timeout(self.shutdown_timeout) as cm:
+            async with asyncio.timeout(timeout) as cm:
                 # Stop accepting new queues and queue changes.
                 try:
                     await self.manager.cancel("queues")
@@ -985,8 +991,6 @@ class Worker:
                 self._queues.clear()
                 while self._executors:
                     await asyncio.sleep(0.1)
-                # And finally axe everything else started by this worker.
-                await self.manager.cancel_all()
         except TimeoutError:
             # We check this instead of depending on the exception in case the
             # exception wasn't really raised by us but a nested timeout.
@@ -999,6 +1003,9 @@ class Worker:
                 )
                 return False
             raise
+        finally:
+            # And finally axe everything else started by this worker.
+            await self.manager.cancel_all()
 
         await self.hub.emit(
             "worker.stopped",
