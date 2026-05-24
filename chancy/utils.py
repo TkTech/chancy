@@ -193,7 +193,7 @@ class TaskManager:
         """
         Add a task to the manager.
         """
-        task = asyncio.create_task(task)
+        task: asyncio.Task = asyncio.create_task(task)
         task.add_done_callback(self._tasks.remove)
         task.set_name(name)
 
@@ -243,7 +243,7 @@ class TaskManager:
                 self._tasks,
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            self._tasks = (pending | self._tasks) - done
+            self._tasks.difference_update(done)
 
     async def cancel(self, name: str):
         """
