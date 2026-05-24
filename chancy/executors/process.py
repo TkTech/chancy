@@ -75,6 +75,10 @@ class ProcessExecutor(ConcurrentExecutor):
 
         self.manager = ctx.Manager()
         self.pids_for_job = self.manager.dict()
+        # Jobs whose cancellation arrived before the child process registered
+        # its PID. Consumed at the top of ``job_wrapper`` to close the race
+        # between dispatch and SIGUSR1 delivery.
+        self.pending_cancellations = self.manager.dict()
         self.timeouts: dict[str, asyncio.Task] = {}
         self.pool = ProcessPoolExecutor(
             max_workers=queue.concurrency,
@@ -117,7 +121,10 @@ class ProcessExecutor(ConcurrentExecutor):
         job = await self.on_job_starting(job)
 
         future: Future = self.pool.submit(
-            self.job_wrapper, job, self.pids_for_job
+            self.job_wrapper,
+            job,
+            self.pids_for_job,
+            self.pending_cancellations,
         )
         future.add_done_callback(
             functools.partial(
@@ -150,7 +157,9 @@ class ProcessExecutor(ConcurrentExecutor):
             pass
 
     @classmethod
-    def job_wrapper(cls, job: QueuedJob, pids_for_job) -> tuple[QueuedJob, Any]:
+    def job_wrapper(
+        cls, job: QueuedJob, pids_for_job, pending_cancellations
+    ) -> tuple[QueuedJob, Any]:
         """
         This is the function that is actually started by the process pool
         executor. It's responsible for setting up necessary signals and limits,
@@ -168,6 +177,10 @@ class ProcessExecutor(ConcurrentExecutor):
         cleanup: list[Callable] = []
         try:
             pids_for_job[job.id] = os.getpid()
+            # Cancel arrived during child startup, before we could register
+            # to receive SIGUSR1. Honor it now.
+            if pending_cancellations.pop(job.id, None) is not None:
+                raise CancelledError("Job was cancelled.")
             func, kwargs = cls.get_function_and_kwargs(job)
 
             if job.limits and resource is None:
@@ -265,10 +278,21 @@ class ProcessExecutor(ConcurrentExecutor):
 
         :param ref: The reference to the job to cancel.
         """
-        await super().cancel(ref)
+        future = next(
+            (f for f, j in self.jobs.items() if j.id == ref.identifier),
+            None,
+        )
+        if future is None:
+            return
+
+        future.cancel()
         pid = self.pids_for_job.get(ref.identifier)
         if pid is not None:
             os.kill(pid, signal.SIGUSR1)
+        else:
+            # Child hasn't registered its PID yet. ``job_wrapper`` will
+            # consume this marker as its first action after registering.
+            self.pending_cancellations[ref.identifier] = True
 
     def get_default_concurrency(self) -> int:
         """
