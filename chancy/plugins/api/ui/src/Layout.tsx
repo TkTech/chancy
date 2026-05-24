@@ -16,16 +16,17 @@ import MetricsIcon from './assets/icons/metrics.svg?react';
 import QueuesIcon from './assets/icons/queues.svg?react';
 import WorkersIcon from './assets/icons/workers.svg?react';
 import SystemIcon from './assets/icons/system.svg?react';
+import { withBasePath } from './config.ts';
 
 function Layout() {
-  const {configuration, isLoading, setHost, setPort, host, port, url, refetch} = useServerConfiguration();
+  const {configuration, isLoading, setHost, setPort, host, port, url, refetch, basePath, setBasePath} = useServerConfiguration();
   const { connected } = useWebSocket();
   const { theme, toggleTheme } = useTheme();
-  // Drawer sync is handled by a nested component within DrawerProvider
   const [formUsername, setFormUsername] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const queryClient = useQueryClient();
   const [checkingSession, setCheckingSession] = useState(true);
+  const logoPath = withBasePath('/logo_small.png');
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
@@ -96,7 +97,7 @@ function Layout() {
           <div className="card shadow-lg">
             <div className="card-body p-4">
               <div className="text-center mb-4">
-                <img src="/logo_small.png" alt="Chancy Logo" width={"128px"} className="mb-3" />
+                <img src={logoPath} alt="Chancy Logo" width={"128px"} className="mb-3" />
               </div>
 
               {loginMutation.isError && (
@@ -160,6 +161,17 @@ function Layout() {
                   />
                   <label htmlFor={"port"}>Port</label>
                 </div>
+                <div className={"form-floating mb-4"}>
+                  <input
+                    className={"form-control"}
+                    type={"text"}
+                    id={"base-path"}
+                    placeholder={"/chancy"}
+                    value={basePath}
+                    onChange={(e) => setBasePath(e.target.value)}
+                  />
+                  <label htmlFor={"base-path"}>Base path</label>
+                </div>
 
                 <button
                   type="submit"
@@ -177,7 +189,7 @@ function Layout() {
     )
   }
 
-    function navLink(link: {to: string, text: ReactNode, icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>, needs?: string[], subLinks?: {to: string, text: ReactNode}[]}) {
+  function navLink(link: {to: string, text: ReactNode, icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>, needs?: string[], subLinks?: {to: string, text: ReactNode}[]}) {
     if (link.needs && configuration && !link.needs.every(need => configuration.plugins.includes(need))) {
       return null;
     }
@@ -269,7 +281,7 @@ function Layout() {
         <div className="d-flex align-items-center justify-content-center px-3 py-3 border-bottom">
           {!sidebarCollapsed && (
             <>
-              <img src="/logo_small.png" alt="Chancy Logo" width="48" height="48" />
+              <img src={logoPath} alt="Chancy Logo" width="48" height="48" />
               <h5 className="ms-3 mb-0 fw-semibold flex-grow-1">Chancy</h5>
               <span title={connected ? 'Live updates connected' : 'Live updates disconnected'}>
                 <span className={`badge rounded-pill bg-${connected ? 'success' : 'secondary'} connection-badge`}></span>
@@ -277,7 +289,7 @@ function Layout() {
             </>
           )}
           {sidebarCollapsed && (
-            <img src="/logo_small.png" alt="Chancy Logo" width="48" height="48" />
+            <img src={logoPath} alt="Chancy Logo" width="48" height="48" />
           )}
         </div>
         <ul className="nav nav-pills flex-column flex-grow-1 px-3 py-3 sidebar-scrollable">

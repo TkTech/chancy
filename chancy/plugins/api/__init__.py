@@ -1,8 +1,9 @@
 __all__ = ("Api", "AuthBackend", "SimpleAuthBackend")
+import json
 import os
 import secrets
-from pathlib import Path
 from functools import partial
+from pathlib import Path
 from typing import Type
 
 import uvicorn
@@ -10,9 +11,10 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 
-from chancy import Worker, Chancy
+from chancy import Chancy, Worker
 from chancy.plugin import Plugin
 from chancy.plugins.api.auth import (
     AuthBackend,
@@ -103,6 +105,7 @@ class Api(Plugin):
     :param host: The host to listen on.
     :param debug: Whether to run the server in debug mode.
     :param allow_origins: A list of origins that are allowed to access the API.
+    :param path_prefix: Optional URL prefix when mounting under another ASGI app.
     """
 
     def __init__(
@@ -114,6 +117,7 @@ class Api(Plugin):
         allow_origins: list[str] | None = None,
         secret_key: str | None = None,
         authentication_backend: AuthBackend,
+        path_prefix: str | None = None,
     ):
         super().__init__()
         self.port = port
@@ -124,15 +128,22 @@ class Api(Plugin):
         self.plugins: set[Type[ApiPlugin]] = {CoreApiPlugin}
         self.authentication_backend = authentication_backend
         self.secret_key = secret_key or secrets.token_urlsafe(32)
+        path_prefix = path_prefix or ""
+        path_prefix = path_prefix.strip("/")
+        self.path_prefix = f"/{path_prefix}" if path_prefix else ""
+        self._app: Starlette | None = None
 
     @staticmethod
     def get_identifier() -> str:
         return "chancy.api"
 
-    async def run(self, worker: Worker, chancy: Chancy):
+    def build_starlette_app(self, worker: Worker, chancy: Chancy) -> Starlette:
         """
-        Start the web server.
+        Build (or return) the Starlette app that powers the API and dashboard.
         """
+        if self._app is not None:
+            return self._app
+
         for plug in chancy.plugins.values():
             api_plugin = plug.api_plugin()
             if api_plugin is None:
@@ -167,6 +178,7 @@ class Api(Plugin):
                 ),
             ],
         )
+        app.state.path_prefix = self.path_prefix
 
         web_plugins = []
         # Look through all the enabled plugins for any that implement the
@@ -192,6 +204,19 @@ class Api(Plugin):
                         name=route["name"],
                     )
 
+        async def prefix_config(request):
+            return Response(
+                f"window.__CHANCY_BASE_PATH__ = {json.dumps(self.path_prefix)};",
+                media_type="application/javascript",
+            )
+
+        app.add_route(
+            "/chancy-config.js",
+            prefix_config,
+            methods=["GET"],
+            name="chancy_config",
+        )
+
         # Add the wildcard route to the end of the list so that it doesn't
         # override any other routes and serves anything that should be handled
         # by the UI SPA.
@@ -204,15 +229,32 @@ class Api(Plugin):
             name="ui",
         )
 
+        self._app = app
+        return app
+
+    async def run(self, worker: Worker, chancy: Chancy):
+        """
+        Start the web server.
+        """
+        app = self.build_starlette_app(worker, chancy)
+        root_app: Starlette = app
+
+        if self.path_prefix:
+            root_app = Starlette()
+            root_app.mount(self.path_prefix, app)
+
         server = uvicorn.Server(
             config=uvicorn.Config(
-                app=app,
+                app=root_app,
                 host=self.host,
                 port=self.port,
                 log_level="error",
             )
         )
 
-        chancy.log.info(f"Dashboard running at http://{self.host}:{self.port}")
+        suffix = self.path_prefix or ""
+        chancy.log.info(
+            f"Dashboard running at http://{self.host}:{self.port}{suffix}"
+        )
 
         await server.serve()

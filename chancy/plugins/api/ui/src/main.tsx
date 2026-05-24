@@ -1,56 +1,60 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createBrowserRouter,
   redirect,
   RouterProvider
 } from 'react-router-dom';
 
-import Layout from './Layout.tsx'
-import './index.scss'
+import Layout from './Layout.tsx';
+import './index.scss';
 // @ts-expect-error We need to import this for the side effects
 import * as bootstrap from 'bootstrap'; // eslint-disable-line
-import {ServerConfigurationProvider} from './hooks/useServerConfiguration.tsx';
-import {Queue, Queues} from './pages/Queues.tsx';
-import {WorkerDetails, Workers} from './pages/Workers.tsx';
-import {Job, Jobs} from './pages/Jobs.tsx';
-import {Cron, Crons} from './pages/Crons.tsx';
-import {Workflow, Workflows} from './pages/Workflows.tsx';
-import {Metrics, MetricDetail} from './pages/Metrics.tsx';
-import {Gossip} from './pages/Gossip.tsx';
-import {Dashboard} from './pages/Dashboard.tsx';
-import {System} from './pages/System.tsx';
+import { ServerConfigurationProvider } from './hooks/useServerConfiguration.tsx';
+import { Queue, Queues } from './pages/Queues.tsx';
+import { WorkerDetails, Workers } from './pages/Workers.tsx';
+import { Job, Jobs } from './pages/Jobs.tsx';
+import { Cron, Crons } from './pages/Crons.tsx';
+import { Workflow, Workflows } from './pages/Workflows.tsx';
+import { Metrics, MetricDetail } from './pages/Metrics.tsx';
+import { Gossip } from './pages/Gossip.tsx';
+import { Dashboard } from './pages/Dashboard.tsx';
+import { System } from './pages/System.tsx';
 import { ToastProvider } from './components/common/ToastProvider.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
 import { WebSocketProvider } from './contexts/WebSocketContext.tsx';
+import { getConfiguredBasePath } from './config.ts';
 
 const queryClient = new QueryClient();
 
-const router = createBrowserRouter([
-  {
-    element: <Layout />,
-    children: [
-      { path: "/", loader: () => redirect("/dashboard") },
-      { path: "/dashboard", element: <Dashboard /> },
-      { path: "/queues", element: <Queues /> },
-      { path: "/queues/:name", element: <Queue /> },
-      { path: "/workers",  element: <Workers /> },
-      { path: "/workers/:worker_id",  element: <WorkerDetails /> },
-      { path: "/jobs", element: <Jobs /> },
-      { path: "/jobs/:job_id", element: <Job /> },
-      { path: "/crons", element: <Crons />},
-      { path: "/crons/:cron_id", element: <Cron />},
-      { path: "/workflows", element: <Workflows />},
-      { path: "/workflows/:workflow_id", element: <Workflow />},
-      { path: "/metrics", element: <Metrics />},
-      { path: "/metrics/:metricKey", element: <MetricDetail />},
-      { path: "/gossip", element: <Gossip />},
-      { path: "/system", element: <System />},
-    ]
-  }
-]);
+const router = createBrowserRouter(
+  [
+    {
+      element: <Layout />,
+      children: [
+        { path: "/", loader: () => redirect("/dashboard") },
+        { path: "/dashboard", element: <Dashboard /> },
+        { path: "/queues", element: <Queues /> },
+        { path: "/queues/:name", element: <Queue /> },
+        { path: "/workers", element: <Workers /> },
+        { path: "/workers/:worker_id", element: <WorkerDetails /> },
+        { path: "/jobs", element: <Jobs /> },
+        { path: "/jobs/:job_id", element: <Job /> },
+        { path: "/crons", element: <Crons /> },
+        { path: "/crons/:cron_id", element: <Cron /> },
+        { path: "/workflows", element: <Workflows /> },
+        { path: "/workflows/:workflow_id", element: <Workflow /> },
+        { path: "/metrics", element: <Metrics /> },
+        { path: "/metrics/:metricKey", element: <MetricDetail /> },
+        { path: "/gossip", element: <Gossip /> },
+        { path: "/system", element: <System /> },
+      ]
+    }
+  ],
+  { basename: getConfiguredBasePath() || "/" }
+);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -68,4 +72,4 @@ createRoot(document.getElementById('root')!).render(
       </QueryClientProvider>
     </ThemeProvider>
   </StrictMode>,
-)
+);

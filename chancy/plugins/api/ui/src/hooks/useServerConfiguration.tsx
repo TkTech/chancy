@@ -2,6 +2,7 @@ import {useLocalStorage} from './useLocalStorage.tsx';
 import {useQuery} from '@tanstack/react-query';
 import { request, ApiError } from '../services/http';
 import React, {useMemo} from 'react';
+import {getConfiguredBasePath, normalizeBasePath} from '../config.ts';
 
 interface ServerConfiguration {
   plugins: string[],
@@ -12,12 +13,29 @@ const ServerContext = React.createContext<ServerConfiguration | null>(null);
 export function useServerConfiguration() {
   const [host, setHost] = useLocalStorage<string>('settings.host', "http://localhost");
   const [port, setPort] = useLocalStorage<number>('settings.port', 8000);
+  const [storedBasePath, setStoredBasePath] = useLocalStorage<string>(
+    'settings.basePath',
+    getConfiguredBasePath(),
+  );
+
+  const basePath = useMemo(
+    () => normalizeBasePath(storedBasePath),
+    [storedBasePath],
+  );
+
+  const baseUrl = useMemo(() => {
+    if (!host || !port) {
+      return null;
+    }
+    return `${host}:${port}${basePath}`;
+  }, [host, port, basePath]);
 
   const { data, isLoading, refetch } = useQuery<ServerConfiguration | null>({
-    queryKey: ['configuration'],
+    queryKey: ['configuration', baseUrl],
     queryFn: async () => {
+      if (!baseUrl) return null;
       try {
-        return await request<ServerConfiguration>(`${host}:${port}`, `/api/v1/configuration`);
+        return await request<ServerConfiguration>(baseUrl, `/api/v1/configuration`);
       } catch (e: any) {
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
           return null; // not authenticated
@@ -29,13 +47,7 @@ export function useServerConfiguration() {
     staleTime: Infinity,
   });
 
-  const url = useMemo(() => {
-    if (!host || !port) {
-      return null;
-    }
-
-    return `${host}:${port}`;
-  }, [host, port]);
+  const setBasePath = (value: string) => setStoredBasePath(normalizeBasePath(value));
 
   return {
     configuration: data ?? null,
@@ -44,8 +56,10 @@ export function useServerConfiguration() {
     setPort,
     host,
     port,
-    url,
+    url: baseUrl,
     refetch,
+    basePath,
+    setBasePath,
   }
 }
 
