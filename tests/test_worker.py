@@ -2,6 +2,7 @@ import time
 import asyncio
 
 import pytest
+from psycopg import OperationalError
 
 from chancy import Worker, Chancy, Queue, QueuedJob, job
 from chancy.errors import MigrationsNeededError
@@ -111,6 +112,70 @@ async def test_error_on_needed_migrations(chancy_just_app: Chancy):
         async with chancy_just_app:
             async with Worker(chancy_just_app):
                 pass
+
+
+def test_calculate_backoff_bounds(worker_no_start: Worker):
+    """
+    The jittered backoff stays within ``[0, ceiling]`` and the ceiling
+    grows exponentially until it hits ``backoff_max``.
+    """
+    worker_no_start.backoff_initial = 1.0
+    worker_no_start.backoff_max = 8.0
+
+    expected_ceilings = [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
+    for failures, ceiling in enumerate(expected_ceilings):
+        samples = [
+            worker_no_start._calculate_backoff(failures) for _ in range(200)
+        ]
+        assert all(0.0 <= s <= ceiling for s in samples)
+        # With 200 draws of uniform(0, ceiling) we expect a healthy spread;
+        # this also guards against accidentally returning the ceiling
+        # itself (no-jitter regression).
+        if ceiling > 0:
+            assert max(samples) > ceiling * 0.5
+            assert min(samples) < ceiling * 0.5
+
+
+@pytest.mark.parametrize(
+    "worker",
+    [
+        {
+            "heartbeat_poll_interval": 1,
+            "backoff_initial": 0.01,
+            "backoff_max": 0.05,
+        }
+    ],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_heartbeat_recovers_from_transient_error(
+    chancy: Chancy, worker: Worker
+):
+    """
+    A transient ``OperationalError`` raised by ``announce_worker`` must
+    not kill the heartbeat loop — it should back off, retry, and recover.
+    """
+    original = worker.announce_worker
+    calls = 0
+    failures_to_inject = 2
+
+    async def flaky_announce(conn):
+        nonlocal calls
+        calls += 1
+        if calls <= failures_to_inject:
+            raise OperationalError("simulated transient failure")
+        return await original(conn)
+
+    worker.announce_worker = flaky_announce
+
+    async with asyncio.timeout(15):
+        while calls <= failures_to_inject:
+            await asyncio.sleep(0.1)
+        # One more successful call proves the loop is still alive after
+        # the injected failures.
+        target = calls + 1
+        while calls < target:
+            await asyncio.sleep(0.1)
 
 
 @pytest.mark.asyncio
