@@ -228,6 +228,38 @@ async def test_failed_task(chancy, worker, django_tasks_settings):
 
 @pytest.mark.django_db
 @pytest.mark.asyncio
+async def test_failed_task_exception_class(
+    chancy, worker, django_tasks_settings
+):
+    """A failed task's error must expose an importable exception class.
+
+    Regression test: the backend set ``exception_class_path="Exception"``,
+    which is not a valid import path, so accessing
+    ``TaskError.exception_class`` raised ``ImportError`` ("Exception doesn't
+    look like a module path").
+    """
+    from django.tasks import task
+    from django.tasks.base import TaskResultStatus
+
+    from chancy.job import Reference
+
+    fail_task = task(failing_task)
+
+    result = await fail_task.aenqueue()
+
+    await chancy.wait_for_job(Reference(result.id), timeout=10)
+
+    await result.arefresh()
+    assert result.status == TaskResultStatus.FAILED
+    assert len(result.errors) > 0
+
+    # Accessing .exception_class import_string()s exception_class_path; with an
+    # invalid path this raises rather than returning an exception type.
+    assert issubclass(result.errors[0].exception_class, BaseException)
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
 async def test_async_task(chancy, django_tasks_settings):
     """Test that async tasks work correctly."""
     from django.tasks import task

@@ -98,7 +98,7 @@ def _build_task_result_from_queued_job(
 
     errors = [
         TaskError(
-            exception_class_path="Exception",
+            exception_class_path="builtins.Exception",
             traceback=err.get("traceback", ""),
         )
         for err in job.errors
