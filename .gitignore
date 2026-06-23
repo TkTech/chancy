@@ -166,5 +166,7 @@ cython_debug/
 chancy/plugins/api/ui/node_modules
 # rollup-visualizer output
 chancy/plugins/api/ui/stats.html
+# TypeScript incremental build cache
+chancy/plugins/api/ui/*.tsbuildinfo
 # uv
 uv.lock
