@@ -137,6 +137,7 @@ class ChancyBackend(BaseTaskBackend):
 
     def __init__(self, alias: str, params: dict[str, Any]):
         super().__init__(alias, params)
+        self.options = dict(self.options)
         self._default_queue: str = self.options.pop("queue", "default")
 
     @cached_property
