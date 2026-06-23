@@ -11,13 +11,13 @@ navigate to the root `/` out of the `chancy.plugins.api.dist` directory.
 Install the dependencies by running the following command:
 
 ```bash
-pnpm install
+npm install
 ```
 
 To start the development server, run the following command:
 
 ```bash
-pnpm run dev
+npm run dev
 ```
 
 This will start a development server that will automatically reload when you
@@ -28,7 +28,7 @@ make changes to the source code on `http://localhost:5137`.
 To build the project, run the following command:
 
 ```bash
-pnpm run build
+npm run build
 ```
 
 Do not commit the `../dist` directory to the repository. It is automatically
