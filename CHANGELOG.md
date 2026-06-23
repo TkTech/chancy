@@ -1,6 +1,37 @@
 Changelog
 =========
 
+0.26.0
+------
+
+✨ Improvements
+
+- Reworked the dashboard, much more informative for operational insights,
+  light/dark themes.
+- Added much, much better composable filtering widgets to both jobs and
+  workflows.
+- Added a visualization of your upcoming (and past) cron schedule, making it
+  easy to identify overloaded periods.
+- Added a realtime view of the internal Chancy communication traffic, helping
+  to debug and identify pain points (like using `push()` in a loop instead of
+  a single `push_many()`).
+- HTTP API now supports mutation - create queues on the fly, move jobs around,
+  retry workflows, etc...
+- HTTP API is now stable, with documentation still a work in progress.
+- HTTP API now includes an unauthenticated endpoint for health checks, meant
+  for docker/containers (#54).
+- Added dozens of new metrics, including metrics on workflows.
+- The starlette app can now be created without being started for advanced use
+  cases, and the mounting prefix for the SPA can be changed (@jklaise, #64).
+- Workflow performance has been significantly improved and can now handle
+  many, individual workflows with thousands of jobs without issue.
+- Can now be used as a django-tasks backend, albeit with less functionality
+  than using Chancy directly.
+
+🐛 Fixes
+
+- Respect CLI flags for API plugin configuration by @alfawal (#68).
+
 0.25.1
 ------
 
