@@ -26,8 +26,12 @@ jobs:
     - name: Install uv
       run: pip install uv
 
-    - name: Pin npm (>=11.10 for release-age cooldown)
-      run: npm install -g npm@11.17.0
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "24"
+        cache: "npm"
+        cache-dependency-path: chancy/plugins/api/ui/package-lock.json
 
     - name: Installing dependencies (Node)
       working-directory: chancy/plugins/api/ui
