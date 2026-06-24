@@ -15,21 +15,25 @@ class V7Migration(Migration):
         """
         old_name = "leader_worker_id_unique"
         new_name = f"{migrator.prefix}leader_worker_id_unique"
+        table = f"{migrator.prefix}leader"
 
-        # Check if the old unprefixed constraint exists
+        # conname is unique per-table, so scope the check to this table or a
+        # different prefix's legacy constraint would match.
         await cursor.execute(
             """
-            SELECT 1 FROM pg_constraint
-            WHERE conname = %s
+            SELECT 1
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            WHERE c.conname = %s AND t.relname = %s
             """,
-            (old_name,),
+            (old_name, table),
         )
         if await cursor.fetchone():
             await cursor.execute(
                 sql.SQL(
                     "ALTER TABLE {table} RENAME CONSTRAINT {old} TO {new}"
                 ).format(
-                    table=sql.Identifier(f"{migrator.prefix}leader"),
+                    table=sql.Identifier(table),
                     old=sql.Identifier(old_name),
                     new=sql.Identifier(new_name),
                 )
@@ -41,21 +45,25 @@ class V7Migration(Migration):
         """
         old_name = f"{migrator.prefix}leader_worker_id_unique"
         new_name = "leader_worker_id_unique"
+        table = f"{migrator.prefix}leader"
 
-        # Check if the prefixed constraint exists
+        # conname is unique per-table, so scope the check to this table or a
+        # different prefix's legacy constraint would match.
         await cursor.execute(
             """
-            SELECT 1 FROM pg_constraint
-            WHERE conname = %s
+            SELECT 1
+            FROM pg_constraint c
+            JOIN pg_class t ON t.oid = c.conrelid
+            WHERE c.conname = %s AND t.relname = %s
             """,
-            (old_name,),
+            (old_name, table),
         )
         if await cursor.fetchone():
             await cursor.execute(
                 sql.SQL(
                     "ALTER TABLE {table} RENAME CONSTRAINT {old} TO {new}"
                 ).format(
-                    table=sql.Identifier(f"{migrator.prefix}leader"),
+                    table=sql.Identifier(table),
                     old=sql.Identifier(old_name),
                     new=sql.Identifier(new_name),
                 )
