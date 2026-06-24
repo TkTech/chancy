@@ -950,7 +950,7 @@ class Worker:
                 asyncio.get_running_loop().stop()
 
             self.shutdown_event.set()
-            await self.manager.cancel_all()
+            await self.stop()
 
     async def on_job_completed(self, *, queue: Queue, job: QueuedJob):
         """
@@ -986,11 +986,15 @@ class Worker:
                     await self.manager.cancel("queues")
                 except KeyError:
                     pass
+
                 # Delete all the queues we know about so the executors can
                 # clean up.
                 self._queues.clear()
                 while self._executors:
                     await asyncio.sleep(0.1)
+
+                # And finally axe everything else started by this worker.
+                await self.manager.cancel_all()
         except TimeoutError:
             # We check this instead of depending on the exception in case the
             # exception wasn't really raised by us but a nested timeout.
@@ -1003,9 +1007,6 @@ class Worker:
                 )
                 return False
             raise
-        finally:
-            # And finally axe everything else started by this worker.
-            await self.manager.cancel_all()
 
         await self.hub.emit(
             "worker.stopped",
