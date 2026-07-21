@@ -14,6 +14,7 @@ except ImportError:
 import signal
 from asyncio import Future, CancelledError
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from typing import Callable, Any
 
 from chancy import Reference
@@ -70,15 +71,20 @@ class ProcessExecutor(ConcurrentExecutor):
         # We're using `spawn` explicitly to get ahead of the curve, however
         # this is slower than `fork`.
         ctx = mp_context or multiprocessing.get_context("spawn")
+        self._mp_context = ctx
+        self._max_tasks_per_child = maximum_jobs_per_worker
 
         self.manager = ctx.Manager()
         self.pids_for_job = self.manager.dict()
         self.timeouts: dict[str, asyncio.Task] = {}
-        self.pool = ProcessPoolExecutor(
-            max_workers=queue.concurrency,
-            max_tasks_per_child=maximum_jobs_per_worker,
+        self.pool = self._create_pool()
+
+    def _create_pool(self) -> ProcessPoolExecutor:
+        return ProcessPoolExecutor(
+            max_workers=self.queue.concurrency,
+            max_tasks_per_child=self._max_tasks_per_child,
             initializer=self.on_initialize_worker,
-            mp_context=ctx,
+            mp_context=self._mp_context,
         )
 
     @classmethod
@@ -111,17 +117,33 @@ class ProcessExecutor(ConcurrentExecutor):
 
             django.setup()
 
-    async def push(self, job: QueuedJob) -> Future:
+    async def push(self, job: QueuedJob) -> Future | None:
         job = await self.on_job_starting(job)
 
-        future: Future = self.pool.submit(
-            self.job_wrapper, job, self.pids_for_job
-        )
-        future.add_done_callback(
-            functools.partial(
-                self._on_job_completed, loop=asyncio.get_running_loop()
+        loop = asyncio.get_running_loop()
+        callback = functools.partial(self._on_job_completed, loop=loop)
+
+        try:
+            future: Future = self.pool.submit(
+                self.job_wrapper, job, self.pids_for_job
             )
-        )
+        except BrokenProcessPool:
+            old = self.pool
+            self.pool = self._create_pool()
+            old.shutdown(wait=False)
+            self.worker.chancy.log.warning(
+                "ProcessExecutor: pool was broken; recreated. Retrying job %s.",
+                job.id,
+            )
+            try:
+                future = self.pool.submit(
+                    self.job_wrapper, job, self.pids_for_job
+                )
+            except BrokenProcessPool as exc2:
+                await self.on_job_completed(job=job, exc=exc2, result=None)
+                return None
+
+        future.add_done_callback(callback)
         self.jobs[future] = job
         time_limit = next(
             (
@@ -234,6 +256,8 @@ class ProcessExecutor(ConcurrentExecutor):
         timeout_task = self.timeouts.pop(job.id, None)
         if timeout_task is not None:
             timeout_task.cancel()
+
+        self.pids_for_job.pop(job.id, None)
 
         result = None
         exc = future.exception()
