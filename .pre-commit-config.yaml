@@ -29,12 +29,12 @@ repos:
         - "globals@15.9.0"
         - "typescript@5.5.3"
 
-  # UI: TypeScript type-check on pre-push
+  # UI: TypeScript type-check
 - repo: local
   hooks:
     - id: ts-typecheck-ui
       name: TypeScript type-check (UI)
       language: system
-      entry: bash -lc 'npm --prefix chancy/plugins/api/ui exec -s tsc -- --noEmit'
+      entry: npm --prefix chancy/plugins/api/ui run typecheck --silent
+      files: ^chancy/plugins/api/ui/
       pass_filenames: false
-      stages: [pre-push]
