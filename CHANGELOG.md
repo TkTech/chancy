@@ -31,6 +31,8 @@ Changelog
 🐛 Fixes
 
 - Respect CLI flags for API plugin configuration by @alfawal (#68).
+- Fixed an issue that allowed the reprioritize plugin to update the same job
+  multiple times in different batches of the same run.
 
 0.25.1
 ------
