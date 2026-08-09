@@ -69,6 +69,10 @@ artifacts = [
 ]
 
 [tool.hatch.build.targets.sdist]
+only-include = [
+    "chancy",
+    "CHANGELOG.md",
+]
 artifacts = [
     "chancy/plugins/api/dist/**"
 ]
