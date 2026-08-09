@@ -1,31 +1,30 @@
+import asyncio
 import dataclasses
 import datetime
+import json
+import platform
 import random
 import re
-import asyncio
-import json
+import signal
+import socket
+import sys
 import time
 import uuid
-import socket
-import signal
-import platform
-import sys
 import warnings
 from collections import defaultdict
 
-from psycopg import sql, OperationalError, InterfaceError
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, InterfaceError, OperationalError, sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from chancy.app import Chancy
 from chancy.errors import MigrationsNeededError
 from chancy.executors.base import Executor
-from chancy.hub import Hub, Event
+from chancy.hub import Event, Hub
+from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
 from chancy.utils import TaskManager, import_string, sleep
-from chancy.job import QueuedJob, Reference
 
 
 class Worker:
@@ -376,7 +375,7 @@ class Worker:
                     ["queue.declared", "queue.paused", "queue.resumed"],
                     timeout=self.queue_change_poll_interval,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     async def _maintain_queue(self, queue: Queue):
@@ -527,12 +526,12 @@ class Worker:
         consecutive_failures = 0
         while True:
             try:
-                async with self.chancy.pool.connection() as conn:
-                    async with conn.transaction():
-                        self.chancy.log.debug(
-                            "Announcing worker to the cluster."
-                        )
-                        await self.announce_worker(conn)
+                async with (
+                    self.chancy.pool.connection() as conn,
+                    conn.transaction(),
+                ):
+                    self.chancy.log.debug("Announcing worker to the cluster.")
+                    await self.announce_worker(conn)
                 consecutive_failures = 0
             except (OperationalError, InterfaceError):
                 consecutive_failures += 1
@@ -638,12 +637,14 @@ class Worker:
             )
 
             try:
-                async with self.chancy.pool.connection() as conn:
-                    async with conn.cursor(row_factory=dict_row) as cursor:
-                        async with conn.transaction():
-                            await cursor.executemany(
-                                sql.SQL(
-                                    """
+                async with (
+                    self.chancy.pool.connection() as conn,
+                    conn.cursor(row_factory=dict_row) as cursor,
+                    conn.transaction(),
+                ):
+                    await cursor.executemany(
+                        sql.SQL(
+                            """
                                     UPDATE
                                         {jobs}
                                     SET
@@ -658,26 +659,24 @@ class Worker:
                                     WHERE
                                         id = %(id)s
                                     """
-                                ).format(
-                                    jobs=sql.Identifier(
-                                        f"{self.chancy.prefix}jobs"
-                                    )
-                                ),
-                                [
-                                    {
-                                        "id": update.id,
-                                        "state": update.state.value,
-                                        "started_at": update.started_at,
-                                        "completed_at": (update.completed_at),
-                                        "scheduled_at": (update.scheduled_at),
-                                        "attempts": update.attempts,
-                                        "errors": Json(update.errors),
-                                        "meta": Json(update.meta),
-                                        "max_attempts": (update.max_attempts),
-                                    }
-                                    for update in pending_updates
-                                ],
-                            )
+                        ).format(
+                            jobs=sql.Identifier(f"{self.chancy.prefix}jobs")
+                        ),
+                        [
+                            {
+                                "id": update.id,
+                                "state": update.state.value,
+                                "started_at": update.started_at,
+                                "completed_at": (update.completed_at),
+                                "scheduled_at": (update.scheduled_at),
+                                "attempts": update.attempts,
+                                "errors": Json(update.errors),
+                                "meta": Json(update.meta),
+                                "max_attempts": (update.max_attempts),
+                            }
+                            for update in pending_updates
+                        ],
+                    )
             except (OperationalError, InterfaceError):
                 consecutive_failures += 1
                 if (
@@ -722,21 +721,18 @@ class Worker:
 
         :param conn: The connection to use for the announcement.
         """
-        async with conn.cursor(row_factory=dict_row) as cur:
-            async with conn.transaction():
-                await cur.execute(
-                    sql.SQL(
-                        """
+        async with conn.cursor(row_factory=dict_row) as cur, conn.transaction():
+            await cur.execute(
+                sql.SQL(
+                    """
                         DELETE FROM {workers}
                         WHERE expires_at < NOW()
                         """
-                    ).format(
-                        workers=sql.Identifier(f"{self.chancy.prefix}workers")
-                    )
-                )
-                await cur.execute(
-                    sql.SQL(
-                        """
+                ).format(workers=sql.Identifier(f"{self.chancy.prefix}workers"))
+            )
+            await cur.execute(
+                sql.SQL(
+                    """
                         INSERT INTO {workers}
                             (worker_id, last_seen, expires_at, tags, queues)
                         VALUES (
@@ -752,21 +748,19 @@ class Worker:
                                 tags = EXCLUDED.tags,
                                 queues = EXCLUDED.queues
                         """
-                    ).format(
-                        workers=sql.Identifier(f"{self.chancy.prefix}workers"),
-                        timeout=sql.Literal(
-                            f"{self.heartbeat_timeout} seconds"
-                        ),
-                    ),
-                    {
-                        "worker_id": self.worker_id,
-                        "tags": list(self.worker_tags()),
-                        "queues": list(self._queues.keys()),
-                    },
-                )
-                await self.chancy.notify(
-                    cur, "worker.announced", {"worker_id": self.worker_id}
-                )
+                ).format(
+                    workers=sql.Identifier(f"{self.chancy.prefix}workers"),
+                    timeout=sql.Literal(f"{self.heartbeat_timeout} seconds"),
+                ),
+                {
+                    "worker_id": self.worker_id,
+                    "tags": list(self.worker_tags()),
+                    "queues": list(self._queues.keys()),
+                },
+            )
+            await self.chancy.notify(
+                cur, "worker.announced", {"worker_id": self.worker_id}
+            )
 
     def worker_tags(self) -> set[str]:
         """
@@ -826,18 +820,20 @@ class Worker:
             f"{self.chancy.prefix}queue_rate_limits"
         )
 
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            async with conn.transaction():
-                # If the queue is configured to use a rate limit, we need to
-                # check if there's any remaining capacity in the current
-                # window.
-                if queue.rate_limit:
-                    now = int(time.time())
-                    window_start = now - (now % queue.rate_limit_window)
+        async with (
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            # If the queue is configured to use a rate limit, we need to
+            # check if there's any remaining capacity in the current
+            # window.
+            if queue.rate_limit:
+                now = int(time.time())
+                window_start = now - (now % queue.rate_limit_window)
 
-                    await cursor.execute(
-                        sql.SQL(
-                            """
+                await cursor.execute(
+                    sql.SQL(
+                        """
                             INSERT INTO {rate_limits_table} (
                                 queue,
                                 window_start,
@@ -855,24 +851,24 @@ class Worker:
                                 window_start = EXCLUDED.window_start
                             RETURNING count
                             """
-                        ).format(rate_limits_table=rate_limits_table),
-                        (queue.name, window_start),
-                    )
+                    ).format(rate_limits_table=rate_limits_table),
+                    (queue.name, window_start),
+                )
 
-                    result = await cursor.fetchone()
-                    current_count = result["count"]
+                result = await cursor.fetchone()
+                current_count = result["count"]
 
-                    # If we've hit the rate limit, return early with no jobs
-                    # fetched.
-                    if current_count >= queue.rate_limit:
-                        return []
+                # If we've hit the rate limit, return early with no jobs
+                # fetched.
+                if current_count >= queue.rate_limit:
+                    return []
 
-                    # Adjust up_to based on remaining rate limit
-                    up_to = min(up_to, queue.rate_limit - current_count)
+                # Adjust up_to based on remaining rate limit
+                up_to = min(up_to, queue.rate_limit - current_count)
 
-                await cursor.execute(
-                    sql.SQL(
-                        """
+            await cursor.execute(
+                sql.SQL(
+                    """
                         WITH selected_jobs AS (
                             SELECT
                                 id
@@ -905,33 +901,33 @@ class Worker:
                             {jobs}.id = selected_jobs.id
                         RETURNING {jobs}.*
                         """
-                    ).format(
-                        jobs=jobs_table,
-                    ),
-                    {
-                        "queue": queue.name,
-                        "maximum_jobs_to_fetch": up_to,
-                        "worker_id": self.worker_id,
-                    },
-                )
+                ).format(
+                    jobs=jobs_table,
+                ),
+                {
+                    "queue": queue.name,
+                    "maximum_jobs_to_fetch": up_to,
+                    "worker_id": self.worker_id,
+                },
+            )
 
-                records = await cursor.fetchall()
+            records = await cursor.fetchall()
 
-                # If a rate limit is configured, and we ended up fetching jobs,
-                # we need to increment the rate limit counter.
-                if queue.rate_limit and records:
-                    await cursor.execute(
-                        sql.SQL(
-                            """
+            # If a rate limit is configured, and we ended up fetching jobs,
+            # we need to increment the rate limit counter.
+            if queue.rate_limit and records:
+                await cursor.execute(
+                    sql.SQL(
+                        """
                             UPDATE {rate_limits_table}
                             SET count = count + %s
                             WHERE queue = %s
                             """
-                        ).format(rate_limits_table=rate_limits_table),
-                        (len(records), queue.name),
-                    )
+                    ).format(rate_limits_table=rate_limits_table),
+                    (len(records), queue.name),
+                )
 
-                return [QueuedJob.unpack(record) for record in records]
+            return [QueuedJob.unpack(record) for record in records]
 
     async def on_signal(self, signum: int):
         """

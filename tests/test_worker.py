@@ -1,10 +1,10 @@
-import time
 import asyncio
+import time
 
 import pytest
 from psycopg import OperationalError
 
-from chancy import Worker, Chancy, Queue, QueuedJob, job
+from chancy import Chancy, Queue, QueuedJob, Worker, job
 from chancy.errors import MigrationsNeededError
 
 
@@ -21,7 +21,6 @@ def job_that_fails():
 @job()
 def job_that_sleeps():
     time.sleep(0.5)
-    return
 
 
 @pytest.mark.asyncio

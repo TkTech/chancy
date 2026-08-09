@@ -1,7 +1,7 @@
-import os
-from concurrent.futures import ThreadPoolExecutor, Future
 import asyncio
 import functools
+import os
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from chancy.executors.base import ConcurrentExecutor, Executor
 from chancy.job import QueuedJob

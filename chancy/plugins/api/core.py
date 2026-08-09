@@ -1,20 +1,20 @@
-from psycopg import sql
-from psycopg.rows import dict_row
 import asyncio
+import importlib.metadata
 import json
 import time
-import importlib.metadata
+
+from psycopg import sql
+from psycopg.rows import dict_row
 from starlette.authentication import requires
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from chancy.job import Reference
 from chancy.plugins.api.plugin import ApiPlugin
 from chancy.queue import Queue
-from chancy.job import Reference
 from chancy.rule import JobRules
 from chancy.utils import json_dumps
-
 
 # Simple in-memory cache for expensive queries
 _functions_cache = {"data": None, "timestamp": 0}
@@ -245,11 +245,13 @@ class CoreApiPlugin(ApiPlugin):
         """
         version = importlib.metadata.version("chancy")
 
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                # Get database version
-                await cursor.execute("SELECT version()")
-                db_version = await cursor.fetchone()
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            # Get database version
+            await cursor.execute("SELECT version()")
+            db_version = await cursor.fetchone()
 
         return Response(
             json_dumps(
@@ -345,7 +347,7 @@ class CoreApiPlugin(ApiPlugin):
         if not token:
             await websocket.close(code=1008)
             return
-        from itsdangerous import URLSafeTimedSerializer, BadSignature
+        from itsdangerous import BadSignature, URLSafeTimedSerializer
 
         try:
             URLSafeTimedSerializer(
@@ -433,7 +435,7 @@ class CoreApiPlugin(ApiPlugin):
                 resume_at=data.get("resume_at"),
                 eager_polling=data.get("eager_polling", False),
             )
-        except Exception as e:
+        except (KeyError, TypeError, ValueError) as e:
             return Response(
                 json_dumps(
                     {"title": "Invalid queue payload", "detail": str(e)}
@@ -464,8 +466,6 @@ class CoreApiPlugin(ApiPlugin):
         GET: Get a list of distinct function names from jobs.
         Uses in-memory caching to avoid expensive DISTINCT queries.
         """
-        global _functions_cache
-
         # Check if cache is valid
         current_time = time.time()
         if (
@@ -479,30 +479,32 @@ class CoreApiPlugin(ApiPlugin):
             )
 
         # Cache miss or expired, fetch from database
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(
+                sql.SQL(
+                    """
                         SELECT DISTINCT func FROM {jobs}
                         WHERE func IS NOT NULL
                         ORDER BY func
                         """
-                    ).format(
-                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
-                    )
+                ).format(
+                    jobs=sql.Identifier(f"{chancy.prefix}jobs"),
                 )
-                result = await cursor.fetchall()
-                functions = [row["func"] for row in result]
+            )
+            result = await cursor.fetchall()
+            functions = [row["func"] for row in result]
 
-                # Update cache
-                _functions_cache["data"] = functions
-                _functions_cache["timestamp"] = current_time
+            # Update cache
+            _functions_cache["data"] = functions
+            _functions_cache["timestamp"] = current_time
 
-                return Response(
-                    json_dumps(functions),
-                    media_type="application/json",
-                )
+            return Response(
+                json_dumps(functions),
+                media_type="application/json",
+            )
 
     @staticmethod
     @requires(["authenticated"])
@@ -589,11 +591,13 @@ class CoreApiPlugin(ApiPlugin):
             else:
                 rule = filter_rule
 
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                if rule:
-                    query = sql.SQL(
-                        """
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            if rule:
+                query = sql.SQL(
+                    """
                         SELECT * FROM {jobs}
                         WHERE ({rule})
                         ORDER BY (
@@ -602,14 +606,14 @@ class CoreApiPlugin(ApiPlugin):
                         ) DESC
                         LIMIT {limit}
                         """
-                    ).format(
-                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
-                        rule=rule.to_sql(),
-                        limit=sql.Literal(limit),
-                    )
-                else:
-                    query = sql.SQL(
-                        """
+                ).format(
+                    jobs=sql.Identifier(f"{chancy.prefix}jobs"),
+                    rule=rule.to_sql(),
+                    limit=sql.Literal(limit),
+                )
+            else:
+                query = sql.SQL(
+                    """
                         SELECT * FROM {jobs}
                         ORDER BY (
                             completed_at,
@@ -617,18 +621,18 @@ class CoreApiPlugin(ApiPlugin):
                         ) DESC
                         LIMIT {limit}
                         """
-                    ).format(
-                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
-                        limit=sql.Literal(limit),
-                    )
-
-                await cursor.execute(query)
-
-                result = await cursor.fetchall()
-                return Response(
-                    json_dumps(result or []),
-                    media_type="application/json",
+                ).format(
+                    jobs=sql.Identifier(f"{chancy.prefix}jobs"),
+                    limit=sql.Literal(limit),
                 )
+
+            await cursor.execute(query)
+
+            result = await cursor.fetchall()
+            return Response(
+                json_dumps(result or []),
+                media_type="application/json",
+            )
 
     @staticmethod
     @requires(["authenticated"])
@@ -645,33 +649,35 @@ class CoreApiPlugin(ApiPlugin):
                 json_dumps({"ok": True}), media_type="application/json"
             )
 
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(
+                sql.SQL(
+                    """
                         SELECT * FROM {jobs}
                         WHERE id = %(job_id)s
                         """
-                    ).format(
-                        jobs=sql.Identifier(f"{chancy.prefix}jobs"),
-                    ),
-                    {"job_id": job_id},
-                )
+                ).format(
+                    jobs=sql.Identifier(f"{chancy.prefix}jobs"),
+                ),
+                {"job_id": job_id},
+            )
 
-                result = await cursor.fetchone()
+            result = await cursor.fetchone()
 
-                if not result:
-                    return Response(
-                        json_dumps({}),
-                        status_code=404,
-                        media_type="application/json",
-                    )
-
+            if not result:
                 return Response(
-                    json_dumps(result),
+                    json_dumps({}),
+                    status_code=404,
                     media_type="application/json",
                 )
+
+            return Response(
+                json_dumps(result),
+                media_type="application/json",
+            )
 
     @staticmethod
     @requires(["authenticated"])

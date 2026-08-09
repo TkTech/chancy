@@ -6,10 +6,10 @@ models have table names set at import time, not runtime.
 """
 
 import os
+
 import pytest
 
 from chancy import job
-
 
 # Skip these tests when running with pytest-xdist since Django model
 # table names are set at import time and can't be made worker-specific

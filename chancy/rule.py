@@ -4,6 +4,7 @@ conditions of a Plugin.
 """
 
 from typing import Any
+
 from psycopg import sql
 
 
@@ -16,10 +17,10 @@ class Rule(SQLAble):
     def __init__(self, field: str):
         self.field = field
 
-    def __eq__(self, other: Any) -> "Condition":
+    def __eq__(self, other: object) -> "Condition":
         return Condition(self.to_sql(), "=", other)
 
-    def __ne__(self, other: Any) -> "Condition":
+    def __ne__(self, other: object) -> "Condition":
         return Condition(self.to_sql(), "!=", other)
 
     def __lt__(self, other: Any) -> "Condition":

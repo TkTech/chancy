@@ -1,15 +1,16 @@
-__all__ = ("SimpleAuthBackend", "AuthBackend")
+__all__ = ("AuthBackend", "SimpleAuthBackend")
 
 import abc
+from contextlib import suppress
 
+import itsdangerous
 from starlette.authentication import (
-    AuthenticationBackend,
     AuthCredentials,
+    AuthenticationBackend,
     BaseUser,
     SimpleUser,
 )
 from starlette.requests import HTTPConnection, Request
-import itsdangerous
 
 
 class AuthBackend(AuthenticationBackend, abc.ABC):
@@ -40,27 +41,22 @@ class SimpleAuthBackend(AuthBackend):
     ) -> bool:
         if username in self.users and self.users[username] == password:
             # In token-only mode, SessionMiddleware may be absent. Best-effort set.
-            try:
+            with suppress(AssertionError):
                 request.session["username"] = username  # type: ignore[attr-defined]
-            except Exception:
-                pass
             return True
         return False
 
     async def logout(self, request: Request) -> None:
-        try:
+        with suppress(AssertionError):
             request.session.pop("username", None)  # type: ignore[attr-defined]
-        except Exception:
-            pass
 
     async def authenticate(
         self, conn: HTTPConnection
     ) -> tuple[AuthCredentials, BaseUser] | None:
-        username = None
         try:
             username = conn.session.get("username")  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except AssertionError:
+            return None
         if username is None:
             return None
 

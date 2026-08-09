@@ -1,10 +1,10 @@
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from chancy.plugin import Plugin
 from chancy.app import Chancy
+from chancy.plugin import Plugin
 from chancy.worker import Worker
 
 
@@ -102,70 +102,72 @@ class Leadership(Plugin):
         )
 
         while await self.sleep(self.poll_interval):
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             expires = now + timedelta(seconds=self.timeout)
 
-            async with chancy.pool.connection() as conn:
-                async with conn.cursor(row_factory=dict_row) as cur:
-                    async with conn.transaction():
-                        await cur.execute(prune_q, {"now": now})
-                        if worker.is_leader.is_set():
-                            await cur.execute(
-                                upsert_q,
-                                {
-                                    "worker_id": worker.worker_id,
-                                    "expires_at": expires,
-                                },
-                            )
-                        else:
-                            await cur.execute(
-                                insert_q,
-                                {
-                                    "worker_id": worker.worker_id,
-                                    "expires_at": expires,
-                                },
-                            )
+            async with (
+                chancy.pool.connection() as conn,
+                conn.cursor(row_factory=dict_row) as cur,
+            ):
+                async with conn.transaction():
+                    await cur.execute(prune_q, {"now": now})
+                    if worker.is_leader.is_set():
+                        await cur.execute(
+                            upsert_q,
+                            {
+                                "worker_id": worker.worker_id,
+                                "expires_at": expires,
+                            },
+                        )
+                    else:
+                        await cur.execute(
+                            insert_q,
+                            {
+                                "worker_id": worker.worker_id,
+                                "expires_at": expires,
+                            },
+                        )
 
-                    is_leader = cur.rowcount == 1
-                    was_leader = worker.is_leader.is_set()
+                is_leader = cur.rowcount == 1
+                was_leader = worker.is_leader.is_set()
 
-                    if is_leader and was_leader:
-                        chancy.log.debug(
-                            f"Worker has renewed its leadership of the cluster"
-                            f" until {expires}."
-                        )
-                        await chancy.notify(
-                            cur,
-                            "leadership.renewed",
-                            {
-                                "worker_id": worker.worker_id,
-                            },
-                        )
-                    elif is_leader:
-                        chancy.log.info(
-                            f"Worker has become the leader of the cluster"
-                            f" until {expires}."
-                        )
-                        worker.is_leader.set()
-                        await chancy.notify(
-                            cur,
-                            "leadership.gained",
-                            {
-                                "worker_id": worker.worker_id,
-                            },
-                        )
-                    elif was_leader:
-                        chancy.log.info(
-                            "Worker has lost leadership of the cluster."
-                        )
-                        worker.is_leader.clear()
-                        await chancy.notify(
-                            cur,
-                            "leadership.lost",
-                            {
-                                "worker_id": worker.worker_id,
-                            },
-                        )
+                if is_leader and was_leader:
+                    chancy.log.debug(
+                        f"Worker has renewed its leadership of the cluster"
+                        f" until {expires}."
+                    )
+                    await chancy.notify(
+                        cur,
+                        "leadership.renewed",
+                        {
+                            "worker_id": worker.worker_id,
+                        },
+                    )
+                elif is_leader:
+                    chancy.log.info(
+                        f"Worker has become the leader of the cluster"
+                        f" until {expires}."
+                    )
+                    worker.is_leader.set()
+                    await chancy.notify(
+                        cur,
+                        "leadership.gained",
+                        {
+                            "worker_id": worker.worker_id,
+                        },
+                    )
+                elif was_leader:
+                    chancy.log.info(
+                        "Worker has lost leadership of the cluster."
+                    )
+                    worker.is_leader.clear()
+                    await chancy.notify(
+                        cur,
+                        "leadership.lost",
+                        {
+                            "worker_id": worker.worker_id,
+                        },
+                    )
 
 
 class ImmediateLeadership(Plugin):

@@ -1,6 +1,6 @@
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -18,7 +18,7 @@ def queued_job(func, *, limits=None):
     return QueuedJob(
         func=Job.from_func(func).func,
         id=uuid4(),
-        created_at=datetime.now(tz=timezone.utc),
+        created_at=datetime.now(tz=UTC),
         limits=limits or [],
     )
 

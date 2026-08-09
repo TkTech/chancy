@@ -3,7 +3,7 @@ from asyncio import CancelledError
 
 from chancy import Reference
 from chancy.executors.base import Executor
-from chancy.job import QueuedJob, Limit
+from chancy.job import Limit, QueuedJob
 
 
 class AsyncExecutor(Executor):
@@ -58,7 +58,8 @@ class AsyncExecutor(Executor):
             async with asyncio.timeout(timeout):
                 result = await func(**kwargs)
             await self.on_job_completed(job=job, result=result)
-        except (Exception, CancelledError) as exc:
+        # User jobs may raise any exception; this boundary records the failure.
+        except (Exception, CancelledError) as exc:  # noqa: BLE001
             await self.on_job_completed(job=job, exc=exc, result=None)
 
     async def cancel(self, ref: Reference):

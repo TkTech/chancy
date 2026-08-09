@@ -1,12 +1,12 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from psycopg import sql
 
 from chancy.app import Chancy
-from chancy.worker import Worker
 from chancy.plugins.leadership import ImmediateLeadership, Leadership
+from chancy.worker import Worker
 
 
 @pytest.mark.parametrize(
@@ -80,20 +80,19 @@ async def test_leadership_renewal_requires_ownership(
     assert worker.is_leader.is_set()
 
     other_worker_id = "another-worker"
-    other_expiry = datetime.now(tz=timezone.utc) + timedelta(hours=1)
+    other_expiry = datetime.now(tz=UTC) + timedelta(hours=1)
     leader_table = sql.Identifier(f"{chancy.prefix}leader")
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL(
-                    """
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL(
+                """
                     UPDATE {leader}
                     SET worker_id = %s, expires_at = %s
                     WHERE id = 1
                     """
-                ).format(leader=leader_table),
-                (other_worker_id, other_expiry),
-            )
+            ).format(leader=leader_table),
+            (other_worker_id, other_expiry),
+        )
 
     result = asyncio.create_task(
         worker.hub.wait_for(
@@ -105,18 +104,17 @@ async def test_leadership_renewal_requires_ownership(
     events = await result
     assert events
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL(
-                    """
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL(
+                """
                     SELECT worker_id, expires_at
                     FROM {leader}
                     WHERE id = 1
                     """
-                ).format(leader=leader_table)
-            )
-            recorded_worker_id, recorded_expiry = await cursor.fetchone()
+            ).format(leader=leader_table)
+        )
+        recorded_worker_id, recorded_expiry = await cursor.fetchone()
 
     assert recorded_worker_id == other_worker_id
     assert recorded_expiry == other_expiry

@@ -1,8 +1,8 @@
-import pytest
 import datetime
 
-from chancy import Worker, Chancy, Queue, QueuedJob, job
+import pytest
 
+from chancy import Chancy, Queue, QueuedJob, Worker, job
 
 low = Queue("low", concurrency=1)
 high = Queue("high", concurrency=1)
@@ -106,7 +106,7 @@ async def test_queue_resume_time_tracking(chancy: Chancy):
     Ensure that paused queues with resume_at set correctly track the time
     when they should automatically resume.
     """
-    resume_time = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    resume_time = datetime.datetime.min.replace(tzinfo=datetime.UTC)
     paused_queue = Queue(
         "tracking_queue",
         concurrency=1,
@@ -147,7 +147,7 @@ async def test_queue_auto_resume(chancy: Chancy, worker: Worker):
     await chancy.pause_queue(
         "auto_resume_queue",
         resume_at=(
-            datetime.datetime.now(tz=datetime.timezone.utc)
+            datetime.datetime.now(tz=datetime.UTC)
             + datetime.timedelta(seconds=10)
         ),
     )

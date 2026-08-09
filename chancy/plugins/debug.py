@@ -2,8 +2,8 @@ from functools import partial
 
 from chancy.app import Chancy
 from chancy.hub import Event
-from chancy.worker import Worker
 from chancy.plugin import Plugin
+from chancy.worker import Worker
 
 
 class DebugPlugin(Plugin):

@@ -4,7 +4,7 @@ import datetime
 import pytest
 from psycopg import sql
 
-from chancy import Job, Queue, Chancy, Worker
+from chancy import Chancy, Job, Queue, Worker
 from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.reprioritize import Reprioritize
 from chancy.rule import JobRules
@@ -40,7 +40,7 @@ async def test_basic_reprioritization(chancy: Chancy, worker: Worker):
 
     ref = await chancy.push(
         Job.from_func(simple_job).with_scheduled_at(
-            datetime.datetime.now(tz=datetime.timezone.utc)
+            datetime.datetime.now(tz=datetime.UTC)
             + datetime.timedelta(minutes=10)
         )
     )
@@ -118,25 +118,24 @@ async def test_reprioritization_skips_locked_jobs(chancy: Chancy):
     ):
         references.extend(batch)
 
-    async with chancy.pool.connection() as conn:
-        async with conn.transaction():
-            await conn.execute(
-                sql.SQL(
-                    """
+    async with chancy.pool.connection() as conn, conn.transaction():
+        await conn.execute(
+            sql.SQL(
+                """
                     SELECT id
                     FROM {jobs_table}
                     WHERE id = %(id)s
                     FOR UPDATE
                     """
-                ).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                {"id": references[0].identifier},
-            )
+            ).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
+            {"id": references[0].identifier},
+        )
 
-            updated = await asyncio.wait_for(
-                plugin.reprioritize_jobs(chancy), timeout=2
-            )
+        updated = await asyncio.wait_for(
+            plugin.reprioritize_jobs(chancy), timeout=2
+        )
 
-            assert updated == 2
+        assert updated == 2
 
     updated = await asyncio.wait_for(
         plugin.reprioritize_jobs(chancy), timeout=2

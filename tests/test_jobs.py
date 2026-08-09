@@ -1,10 +1,10 @@
-import time
 import asyncio
+import time
 
 import pytest
-
-from chancy import Chancy, Worker, Queue, QueuedJob, Limit, job, Job
 from test_worker import job_that_fails
+
+from chancy import Chancy, Job, Limit, Queue, QueuedJob, Worker, job
 
 
 @job()

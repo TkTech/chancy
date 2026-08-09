@@ -1,16 +1,17 @@
 import asyncio
+import contextlib
 import datetime
 import enum
 import importlib
 import inspect
-import uuid
-import time
+import itertools
 import json
 import secrets
-import itertools
-import contextlib
-from dataclasses import is_dataclass, asdict
-from typing import Iterable, Coroutine, NotRequired, Any, TypedDict
+import time
+import uuid
+from collections.abc import Coroutine, Iterable
+from dataclasses import asdict, is_dataclass
+from typing import Any, NotRequired, TypedDict
 from urllib.parse import quote_plus, urlencode, urlunparse
 
 
@@ -41,7 +42,7 @@ async def sleep(
 
     tasks = [asyncio.create_task(event) for event in events]
     try:
-        done, pending = await asyncio.wait(
+        _done, pending = await asyncio.wait(
             tasks,
             timeout=seconds,
             return_when=asyncio.FIRST_COMPLETED,
@@ -214,7 +215,7 @@ class TaskManager:
             )
 
             try:
-                done, pending = await asyncio.wait(
+                done, _pending = await asyncio.wait(
                     self._tasks | {added_task},
                     return_when=asyncio.FIRST_COMPLETED,
                 )
@@ -239,7 +240,7 @@ class TaskManager:
             for task in self._tasks:
                 task.cancel()
 
-            done, pending = await asyncio.wait(
+            done, _pending = await asyncio.wait(
                 self._tasks,
                 return_when=asyncio.FIRST_COMPLETED,
             )

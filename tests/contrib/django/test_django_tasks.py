@@ -4,8 +4,10 @@ Tests for Django Tasks backend integration.
 These tests require Django 6.0+ which includes the built-in tasks framework.
 """
 
-import pytest
+from datetime import UTC
+
 import django
+import pytest
 
 # Skip all tests in this module if Django < 6.0
 pytestmark = pytest.mark.skipif(
@@ -102,7 +104,7 @@ async def test_enqueue_task_with_kwargs(chancy, worker, django_tasks_settings):
     """Test that a Django task can be enqueued with keyword arguments."""
     from django.tasks import task
 
-    from chancy.job import Reference, QueuedJob
+    from chancy.job import QueuedJob, Reference
 
     greet_task = task(greet)
 
@@ -137,7 +139,7 @@ async def test_enqueue_task_with_priority(
 @pytest.mark.asyncio
 async def test_enqueue_deferred_task(chancy, worker, django_tasks_settings):
     """Test that tasks can be deferred using run_after."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from django.tasks import task
 
@@ -145,7 +147,7 @@ async def test_enqueue_deferred_task(chancy, worker, django_tasks_settings):
 
     defer_task = task(deferred_task)
 
-    run_after = datetime.now(tz=timezone.utc) + timedelta(seconds=5)
+    run_after = datetime.now(tz=UTC) + timedelta(seconds=5)
     result = await defer_task.using(run_after=run_after).aenqueue()
 
     queued_job = await chancy.get_job(Reference(result.id))

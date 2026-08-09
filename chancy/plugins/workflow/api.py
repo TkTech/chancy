@@ -40,8 +40,8 @@ class WorkflowApiPlugin(ApiPlugin):
         """
         Get all known workflows with optional filtering.
         """
-        from chancy.rule import Rule
         from chancy.plugins.api.core import parse_filters
+        from chancy.rule import Rule
 
         # Get filter parameters
         filters_param = request.query_params.get("filters")
@@ -60,11 +60,13 @@ class WorkflowApiPlugin(ApiPlugin):
         if error:
             return error
 
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                if rule:
-                    query = sql.SQL(
-                        """
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            if rule:
+                query = sql.SQL(
+                    """
                         SELECT
                             w.id,
                             w.name,
@@ -95,20 +97,18 @@ class WorkflowApiPlugin(ApiPlugin):
                             w.created_at DESC
                         LIMIT {limit}
                         """
-                    ).format(
-                        workflows_table=sql.Identifier(
-                            f"{chancy.prefix}workflows"
-                        ),
-                        workflow_steps_table=sql.Identifier(
-                            f"{chancy.prefix}workflow_steps"
-                        ),
-                        jobs_table=sql.Identifier(f"{chancy.prefix}jobs"),
-                        rule=rule.to_sql(),
-                        limit=sql.Literal(limit),
-                    )
-                else:
-                    query = sql.SQL(
-                        """
+                ).format(
+                    workflows_table=sql.Identifier(f"{chancy.prefix}workflows"),
+                    workflow_steps_table=sql.Identifier(
+                        f"{chancy.prefix}workflow_steps"
+                    ),
+                    jobs_table=sql.Identifier(f"{chancy.prefix}jobs"),
+                    rule=rule.to_sql(),
+                    limit=sql.Literal(limit),
+                )
+            else:
+                query = sql.SQL(
+                    """
                         SELECT
                             w.id,
                             w.name,
@@ -138,24 +138,22 @@ class WorkflowApiPlugin(ApiPlugin):
                             w.created_at DESC
                         LIMIT {limit}
                         """
-                    ).format(
-                        workflows_table=sql.Identifier(
-                            f"{chancy.prefix}workflows"
-                        ),
-                        workflow_steps_table=sql.Identifier(
-                            f"{chancy.prefix}workflow_steps"
-                        ),
-                        jobs_table=sql.Identifier(f"{chancy.prefix}jobs"),
-                        limit=sql.Literal(limit),
-                    )
-
-                await cursor.execute(query)
-                results = await cursor.fetchall()
-
-                return Response(
-                    json_dumps(results),
-                    media_type="application/json",
+                ).format(
+                    workflows_table=sql.Identifier(f"{chancy.prefix}workflows"),
+                    workflow_steps_table=sql.Identifier(
+                        f"{chancy.prefix}workflow_steps"
+                    ),
+                    jobs_table=sql.Identifier(f"{chancy.prefix}jobs"),
+                    limit=sql.Literal(limit),
                 )
+
+            await cursor.execute(query)
+            results = await cursor.fetchall()
+
+            return Response(
+                json_dumps(results),
+                media_type="application/json",
+            )
 
     @staticmethod
     @requires(["authenticated"])

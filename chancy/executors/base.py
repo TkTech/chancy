@@ -1,15 +1,16 @@
 import abc
 import asyncio
+import dataclasses
 import enum
 import inspect
-import typing
 import traceback
-import dataclasses
+import typing
 from abc import ABC
 from asyncio import Future
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from functools import cached_property
-from typing import Callable, Any
+from typing import Any
 
 import chancy.queue
 from chancy.job import Limit, QueuedJob, Reference
@@ -33,6 +34,7 @@ class Executor(abc.ABC):
     class Capability(enum.IntFlag):
         """Features supported by an executor."""
 
+        NONE = 0
         SYNC_JOBS = enum.auto()
         ASYNC_JOBS = enum.auto()
         CANCELLATION = enum.auto()
@@ -40,7 +42,7 @@ class Executor(abc.ABC):
         COOPERATIVE_TIME_LIMITS = enum.auto()
         MEMORY_LIMITS = enum.auto()
 
-    capabilities = Capability(0)
+    capabilities = Capability.NONE
 
     def __init__(self, worker: "Worker", queue: chancy.queue.Queue):
         self.worker = worker
@@ -94,7 +96,7 @@ class Executor(abc.ABC):
         :param result: The result of the job, if any.
         """
         if exc is None:
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             new_instance = dataclasses.replace(
                 job,
                 state=QueuedJob.State.SUCCEEDED,
@@ -114,9 +116,7 @@ class Executor(abc.ABC):
                 job,
                 state=new_state,
                 attempts=job.attempts + 1,
-                completed_at=(
-                    datetime.now(tz=timezone.utc) if is_failure else None
-                ),
+                completed_at=(datetime.now(tz=UTC) if is_failure else None),
                 errors=[
                     *job.errors,
                     {
@@ -179,7 +179,7 @@ class Executor(abc.ABC):
         kwargs = dict(job.kwargs or {})
         has_job_context = False
         for param_name, param in sig.parameters.items():
-            if not param.kind == param.KEYWORD_ONLY:
+            if param.kind != param.KEYWORD_ONLY:
                 continue
 
             if not param.annotation:

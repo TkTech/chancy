@@ -32,29 +32,26 @@ Chancy documentation for details.
 """
 
 import inspect
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 from asgiref.sync import async_to_sync
-
-from chancy import Chancy
-from chancy.job import Job, QueuedJob, Reference
-from chancy.utils import importable_name, get_database_dsn
-
-from dataclasses import dataclass, field
-from typing import Optional
-
 from django.conf import settings as django_settings
 from django.tasks import TaskResult
-from django.tasks.base import TaskResultStatus, TaskError
 from django.tasks.backends.base import BaseTaskBackend
+from django.tasks.base import TaskError, TaskResultStatus
 from django.tasks.exceptions import TaskResultDoesNotExist
 from django.utils.module_loading import import_string
 
+from chancy import Chancy
+from chancy.job import Job, QueuedJob, Reference
+from chancy.utils import get_database_dsn, importable_name
 
 if TYPE_CHECKING:
-    from django.tasks import Task, TaskResult as DjangoTaskResult
+    from django.tasks import Task
+    from django.tasks import TaskResult as DjangoTaskResult
 
 
 WRAPPER_FUNC = "chancy.contrib.django.task_wrapper.django_task_executor"
@@ -70,7 +67,7 @@ class ChancyTaskResult(TaskResult):
     """
 
     _attempts: int = field(default=0)
-    _return_value: Optional[Any] = field(default=None)
+    _return_value: Any | None = field(default=None)
 
     @property
     def attempts(self):
@@ -186,7 +183,7 @@ class ChancyBackend(BaseTaskBackend):
         """
         queue_name = getattr(task, "queue_name", None) or self._default_queue
 
-        scheduled_at = datetime.now(tz=timezone.utc)
+        scheduled_at = datetime.now(tz=UTC)
         run_after = getattr(task, "run_after", None)
         if run_after is not None:
             scheduled_at = run_after
@@ -217,7 +214,7 @@ class ChancyBackend(BaseTaskBackend):
             task=task,
             id=str(ref.identifier),
             status=TaskResultStatus.READY,
-            enqueued_at=datetime.now(tz=timezone.utc),
+            enqueued_at=datetime.now(tz=UTC),
             started_at=None,
             finished_at=None,
             last_attempted_at=None,

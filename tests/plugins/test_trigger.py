@@ -1,10 +1,10 @@
 import uuid
-import pytest
 
+import pytest
 import pytest_asyncio
 from psycopg import sql
 
-from chancy import job, Queue, Reference, Chancy, QueuedJob
+from chancy import Chancy, Queue, QueuedJob, Reference, job
 from chancy.plugins.trigger import Trigger
 
 
@@ -49,27 +49,25 @@ async def test_table(chancy, test_suffix):
     # Use unique table name per xdist worker to avoid conflicts
     table_name = f"test_users{test_suffix}"
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL("""
                     CREATE TABLE IF NOT EXISTS {table} (
                         id SERIAL PRIMARY KEY,
                         name TEXT NOT NULL,
                         email TEXT UNIQUE NOT NULL
                     )
                 """).format(table=sql.Identifier(table_name))
-            )
+        )
 
     yield table_name
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL("DROP TABLE IF EXISTS {table} CASCADE").format(
-                    table=sql.Identifier(table_name)
-                )
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL("DROP TABLE IF EXISTS {table} CASCADE").format(
+                table=sql.Identifier(table_name)
             )
+        )
 
 
 @pytest.mark.parametrize(
@@ -93,59 +91,55 @@ async def test_trigger_creates_job_on_change(
         job_template=handle_table_change,
     )
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('John Doe', 'john@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_table_change.job.func,),
-            )
+            (handle_table_change.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 1, "Trigger should create exactly one job"
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 1, "Trigger should create exactly one job"
 
-            ref = Reference(jobs[0][0])
-            j = await chancy.wait_for_job(ref)
-            assert j, "Job did not complete successfully"
+        ref = Reference(jobs[0][0])
+        j = await chancy.wait_for_job(ref)
+        assert j, "Job did not complete successfully"
 
     # Now let us disable the trigger and ensure no new jobs are created
     await Trigger.disable_trigger(chancy, trigger_id)
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('Jane Doe', 'jane@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_table_change.job.func,),
-            )
+            (handle_table_change.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 0, (
-                "Trigger should not create jobs when disabled"
-            )
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 0, "Trigger should not create jobs when disabled"
 
 
 @pytest.mark.parametrize(
@@ -165,45 +159,42 @@ async def test_trigger_update_operation(chancy: Chancy, worker, test_table):
         job_template=handle_update,
     )
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            # First insert a row
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        # First insert a row
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('John Doe', 'john@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            # Now update it
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+        # Now update it
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         UPDATE {table}
                         SET name = 'Jane Doe'
                         WHERE email = 'john@example.com'
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_update.job.func,),
-            )
+            (handle_update.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 1, (
-                "UPDATE trigger should create exactly one job"
-            )
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 1, "UPDATE trigger should create exactly one job"
 
-            ref = Reference(jobs[0][0])
-            j = await chancy.wait_for_job(ref)
-            assert j, "Job did not complete successfully"
+        ref = Reference(jobs[0][0])
+        j = await chancy.wait_for_job(ref)
+        assert j, "Job did not complete successfully"
 
 
 @pytest.mark.parametrize(
@@ -223,44 +214,41 @@ async def test_trigger_delete_operation(chancy: Chancy, worker, test_table):
         job_template=handle_delete,
     )
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            # First insert a row
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        # First insert a row
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('John Doe', 'john@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            # Now delete it
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+        # Now delete it
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         DELETE FROM {table}
                         WHERE email = 'john@example.com'
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_delete.job.func,),
-            )
+            (handle_delete.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 1, (
-                "DELETE trigger should create exactly one job"
-            )
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 1, "DELETE trigger should create exactly one job"
 
-            ref = Reference(jobs[0][0])
-            j = await chancy.wait_for_job(ref)
-            assert j, "Job did not complete successfully"
+        ref = Reference(jobs[0][0])
+        j = await chancy.wait_for_job(ref)
+        assert j, "Job did not complete successfully"
 
 
 @pytest.mark.parametrize(
@@ -280,57 +268,56 @@ async def test_trigger_multiple_operations(chancy: Chancy, worker, test_table):
         job_template=handle_any_change,
     )
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            # INSERT
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        # INSERT
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('John Doe', 'john@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            # UPDATE
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+        # UPDATE
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         UPDATE {table}
                         SET name = 'Jane Doe'
                         WHERE email = 'john@example.com'
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            # DELETE
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+        # DELETE
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         DELETE FROM {table}
                         WHERE email = 'john@example.com'
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            # Query for all jobs created by this trigger (any state)
-            await cursor.execute(
-                sql.SQL("""
+        # Query for all jobs created by this trigger (any state)
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     ORDER BY created_at ASC
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_any_change.job.func,),
-            )
+            (handle_any_change.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 3, (
-                f"Should create 3 jobs (INSERT, UPDATE, DELETE), got {len(jobs)}"
-            )
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 3, (
+            f"Should create 3 jobs (INSERT, UPDATE, DELETE), got {len(jobs)}"
+        )
 
-            # Wait for all jobs to complete
-            for job_row in jobs:
-                ref = Reference(job_row[0])
-                j = await chancy.wait_for_job(ref)
-                assert j, "Job did not complete successfully"
+        # Wait for all jobs to complete
+        for job_row in jobs:
+            ref = Reference(job_row[0])
+            j = await chancy.wait_for_job(ref)
+            assert j, "Job did not complete successfully"
 
 
 @pytest.mark.parametrize(
@@ -364,28 +351,27 @@ async def test_unregister_trigger(chancy: Chancy, worker, test_table):
     assert len(triggers) == 0
 
     # Verify no jobs are created
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('John Doe', 'john@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_insert.job.func,),
-            )
+            (handle_insert.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 0, "Unregistered trigger should not create jobs"
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 0, "Unregistered trigger should not create jobs"
 
 
 @pytest.mark.parametrize(
@@ -410,56 +396,54 @@ async def test_enable_trigger(chancy: Chancy, worker, test_table):
     assert changed is True
 
     # Verify no jobs created when disabled
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('Disabled User', 'disabled@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_insert.job.func,),
-            )
+            (handle_insert.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 0
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 0
 
     # Re-enable it
     changed = await Trigger.enable_trigger(chancy, trigger_id)
     assert changed is True
 
     # Verify jobs are created again
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('Enabled User', 'enabled@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_insert.job.func,),
-            )
+            (handle_insert.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 1, "Re-enabled trigger should create jobs"
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 1, "Re-enabled trigger should create jobs"
 
 
 @pytest.mark.parametrize(
@@ -585,12 +569,11 @@ async def test_trigger_bulk_operations(chancy: Chancy, worker, test_table):
         job_template=handle_insert,
     )
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            # Bulk insert 5 rows in one statement
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        # Bulk insert 5 rows in one statement
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES
                             ('User 1', 'user1@example.com'),
@@ -599,23 +582,23 @@ async def test_trigger_bulk_operations(chancy: Chancy, worker, test_table):
                             ('User 4', 'user4@example.com'),
                             ('User 5', 'user5@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_insert.job.func,),
-            )
+            (handle_insert.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            # Statement-level trigger should fire once per statement, not per row
-            assert len(jobs) == 1, (
-                "Statement-level trigger should create 1 job for bulk insert"
-            )
+        jobs = await cursor.fetchall()
+        # Statement-level trigger should fire once per statement, not per row
+        assert len(jobs) == 1, (
+            "Statement-level trigger should create 1 job for bulk insert"
+        )
 
 
 @pytest.mark.parametrize(
@@ -635,29 +618,28 @@ async def test_trigger_with_job_parameters(chancy: Chancy, worker, test_table):
         job_template=handle_with_priority,
     )
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('Priority User', 'priority@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id, priority
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_with_priority.job.func,),
-            )
+            (handle_with_priority.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 1
-            assert jobs[0][1] == 10, "Job should have priority 10"
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 1
+        assert jobs[0][1] == 10, "Job should have priority 10"
 
 
 @pytest.mark.parametrize(
@@ -686,28 +668,27 @@ async def test_trigger_disabled_at_registration(
     assert triggers[trigger_id].enabled is False
 
     # Verify no jobs are created
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {table} (name, email)
                         VALUES ('Test User', 'test@example.com')
                     """).format(table=sql.Identifier(test_table))
-                )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_insert.job.func,),
-            )
+            (handle_insert.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 0, "Disabled trigger should not create jobs"
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 0, "Disabled trigger should not create jobs"
 
 
 @pytest_asyncio.fixture
@@ -717,35 +698,33 @@ async def test_schema(chancy, test_suffix):
     schema_name = f"test_schema{test_suffix}"
     table_name = f"test_users{test_suffix}"
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL("CREATE SCHEMA IF NOT EXISTS {schema}").format(
-                    schema=sql.Identifier(schema_name)
-                )
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL("CREATE SCHEMA IF NOT EXISTS {schema}").format(
+                schema=sql.Identifier(schema_name)
             )
-            await cursor.execute(
-                sql.SQL("""
+        )
+        await cursor.execute(
+            sql.SQL("""
                     CREATE TABLE IF NOT EXISTS {schema}.{table} (
                         id SERIAL PRIMARY KEY,
                         name TEXT NOT NULL,
                         email TEXT UNIQUE NOT NULL
                     )
                 """).format(
-                    schema=sql.Identifier(schema_name),
-                    table=sql.Identifier(table_name),
-                )
+                schema=sql.Identifier(schema_name),
+                table=sql.Identifier(table_name),
             )
+        )
 
     yield (schema_name, table_name)
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL("DROP SCHEMA IF EXISTS {schema} CASCADE").format(
-                    schema=sql.Identifier(schema_name)
-                )
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL("DROP SCHEMA IF EXISTS {schema} CASCADE").format(
+                schema=sql.Identifier(schema_name)
             )
+        )
 
 
 @pytest.mark.parametrize(
@@ -767,28 +746,27 @@ async def test_trigger_different_schema(chancy: Chancy, worker, test_schema):
         schema_name=schema_name,
     )
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL("""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        async with conn.transaction():
+            await cursor.execute(
+                sql.SQL("""
                         INSERT INTO {schema}.{table} (name, email)
                         VALUES ('Schema User', 'schema@example.com')
                     """).format(
-                        schema=sql.Identifier(schema_name),
-                        table=sql.Identifier(table_name),
-                    )
+                    schema=sql.Identifier(schema_name),
+                    table=sql.Identifier(table_name),
                 )
+            )
 
-            await cursor.execute(
-                sql.SQL("""
+        await cursor.execute(
+            sql.SQL("""
                     SELECT id
                     FROM {jobs_table}
                     WHERE func = %s
                     AND state = 'pending'
                 """).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs")),
-                (handle_insert.job.func,),
-            )
+            (handle_insert.job.func,),
+        )
 
-            jobs = await cursor.fetchall()
-            assert len(jobs) == 1, "Trigger in custom schema should create job"
+        jobs = await cursor.fetchall()
+        assert len(jobs) == 1, "Trigger in custom schema should create job"

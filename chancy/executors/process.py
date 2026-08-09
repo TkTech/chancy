@@ -4,21 +4,21 @@ import multiprocessing
 import os
 from multiprocessing.context import BaseContext
 
-
 try:
     import resource
 except ImportError:
     # Windows doesn't have the `resource` module
     resource = None
 import signal
-from asyncio import Future, CancelledError
+from asyncio import CancelledError, Future
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
-from typing import Callable, Any
+from typing import Any
 from uuid import UUID
 
 from chancy import Reference
 from chancy.executors.base import ConcurrentExecutor, Executor
-from chancy.job import QueuedJob, Limit
+from chancy.job import Limit, QueuedJob
 
 
 class ProcessExecutor(ConcurrentExecutor):
@@ -201,8 +201,10 @@ class ProcessExecutor(ConcurrentExecutor):
                             resource.RLIMIT_AS, (limit.value, -1)
                         )
                         cleanup.append(
-                            lambda: resource.setrlimit(
-                                resource.RLIMIT_AS, (previous_soft, -1)
+                            lambda previous_soft=previous_soft: (
+                                resource.setrlimit(
+                                    resource.RLIMIT_AS, (previous_soft, -1)
+                                )
                             )
                         )
 

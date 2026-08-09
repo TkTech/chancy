@@ -1,15 +1,14 @@
 import dataclasses
 import enum
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import (
     Any,
-    Optional,
+    ParamSpec,
+    Protocol,
     TypedDict,
     TypeVar,
-    ParamSpec,
-    Callable,
-    Protocol,
     Union,
 )
 from uuid import UUID
@@ -120,7 +119,7 @@ class Job:
     max_attempts: int = 1
     #: The time at which this job should be scheduled to run.
     scheduled_at: datetime = dataclasses.field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
+        default_factory=lambda: datetime.now(tz=UTC)
     )
     #: A list of resource limits that should be applied to this job.
     limits: list[Limit] = dataclasses.field(default_factory=list)
@@ -198,7 +197,7 @@ class Job:
             kwargs=data["k"],
             priority=data["p"],
             max_attempts=data["a"],
-            scheduled_at=datetime.fromtimestamp(data["s"], tz=timezone.utc),
+            scheduled_at=datetime.fromtimestamp(data["s"], tz=UTC),
             limits=[Limit.deserialize(limit) for limit in data["l"]],
             unique_key=data["u"],
             queue=data["q"],
@@ -226,9 +225,9 @@ class QueuedJob(Job):
     #: The time at which this job was created.
     created_at: datetime
     #: The time at which this job was started, if it has been started.
-    started_at: Optional[datetime] = None
+    started_at: datetime | None = None
     #: The time at which this job was completed, if it has been completed.
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     #: The number of times this job has been attempted.
     attempts: int = 0
     #: The current state of this job instance.

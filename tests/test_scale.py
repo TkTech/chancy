@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from psycopg import sql
@@ -60,8 +60,8 @@ async def test_busy_chancy(chancy: Chancy, worker_no_start: Worker):
                             "dummy_job",
                             "{}",
                             "{}",
-                            datetime.now(timezone.utc),
-                            datetime.now(timezone.utc),
+                            datetime.now(UTC),
+                            datetime.now(UTC),
                         )
                     )
 
@@ -76,8 +76,8 @@ async def test_busy_chancy(chancy: Chancy, worker_no_start: Worker):
                             j.func,
                             "{}",
                             "{}",
-                            datetime.now(timezone.utc),
-                            datetime.now(timezone.utc),
+                            datetime.now(UTC),
+                            datetime.now(UTC),
                         )
                     )
 

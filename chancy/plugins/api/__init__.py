@@ -1,9 +1,8 @@
 __all__ = ("Api", "AuthBackend", "SimpleAuthBackend")
 import os
 import secrets
-from pathlib import Path
 from functools import partial
-from typing import Type
+from pathlib import Path
 
 import uvicorn
 from starlette.applications import Starlette
@@ -12,7 +11,7 @@ from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.staticfiles import StaticFiles
 
-from chancy import Worker, Chancy
+from chancy import Chancy, Worker
 from chancy.plugin import Plugin
 from chancy.plugins.api.auth import (
     AuthBackend,
@@ -121,7 +120,7 @@ class Api(Plugin):
         self.debug = debug
         self.root = Path(__file__).parent
         self.allow_origins = allow_origins or []
-        self.plugins: set[Type[ApiPlugin]] = {CoreApiPlugin}
+        self.plugins: set[type[ApiPlugin]] = {CoreApiPlugin}
         self.authentication_backend = authentication_backend
         self.secret_key = secret_key or secrets.token_urlsafe(32)
 

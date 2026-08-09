@@ -1,12 +1,11 @@
 import asyncio
-import os
 import functools
+import os
+import sys
 from concurrent.futures import Future
 
-import sys
-
-from chancy.worker import Worker
 from chancy.queue import Queue
+from chancy.worker import Worker
 
 try:
     # Only available in 3.14+

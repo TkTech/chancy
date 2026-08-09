@@ -1,10 +1,10 @@
 import asyncio
 import os
-from typing import AsyncIterator
+import sys
+from collections.abc import AsyncIterator
 
 import pytest
 import pytest_asyncio
-import sys
 
 from chancy import Chancy, Worker
 from chancy.executors.base import Executor
@@ -12,9 +12,9 @@ from chancy.utils import import_string
 
 
 def executor_params(
-    required: Executor.Capability = Executor.Capability(0),
+    required: Executor.Capability = Executor.Capability.NONE,
     *,
-    excluded: Executor.Capability = Executor.Capability(0),
+    excluded: Executor.Capability = Executor.Capability.NONE,
 ):
     """Return built-in executors matching the requested capabilities."""
     params = []

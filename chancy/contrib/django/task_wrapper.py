@@ -5,12 +5,11 @@ Since Chancy only supports kwargs, this wrapper receives task metadata
 as kwargs and reconstructs the original function call.
 """
 
-from chancy.job import QueuedJob
-
-from django.utils.module_loading import import_string
 from django.tasks import Task, TaskContext
+from django.utils.module_loading import import_string
 
 from chancy.contrib.django.backend import _build_task_result_from_queued_job
+from chancy.job import QueuedJob
 
 
 def _build_task_for_context(context: QueuedJob, func) -> Task:

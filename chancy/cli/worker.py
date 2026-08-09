@@ -13,7 +13,6 @@ def worker_group():
     """
     Worker management commands.
     """
-    pass
 
 
 @worker_group.command("start")
