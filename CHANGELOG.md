@@ -40,6 +40,8 @@ Changelog
 - Job timeouts on the threaded and sub-interpreter executors are now
   co-operative - non-cooperative timeouts are not reliable in CPython's model (
   how do we cleanup a job that's holding a cross-thread lock?)
+- `wait_for_jobs()` could wait forever if a job was purged and no timeout was
+  provided.
 
 0.25.1
 ------

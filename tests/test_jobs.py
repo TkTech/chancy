@@ -134,6 +134,29 @@ async def test_wait_for_job_timeout(
 
 
 @pytest.mark.asyncio
+async def test_wait_for_jobs_ignores_purged_jobs(
+    chancy: Chancy, worker: Worker
+):
+    """
+    Ensures that waiting for jobs ignores references to purged jobs.
+    """
+    await chancy.declare(Queue("default"))
+
+    existing_ref = await chancy.push(job_to_run.job)
+    purged_ref = await chancy.push(job_to_run.job)
+
+    await chancy.wait_for_job(existing_ref, timeout=30)
+    await chancy.wait_for_job(purged_ref, timeout=30)
+    await chancy.purge_jobs([purged_ref])
+
+    completed = await chancy.wait_for_jobs(
+        [existing_ref, purged_ref], interval=0.01, timeout=1
+    )
+
+    assert [job.id for job in completed] == [existing_ref.identifier]
+
+
+@pytest.mark.asyncio
 async def test_cooperative_time_limit_sync(
     chancy: Chancy,
     worker: Worker,

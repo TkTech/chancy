@@ -854,8 +854,9 @@ class Chancy:
             completed = []
             while pending:
                 jobs = await self.get_jobs(list(pending))
+                pending.intersection_update(Reference(job.id) for job in jobs)
                 for job in jobs:
-                    if job is None or job.state in states:
+                    if job.state in states:
                         completed.append(job)
                         pending.remove(Reference(job.id))
                 if pending:
