@@ -7,6 +7,37 @@ import pytest_asyncio
 import sys
 
 from chancy import Chancy, Worker
+from chancy.executors.base import Executor
+from chancy.utils import import_string
+
+
+def executor_params(
+    required: Executor.Capability = Executor.Capability(0),
+    *,
+    excluded: Executor.Capability = Executor.Capability(0),
+):
+    """Return built-in executors matching the requested capabilities."""
+    params = []
+    for executor in Chancy.Executor:
+        try:
+            executor_class = import_string(executor)
+        except ImportError:
+            if (
+                executor is Chancy.Executor.SubInterpreter
+                and sys.version_info < (3, 13)
+            ):
+                continue
+            raise
+
+        capabilities = executor_class.get_capabilities()
+        if (capabilities & required) != required:
+            continue
+        if capabilities & excluded:
+            continue
+
+        params.append(pytest.param(executor, id=executor.name.lower()))
+
+    return params
 
 
 @pytest.fixture(scope="session")
@@ -107,26 +138,49 @@ async def worker_no_start(chancy) -> Worker:
     return Worker(chancy)
 
 
-@pytest.fixture(
-    params=(
-        [Chancy.Executor.Process, Chancy.Executor.Threaded]
-        + (
-            [Chancy.Executor.SubInterpreter]
-            if sys.version_info >= (3, 13)
-            else []
-        )
-    )
-)
-def sync_executor(request):
-    """
-    Provides a parameterized fixture for all sync executors.
-    """
+@pytest.fixture(params=executor_params(Executor.Capability.SYNC_JOBS))
+def sync_job_executor(request):
+    """Provide each executor that supports synchronous jobs."""
     return request.param
 
 
-@pytest.fixture(params=[Chancy.Executor.Async])
-def async_executor(request):
-    """
-    Provides a parameterized fixture for all async executors.
-    """
+@pytest.fixture(params=executor_params(Executor.Capability.ASYNC_JOBS))
+def async_job_executor(request):
+    """Provide each executor that supports asynchronous jobs."""
+    return request.param
+
+
+@pytest.fixture(
+    params=executor_params(Executor.Capability.COOPERATIVE_TIME_LIMITS)
+)
+def cooperative_time_limit_executor(request):
+    """Provide each executor with cooperative time limits."""
+    return request.param
+
+
+@pytest.fixture(
+    params=executor_params(Executor.Capability.AUTOMATIC_TIME_LIMITS)
+)
+def automatic_time_limit_executor(request):
+    """Provide each executor with automatic time limits."""
+    return request.param
+
+
+@pytest.fixture(params=executor_params(Executor.Capability.CANCELLATION))
+def cancellation_executor(request):
+    """Provide each executor that can cancel an active job."""
+    return request.param
+
+
+@pytest.fixture(
+    params=executor_params(excluded=Executor.Capability.MEMORY_LIMITS)
+)
+def executor_without_memory_limits(request):
+    """Provide each executor without memory limit support."""
+    return request.param
+
+
+@pytest.fixture(params=executor_params(excluded=Executor.Capability.SYNC_JOBS))
+def executor_without_sync_jobs(request):
+    """Provide each executor without synchronous job support."""
     return request.param

@@ -1,9 +1,7 @@
 import asyncio
 import functools
-import inspect
 import multiprocessing
 import os
-import warnings
 from multiprocessing.context import BaseContext
 
 
@@ -19,7 +17,7 @@ from typing import Callable, Any
 from uuid import UUID
 
 from chancy import Reference
-from chancy.executors.base import ConcurrentExecutor
+from chancy.executors.base import ConcurrentExecutor, Executor
 from chancy.job import QueuedJob, Limit
 
 
@@ -57,6 +55,21 @@ class ProcessExecutor(ConcurrentExecutor):
                        default "spawn" context will be used, which is the
                        safest option on all platforms.
     """
+
+    capabilities = (
+        Executor.Capability.SYNC_JOBS | Executor.Capability.ASYNC_JOBS
+    )
+
+    @classmethod
+    def get_capabilities(cls) -> Executor.Capability:
+        capabilities = cls.capabilities
+        if hasattr(signal, "SIGUSR1"):
+            capabilities |= Executor.Capability.CANCELLATION
+        if hasattr(signal, "SIGALRM"):
+            capabilities |= Executor.Capability.AUTOMATIC_TIME_LIMITS
+        if resource is not None and hasattr(resource, "RLIMIT_AS"):
+            capabilities |= Executor.Capability.MEMORY_LIMITS
+        return capabilities
 
     def __init__(
         self,
@@ -132,15 +145,10 @@ class ProcessExecutor(ConcurrentExecutor):
             )
         )
         self.jobs[future] = job
-        time_limit = next(
-            (
-                limit.value
-                for limit in job.limits
-                if limit.type_ == Limit.Type.TIME
-            ),
-            None,
-        )
-        if time_limit is not None:
+        time_limit = self.get_limit(job, Limit.Type.TIME)
+        if time_limit is not None and self.supports(
+            Executor.Capability.AUTOMATIC_TIME_LIMITS
+        ):
             self.timeouts[job.id] = asyncio.create_task(
                 self._handle_timeout(job.id, time_limit)
             )
@@ -181,40 +189,24 @@ class ProcessExecutor(ConcurrentExecutor):
             # to receive SIGUSR1. Honor it now.
             if pending_cancellations.pop(job.id, None) is not None:
                 raise CancelledError("Job was cancelled.")
-            func, kwargs = cls.get_function_and_kwargs(job)
+            job, func, kwargs = cls.prepare_job_for_execution(job)
 
-            if job.limits and resource is None:
-                warnings.warn(
-                    f"Resource limits are not supported on this,"
-                    f" platform ignoring limits for job {job.id}.",
-                    RuntimeWarning,
-                )
-            else:
-                for limit in job.limits:
-                    match limit.type_:
-                        case Limit.Type.MEMORY:
-                            previous_soft, _ = resource.getrlimit(
-                                resource.RLIMIT_AS
+            for limit in job.limits:
+                match limit.type_:
+                    case Limit.Type.MEMORY:
+                        previous_soft, _ = resource.getrlimit(
+                            resource.RLIMIT_AS
+                        )
+                        resource.setrlimit(
+                            resource.RLIMIT_AS, (limit.value, -1)
+                        )
+                        cleanup.append(
+                            lambda: resource.setrlimit(
+                                resource.RLIMIT_AS, (previous_soft, -1)
                             )
-                            resource.setrlimit(
-                                resource.RLIMIT_AS, (limit.value, -1)
-                            )
-                            cleanup.append(
-                                lambda: resource.setrlimit(
-                                    resource.RLIMIT_AS, (previous_soft, -1)
-                                )
-                            )
+                        )
 
-            if inspect.iscoroutinefunction(func):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    result = loop.run_until_complete(func(**kwargs))
-                finally:
-                    loop.run_until_complete(loop.shutdown_asyncgens())
-                    loop.close()
-            else:
-                result = func(**kwargs)
+            result = cls.run_function(func, kwargs)
         finally:
             pids_for_job.pop(job.id)
             for clean in cleanup:
@@ -236,10 +228,10 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        if hasattr(signal, "SIGALRM") and signum == signal.SIGALRM:
-            raise TimeoutError("Job timed out.")
-        if hasattr(signal, "SIGUSR1") and signum == signal.SIGUSR1:
+        if getattr(signal, "SIGUSR1", None) == signum:
             raise CancelledError("Job was cancelled.")
+        if getattr(signal, "SIGALRM", None) == signum:
+            raise TimeoutError("Job timeout out.")
 
     def _on_job_completed(
         self, future: Future, loop: asyncio.AbstractEventLoop
@@ -286,6 +278,9 @@ class ProcessExecutor(ConcurrentExecutor):
             return
 
         future.cancel()
+        if not self.supports(Executor.Capability.CANCELLATION):
+            return
+
         pid = self.pids_for_job.get(ref.identifier)
         if pid is not None:
             os.kill(pid, signal.SIGUSR1)

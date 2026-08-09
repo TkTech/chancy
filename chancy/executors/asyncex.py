@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 from asyncio import CancelledError
 
 from chancy import Reference
@@ -32,6 +31,12 @@ class AsyncExecutor(Executor):
             )
     """
 
+    capabilities = (
+        Executor.Capability.ASYNC_JOBS
+        | Executor.Capability.CANCELLATION
+        | Executor.Capability.AUTOMATIC_TIME_LIMITS
+    )
+
     def __init__(self, worker, queue):
         super().__init__(worker, queue)
         self.jobs: dict[asyncio.Task, QueuedJob] = {}
@@ -47,22 +52,8 @@ class AsyncExecutor(Executor):
 
     async def _job_wrapper(self, job: QueuedJob):
         try:
-            func, kwargs = Executor.get_function_and_kwargs(job)
-            if not inspect.iscoroutinefunction(func):
-                raise ValueError(
-                    f"Function {job.func!r} is not an async function, which is"
-                    f" required for the AsyncExecutor. Please use the"
-                    f" ThreadedExecutor or ProcessExecutor instead."
-                )
-
-            timeout = next(
-                (
-                    limit.value
-                    for limit in job.limits
-                    if limit.type_ == Limit.Type.TIME
-                ),
-                None,
-            )
+            job, func, kwargs = self.prepare_job_for_execution(job)
+            timeout = self.get_limit(job, Limit.Type.TIME)
 
             async with asyncio.timeout(timeout):
                 result = await func(**kwargs)

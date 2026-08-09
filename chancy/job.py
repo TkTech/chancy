@@ -1,5 +1,6 @@
 import dataclasses
 import enum
+import time
 from datetime import datetime, timezone
 from typing import (
     Any,
@@ -234,6 +235,44 @@ class QueuedJob(Job):
     state: State = State.PENDING
     #: A list of errors that occurred during the execution of this job.
     errors: list[ErrorT] = dataclasses.field(default_factory=list)
+    _time_limit_deadline: float | None = dataclasses.field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
+
+    @property
+    def time_remaining(self) -> float | None:
+        """
+        Return the number of seconds remaining before the job's cooperative
+        time limit expires.
+
+        Returns ``None`` when the executor has not configured a cooperative
+        time limit for this execution.
+        """
+        if self._time_limit_deadline is None:
+            return None
+        return max(0.0, self._time_limit_deadline - time.monotonic())
+
+    def checkpoint(self) -> None:
+        """
+        Raise :class:`TimeoutError` if the cooperative time limit has expired.
+
+        Jobs running in a threaded or sub-interpreter executor should call this
+        method periodically at points where execution can be safely
+        interrupted.
+        """
+        if (
+            self._time_limit_deadline is not None
+            and time.monotonic() >= self._time_limit_deadline
+        ):
+            raise TimeoutError("Job timed out.")
+
+    def _with_time_limit(self, seconds: int) -> "QueuedJob":
+        return dataclasses.replace(
+            self,
+            _time_limit_deadline=time.monotonic() + seconds,
+        )
 
     @classmethod
     def unpack(cls, data: dict) -> "QueuedJob":

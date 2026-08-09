@@ -27,12 +27,19 @@ Changelog
   many, individual workflows with thousands of jobs without issue.
 - Can now be used as a django-tasks backend, albeit with less functionality
   than using Chancy directly.
+- Executors now declare their capabilities with `Executor.supports` and
+  `Executor.get_capabilities()`, such as time out and memory limit support.
+- Threaded and sub-interpreter executors now support co-operative timeouts
+  by periodically calling `QueuedJob.checkpoint()`.
 
 🐛 Fixes
 
 - Respect CLI flags for API plugin configuration by @alfawal (#68).
 - Fixed an issue that allowed the reprioritize plugin to update the same job
   multiple times in different batches of the same run.
+- Job timeouts on the threaded and sub-interpreter executors are now
+  co-operative - non-cooperative timeouts are not reliable in CPython's model (
+  how do we cleanup a job that's holding a cross-thread lock?)
 
 0.25.1
 ------
