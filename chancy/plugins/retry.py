@@ -1,10 +1,10 @@
 import dataclasses
-from datetime import datetime, timedelta, timezone
 import random
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from chancy.plugin import Plugin
 from chancy.job import QueuedJob
+from chancy.plugin import Plugin
 from chancy.worker import Worker
 
 
@@ -60,7 +60,7 @@ class RetryPlugin(Plugin):
         delay = min(delay, limit)
         delay += random.uniform(*jitter)
 
-        return datetime.now(timezone.utc) + timedelta(seconds=delay)
+        return datetime.now(UTC) + timedelta(seconds=delay)
 
     async def on_job_completed(
         self,

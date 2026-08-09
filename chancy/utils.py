@@ -1,16 +1,17 @@
 import asyncio
+import contextlib
 import datetime
 import enum
 import importlib
 import inspect
-import uuid
-import time
+import itertools
 import json
 import secrets
-import itertools
-import contextlib
-from dataclasses import is_dataclass, asdict
-from typing import Iterable, Coroutine, NotRequired, Any, TypedDict
+import time
+import uuid
+from collections.abc import Coroutine, Iterable
+from dataclasses import asdict, is_dataclass
+from typing import Any, NotRequired, TypedDict
 from urllib.parse import quote_plus, urlencode, urlunparse
 
 
@@ -41,7 +42,7 @@ async def sleep(
 
     tasks = [asyncio.create_task(event) for event in events]
     try:
-        done, pending = await asyncio.wait(
+        _done, pending = await asyncio.wait(
             tasks,
             timeout=seconds,
             return_when=asyncio.FIRST_COMPLETED,
@@ -121,7 +122,7 @@ def import_string(name):
     return getattr(module, func_name)
 
 
-def chancy_uuid() -> str:
+def chancy_uuid() -> uuid.UUID:
     """
     Generate a UUID suitable for use as a job ID.
 
@@ -129,12 +130,12 @@ def chancy_uuid() -> str:
 
         It's UUID7, kinda, since the draft keeps changing.
 
-    :return: str
+    :return: UUID
     """
     t = (time.time_ns() // 100) & 0xFFFFFFFFFFFFFF
     rand = secrets.randbits(62)
     uuid7 = (t << 68) | (7 << 64) | (2 << 62) | rand
-    return f"{uuid7:032x}"
+    return uuid.UUID(f"{uuid7:032x}")
 
 
 def json_dumps(obj, **kwargs):
@@ -193,7 +194,7 @@ class TaskManager:
         """
         Add a task to the manager.
         """
-        task = asyncio.create_task(task)
+        task: asyncio.Task = asyncio.create_task(task)
         task.add_done_callback(self._tasks.remove)
         task.set_name(name)
 
@@ -214,7 +215,7 @@ class TaskManager:
             )
 
             try:
-                done, pending = await asyncio.wait(
+                done, _pending = await asyncio.wait(
                     self._tasks | {added_task},
                     return_when=asyncio.FIRST_COMPLETED,
                 )
@@ -239,11 +240,11 @@ class TaskManager:
             for task in self._tasks:
                 task.cancel()
 
-            done, pending = await asyncio.wait(
+            done, _pending = await asyncio.wait(
                 self._tasks,
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            self._tasks = (pending | self._tasks) - done
+            self._tasks.difference_update(done)
 
     async def cancel(self, name: str):
         """

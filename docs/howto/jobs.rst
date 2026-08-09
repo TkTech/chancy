@@ -122,7 +122,7 @@ Set memory and time limits for job execution:
 
 .. code-block:: python
 
-   from chancy import Limit, job
+   from chancy import Limit, QueuedJob, job
 
    @job(limits=[
        Limit(Limit.Type.MEMORY, 1024 * 1024 * 1024),
@@ -133,7 +133,17 @@ Set memory and time limits for job execution:
 
 Not all executors will support all types of limits. For example only
 the default :class:`~chancy.executors.process.ProcessExecutor` supports
-memory limits.
+memory limits. Time limits in the threaded and sub-interpreter executors are
+cooperative: jobs must accept a :class:`chancy.job.QueuedJob` context and call
+:meth:`~chancy.job.QueuedJob.checkpoint` periodically.
+
+.. code-block:: python
+
+   @job(limits=[Limit(Limit.Type.TIME, 60)])
+   def process_items(*, context: QueuedJob):
+       for item in get_items():
+           context.checkpoint()
+           process(item)
 
 Unique Jobs
 -----------

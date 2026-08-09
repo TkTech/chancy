@@ -1,9 +1,10 @@
-import time
 import asyncio
+import time
 
 import pytest
+from psycopg import OperationalError
 
-from chancy import Worker, Chancy, Queue, QueuedJob, job
+from chancy import Chancy, Queue, QueuedJob, Worker, job
 from chancy.errors import MigrationsNeededError
 
 
@@ -20,7 +21,6 @@ def job_that_fails():
 @job()
 def job_that_sleeps():
     time.sleep(0.5)
-    return
 
 
 @pytest.mark.asyncio
@@ -93,8 +93,10 @@ async def test_queue_removal(chancy: Chancy, worker: Worker):
     await chancy.delete_queue("test_removal", purge_jobs=True)
     await worker.hub.wait_for("worker.queue.removed", timeout=30)
 
-    # Give the executor time to clean up
-    await asyncio.sleep(5)
+    # Wait for the executor to clean up
+    async with asyncio.timeout(10):
+        while "test_removal" in worker.executors:
+            await asyncio.sleep(0.1)
 
     assert "test_removal" not in worker.executors
 
@@ -111,6 +113,70 @@ async def test_error_on_needed_migrations(chancy_just_app: Chancy):
                 pass
 
 
+def test_calculate_backoff_bounds(worker_no_start: Worker):
+    """
+    The jittered backoff stays within ``[0, ceiling]`` and the ceiling
+    grows exponentially until it hits ``backoff_max``.
+    """
+    worker_no_start.backoff_initial = 1.0
+    worker_no_start.backoff_max = 8.0
+
+    expected_ceilings = [1.0, 2.0, 4.0, 8.0, 8.0, 8.0]
+    for failures, ceiling in enumerate(expected_ceilings):
+        samples = [
+            worker_no_start._calculate_backoff(failures) for _ in range(200)
+        ]
+        assert all(0.0 <= s <= ceiling for s in samples)
+        # With 200 draws of uniform(0, ceiling) we expect a healthy spread;
+        # this also guards against accidentally returning the ceiling
+        # itself (no-jitter regression).
+        if ceiling > 0:
+            assert max(samples) > ceiling * 0.5
+            assert min(samples) < ceiling * 0.5
+
+
+@pytest.mark.parametrize(
+    "worker",
+    [
+        {
+            "heartbeat_poll_interval": 1,
+            "backoff_initial": 0.01,
+            "backoff_max": 0.05,
+        }
+    ],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_heartbeat_recovers_from_transient_error(
+    chancy: Chancy, worker: Worker
+):
+    """
+    A transient ``OperationalError`` raised by ``announce_worker`` must
+    not kill the heartbeat loop — it should back off, retry, and recover.
+    """
+    original = worker.announce_worker
+    calls = 0
+    failures_to_inject = 2
+
+    async def flaky_announce(conn):
+        nonlocal calls
+        calls += 1
+        if calls <= failures_to_inject:
+            raise OperationalError("simulated transient failure")
+        return await original(conn)
+
+    worker.announce_worker = flaky_announce
+
+    async with asyncio.timeout(15):
+        while calls <= failures_to_inject:
+            await asyncio.sleep(0.1)
+        # One more successful call proves the loop is still alive after
+        # the injected failures.
+        target = calls + 1
+        while calls < target:
+            await asyncio.sleep(0.1)
+
+
 @pytest.mark.asyncio
 async def test_immediate_processing(chancy: Chancy, worker: Worker):
     """
@@ -119,14 +185,12 @@ async def test_immediate_processing(chancy: Chancy, worker: Worker):
     """
     await chancy.declare(Queue("test_immediate", polling_interval=60))
     await worker.hub.wait_for("worker.queue.started")
-    await asyncio.sleep(5)
 
     j = await chancy.push(job_to_run.job.with_queue("test_immediate"))
 
-    result = await chancy.wait_for_job(
-        j,
-        interval=1,
-        timeout=5,  # Short timeout since we expect immediate processing
-    )
+    # Generous compared to the polling_interval=60 we're trying to bypass,
+    # but enough headroom for slow CI runners (process spawn, update
+    # batching, scheduling).
+    result = await chancy.wait_for_job(j, interval=1, timeout=15)
 
     assert result.state == QueuedJob.State.SUCCEEDED

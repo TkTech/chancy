@@ -43,7 +43,7 @@ class MetricsApiPlugin(ApiPlugin):
         metric_categories = defaultdict(list)
 
         metrics = await metrics_plugin.get_metrics(chancy)
-        for key in metrics.keys():
+        for key in metrics:
             parts = key.split(":")
             category, metric_name = parts[0], parts[1]
             if metric_name not in metric_categories[category]:

@@ -1,10 +1,10 @@
-import time
 import asyncio
+import time
 
 import pytest
-
-from chancy import Chancy, Worker, Queue, QueuedJob, Reference, job, Job
 from test_worker import job_that_fails
+
+from chancy import Chancy, Job, Limit, Queue, QueuedJob, Worker, job
 
 
 @job()
@@ -38,8 +38,35 @@ async def very_long_job():
 
 
 @job()
-def sync_very_long_job():
-    time.sleep(60)
+def cooperative_time_limited_job(*, context: QueuedJob):
+    assert context.time_remaining is not None
+    while True:
+        time.sleep(0.05)
+        context.checkpoint()
+
+
+@job()
+async def async_time_limited_job(*, context: QueuedJob):
+    assert context.time_remaining is not None
+    while True:
+        await asyncio.sleep(0.05)
+        context.checkpoint()
+
+
+@job()
+def uncooperative_time_limited_job(*, context: QueuedJob):
+    assert context.time_remaining is not None
+    time.sleep(2)
+
+
+@job()
+def time_limited_job_without_context():
+    raise AssertionError("Job should not have been executed.")
+
+
+@job()
+async def async_time_limited_job_without_context():
+    raise AssertionError("Job should not have been executed.")
 
 
 @job(queue="low")
@@ -59,12 +86,12 @@ def job_with_kwarg_generic(*, hello: list[str]):
 
 @pytest.mark.asyncio
 async def test_basic_job_sync(
-    chancy: Chancy, worker: Worker, sync_executor: str
+    chancy: Chancy, worker: Worker, sync_job_executor: str
 ):
     """
-    Ensures that a basic job can be run on all built-in executors.
+    Ensures that a synchronous job can run on every supporting executor.
     """
-    await chancy.declare(Queue("low", executor=sync_executor))
+    await chancy.declare(Queue("low", executor=sync_job_executor))
 
     ref = await chancy.push(job_to_run.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
@@ -74,27 +101,12 @@ async def test_basic_job_sync(
 
 @pytest.mark.asyncio
 async def test_basic_job_async(
-    chancy: Chancy, worker: Worker, async_executor: str
+    chancy: Chancy, worker: Worker, async_job_executor: str
 ):
     """
-    Ensures that a basic job can be run on all built-in executors.
+    Ensures that an asynchronous job can run on every supporting executor.
     """
-    await chancy.declare(Queue("low", executor=async_executor))
-
-    ref = await chancy.push(async_job_to_run.job.with_queue("low"))
-    j = await chancy.wait_for_job(ref, timeout=30)
-
-    assert j.state == j.State.SUCCEEDED
-
-
-@pytest.mark.asyncio
-async def test_async_job_on_sync_executor(
-    chancy: Chancy, worker: Worker, sync_executor: str
-):
-    """
-    Ensures that async jobs can run on sync executors.
-    """
-    await chancy.declare(Queue("low", executor=sync_executor))
+    await chancy.declare(Queue("low", executor=async_job_executor))
 
     ref = await chancy.push(async_job_to_run.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
@@ -104,12 +116,12 @@ async def test_async_job_on_sync_executor(
 
 @pytest.mark.asyncio
 async def test_wait_for_job_timeout(
-    chancy: Chancy, worker: Worker, sync_executor: str
+    chancy: Chancy, worker: Worker, sync_job_executor: str
 ):
     """
     Ensures that waiting for a job times out as expected.
     """
-    await chancy.declare(Queue("low", executor=sync_executor))
+    await chancy.declare(Queue("low", executor=sync_job_executor))
 
     ref = await chancy.push(job_to_run.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=20)
@@ -122,13 +134,164 @@ async def test_wait_for_job_timeout(
 
 
 @pytest.mark.asyncio
+async def test_wait_for_jobs_ignores_purged_jobs(
+    chancy: Chancy, worker: Worker
+):
+    """
+    Ensures that waiting for jobs ignores references to purged jobs.
+    """
+    await chancy.declare(Queue("default"))
+
+    existing_ref = await chancy.push(job_to_run.job)
+    purged_ref = await chancy.push(job_to_run.job)
+
+    await chancy.wait_for_job(existing_ref, timeout=30)
+    await chancy.wait_for_job(purged_ref, timeout=30)
+    await chancy.purge_jobs([purged_ref])
+
+    completed = await chancy.wait_for_jobs(
+        [existing_ref, purged_ref], interval=0.01, timeout=1
+    )
+
+    assert [job.id for job in completed] == [existing_ref.identifier]
+
+
+@pytest.mark.asyncio
+async def test_cooperative_time_limit_sync(
+    chancy: Chancy,
+    worker: Worker,
+    cooperative_time_limit_executor: str,
+):
+    await chancy.declare(
+        Queue(
+            "time_limit_sync",
+            executor=cooperative_time_limit_executor,
+        )
+    )
+    ref = await chancy.push(
+        cooperative_time_limited_job.job.with_queue(
+            "time_limit_sync"
+        ).with_limits([Limit(Limit.Type.TIME, 1)])
+    )
+
+    completed = await chancy.wait_for_job(ref, timeout=30)
+
+    assert completed.state == QueuedJob.State.FAILED
+    assert "TimeoutError: Job timed out." in completed.errors[-1]["traceback"]
+
+
+@pytest.mark.asyncio
+async def test_cooperative_time_limit_async(
+    chancy: Chancy,
+    worker: Worker,
+    cooperative_time_limit_executor: str,
+):
+    await chancy.declare(
+        Queue(
+            "time_limit_async",
+            executor=cooperative_time_limit_executor,
+        )
+    )
+    ref = await chancy.push(
+        async_time_limited_job.job.with_queue("time_limit_async").with_limits(
+            [Limit(Limit.Type.TIME, 1)]
+        )
+    )
+
+    completed = await chancy.wait_for_job(ref, timeout=30)
+
+    assert completed.state == QueuedJob.State.FAILED
+    assert "TimeoutError: Job timed out." in completed.errors[-1]["traceback"]
+
+
+@pytest.mark.asyncio
+async def test_cooperative_time_limit_checked_after_return(
+    chancy: Chancy,
+    worker: Worker,
+    cooperative_time_limit_executor: str,
+):
+    await chancy.declare(
+        Queue(
+            "time_limit_after",
+            executor=cooperative_time_limit_executor,
+        )
+    )
+    ref = await chancy.push(
+        uncooperative_time_limited_job.job.with_queue(
+            "time_limit_after"
+        ).with_limits([Limit(Limit.Type.TIME, 1)])
+    )
+
+    completed = await chancy.wait_for_job(ref, timeout=30)
+
+    assert completed.state == QueuedJob.State.FAILED
+    assert "TimeoutError: Job timed out." in completed.errors[-1]["traceback"]
+
+
+@pytest.mark.parametrize(
+    "job_without_context",
+    [time_limited_job_without_context, async_time_limited_job_without_context],
+)
+@pytest.mark.asyncio
+async def test_cooperative_time_limit_requires_context(
+    chancy: Chancy,
+    worker: Worker,
+    cooperative_time_limit_executor: str,
+    job_without_context,
+):
+    await chancy.declare(
+        Queue(
+            "time_limit_context",
+            executor=cooperative_time_limit_executor,
+        )
+    )
+    ref = await chancy.push(
+        job_without_context.job.with_queue("time_limit_context").with_limits(
+            [Limit(Limit.Type.TIME, 1)]
+        )
+    )
+
+    completed = await chancy.wait_for_job(ref, timeout=30)
+
+    assert completed.state == QueuedJob.State.FAILED
+    assert (
+        "Jobs using cooperative time limits must accept"
+        in completed.errors[-1]["traceback"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_automatic_time_limit(
+    chancy: Chancy,
+    worker: Worker,
+    automatic_time_limit_executor: str,
+):
+    await chancy.declare(
+        Queue(
+            "time_limit_automatic",
+            executor=automatic_time_limit_executor,
+        )
+    )
+    ref = await chancy.push(
+        very_long_job.job.with_queue("time_limit_automatic").with_limits(
+            [Limit(Limit.Type.TIME, 1)]
+        )
+    )
+
+    completed = await chancy.wait_for_job(ref, timeout=30)
+
+    assert completed.state == QueuedJob.State.FAILED
+    assert "TimeoutError" in completed.errors[-1]["traceback"]
+
+
+@pytest.mark.asyncio
 async def test_job_instance_kwarg(
-    chancy: Chancy, worker: Worker, sync_executor: str
+    chancy: Chancy, worker: Worker, sync_job_executor: str
 ):
     """
     Test that jobs requesting a QueuedJob kwarg receive the correct instance.
     """
-    await chancy.declare(Queue("low", executor=sync_executor))
+    await chancy.declare(Queue("low", executor=sync_job_executor))
 
     ref = await chancy.push(job_with_instance.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
@@ -139,60 +302,19 @@ async def test_job_instance_kwarg(
 
 @pytest.mark.asyncio
 async def test_async_job_instance_kwarg(
-    chancy: Chancy, worker: Worker, async_executor: str
+    chancy: Chancy, worker: Worker, async_job_executor: str
 ):
     """
     Test that async jobs requesting a QueuedJob kwarg receive the correct
     instance.
     """
-    await chancy.declare(Queue("low", executor=async_executor))
+    await chancy.declare(Queue("low", executor=async_job_executor))
 
     ref = await chancy.push(async_job_with_instance.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
 
     assert j.state == j.State.SUCCEEDED
     assert j.meta.get("received_instance") is True
-
-
-@pytest.mark.asyncio
-async def test_async_job_instance_kwarg_on_sync_executor(
-    chancy: Chancy, worker: Worker, sync_executor: str
-):
-    """
-    Test that async jobs requesting a QueuedJob kwarg receive the correct
-    instance when run on a sync executor.
-    """
-    await chancy.declare(Queue("low", executor=sync_executor))
-
-    ref = await chancy.push(async_job_with_instance.job.with_queue("low"))
-    j = await chancy.wait_for_job(ref, timeout=30)
-
-    assert j.state == j.State.SUCCEEDED
-    assert j.meta.get("received_instance") is True
-
-
-@pytest.mark.asyncio
-async def test_job_cancellation(chancy: Chancy, worker: Worker):
-    """
-    Test that jobs can be cancelled on supporting executors.
-    """
-
-    async def cancel_in_a_bit(to_cancel: Reference):
-        await asyncio.sleep(10)
-        await chancy.cancel_job(to_cancel)
-
-    await chancy.declare(Queue("async", executor=Chancy.Executor.Async))
-    await chancy.declare(Queue("sync", executor=Chancy.Executor.Process))
-
-    ref = await chancy.push(very_long_job.job.with_queue("async"))
-    asyncio.create_task(cancel_in_a_bit(ref))
-    j = await chancy.wait_for_job(ref, timeout=30)
-    assert j.state == j.State.FAILED
-
-    ref = await chancy.push(sync_very_long_job.job.with_queue("sync"))
-    asyncio.create_task(cancel_in_a_bit(ref))
-    j = await chancy.wait_for_job(ref, timeout=30)
-    assert j.state == j.State.FAILED
 
 
 @pytest.mark.asyncio
@@ -295,12 +417,14 @@ async def test_retry_jobs(chancy: Chancy, worker: Worker):
 
 
 @pytest.mark.asyncio
-async def test_purge_jobs(chancy: Chancy, worker: Worker, sync_executor: str):
+async def test_purge_jobs(
+    chancy: Chancy, worker: Worker, sync_job_executor: str
+):
     """
     Ensure that purging jobs removes them permanently.
     """
     # Create a succeeded job
-    await chancy.declare(Queue("low", executor=sync_executor))
+    await chancy.declare(Queue("low", executor=sync_job_executor))
     ref_ok = await chancy.push(job_to_run.job.with_queue("low"))
     j_ok = await chancy.wait_for_job(ref_ok, timeout=30)
     assert j_ok is not None and j_ok.state == QueuedJob.State.SUCCEEDED
@@ -315,3 +439,31 @@ async def test_purge_jobs(chancy: Chancy, worker: Worker, sync_executor: str):
     await chancy.purge_jobs([ref_ok, ref_fail])
     assert await chancy.get_job(ref_ok) is None
     assert await chancy.get_job(ref_fail) is None
+
+
+@pytest.mark.asyncio
+async def test_executor_job_cancellation(
+    chancy: Chancy,
+    worker: Worker,
+    cancellation_executor: str,
+):
+    """
+    Test that active jobs can be cancelled on every supporting executor.
+    """
+    await chancy.declare(Queue("cancel_test", executor=cancellation_executor))
+
+    ref = await chancy.push(very_long_job.job.with_queue("cancel_test"))
+    j = await chancy.wait_for_job(
+        ref, timeout=10, states={QueuedJob.State.RUNNING}
+    )
+    assert j.state == j.State.RUNNING
+
+    await chancy.cancel_job(ref)
+
+    executor = worker._executors.get("cancel_test")
+    async with asyncio.timeout(10):
+        while executor.is_job_running(ref):
+            await asyncio.sleep(0.1)
+
+    j = await chancy.wait_for_job(ref, timeout=10)
+    assert j.state == j.State.FAILED

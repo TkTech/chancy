@@ -54,7 +54,7 @@ async def test_retry_with_custom_settings(chancy, worker: Worker):
         "backoff_jitter": [0, 1],
     }
 
-    starting_time = datetime.datetime.now(tz=datetime.timezone.utc)
+    starting_time = datetime.datetime.now(tz=datetime.UTC)
     ref = await chancy.push(
         Job.from_func(
             job_that_fails,

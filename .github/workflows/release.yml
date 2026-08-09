@@ -26,19 +26,26 @@ jobs:
     - name: Install uv
       run: pip install uv
 
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "24"
+        cache: "npm"
+        cache-dependency-path: chancy/plugins/api/ui/package-lock.json
+
     - name: Installing dependencies (Node)
       working-directory: chancy/plugins/api/ui
-      run: npm install
+      run: npm ci
 
     - name: Building UI
       working-directory: chancy/plugins/api/ui
       run: npm run build
 
     - name: Checking for code smells
-      run: uv run ruff check
+      run: uvx --from ruff==0.16.2 ruff check
 
     - name: Checking for formatting issues
-      run: uv run ruff format --check
+      run: uvx --from ruff==0.16.2 ruff format --check
 
     - name: Build package
       run: uv build
@@ -61,7 +68,7 @@ jobs:
     name: "${{ matrix.os }} - Py${{ matrix.python-version }} - PG${{ matrix.pg }}"
     needs: [build]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     if: github.event_name == 'pull_request'
     strategy:
       fail-fast: true
@@ -96,9 +103,13 @@ jobs:
       - name: Installing dependencies (Python)
         run: uv sync --all-extras
 
-      - name: Running tests
+      - name: Running tests (parallel)
         run: |
-          uv run pytest -s -v --cov=chancy --cov-report=xml
+          uv run pytest -n auto -v --cov=chancy --cov-report=xml
+
+      - name: Running Django ORM tests (sequential)
+        run: |
+          uv run pytest tests/contrib/django/test_models.py -v --cov=chancy --cov-report=xml --cov-append
 
       - name: Uploading coverage
         uses: codecov/codecov-action@v4
@@ -109,6 +120,43 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
           slug: TkTech/chancy
+
+  test-django6:
+    name: "Django 6 Tests (Ubuntu, Py3.12)"
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4.1.6
+
+      - uses: ikalnytskyi/action-setup-postgres@v8
+        with:
+          username: postgres
+          password: localtest
+          database: postgres
+          port: 8190
+          postgres-version: "18"
+        id: postgres
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Installing uv
+        run: pip install uv
+
+      - name: Installing dependencies (Python)
+        run: uv sync --all-extras
+
+      - name: Installing Django 6
+        run: uv pip install 'django>=6.0'
+
+      - name: Running Django Tasks tests
+        run: |
+          uv run pytest tests/contrib/django/ -s -v
 
   docs:
     name: Building Documentation

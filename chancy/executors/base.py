@@ -1,16 +1,19 @@
 import abc
-import inspect
-import typing
-import traceback
+import asyncio
 import dataclasses
+import enum
+import inspect
+import traceback
+import typing
 from abc import ABC
 from asyncio import Future
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from functools import cached_property
-from typing import Callable, Any
+from typing import Any
 
-from chancy.job import QueuedJob, Reference
-from chancy.queue import Queue
+import chancy.queue
+from chancy.job import Limit, QueuedJob, Reference
 
 if typing.TYPE_CHECKING:
     from chancy.worker import Worker
@@ -28,9 +31,32 @@ class Executor(abc.ABC):
     executors.
     """
 
-    def __init__(self, worker: "Worker", queue: "Queue"):
+    class Capability(enum.IntFlag):
+        """Features supported by an executor."""
+
+        NONE = 0
+        SYNC_JOBS = enum.auto()
+        ASYNC_JOBS = enum.auto()
+        CANCELLATION = enum.auto()
+        AUTOMATIC_TIME_LIMITS = enum.auto()
+        COOPERATIVE_TIME_LIMITS = enum.auto()
+        MEMORY_LIMITS = enum.auto()
+
+    capabilities = Capability.NONE
+
+    def __init__(self, worker: "Worker", queue: chancy.queue.Queue):
         self.worker = worker
         self.queue = queue
+
+    @classmethod
+    def get_capabilities(cls) -> Capability:
+        """Return the features supported by this executor."""
+        return cls.capabilities
+
+    @classmethod
+    def supports(cls, capability: Capability) -> bool:
+        """Return whether this executor supports all given capabilities."""
+        return (cls.get_capabilities() & capability) == capability
 
     @abc.abstractmethod
     async def push(self, job: QueuedJob):
@@ -70,7 +96,7 @@ class Executor(abc.ABC):
         :param result: The result of the job, if any.
         """
         if exc is None:
-            now = datetime.now(tz=timezone.utc)
+            now = datetime.now(tz=UTC)
             new_instance = dataclasses.replace(
                 job,
                 state=QueuedJob.State.SUCCEEDED,
@@ -90,9 +116,7 @@ class Executor(abc.ABC):
                 job,
                 state=new_state,
                 attempts=job.attempts + 1,
-                completed_at=(
-                    datetime.now(tz=timezone.utc) if is_failure else None
-                ),
+                completed_at=(datetime.now(tz=UTC) if is_failure else None),
                 errors=[
                     *job.errors,
                     {
@@ -129,13 +153,15 @@ class Executor(abc.ABC):
         await self.worker.on_job_completed(queue=self.queue, job=new_instance)
 
     @staticmethod
-    def get_function_and_kwargs(job: QueuedJob) -> tuple[Callable, dict]:
+    def _resolve_function_and_kwargs(
+        job: QueuedJob,
+    ) -> tuple[Callable, dict, bool]:
         """
         Finds the function which should be executed for the given job and
-        returns its keyword arguments.
+        returns its keyword arguments and whether it accepts job context.
 
         :param job: The job instance to get the function and arguments for.
-        :return: A tuple containing the function and its keyword arguments.
+        :return: The function, keyword arguments, and context support.
         """
         mod_name, func_name = job.func.rsplit(".", 1)
         mod = __import__(mod_name, fromlist=[func_name])
@@ -150,9 +176,10 @@ class Executor(abc.ABC):
         # user has specified that the job instance should be passed as a
         # keyword argument.
         sig = inspect.signature(func)
-        kwargs = job.kwargs or {}
+        kwargs = dict(job.kwargs or {})
+        has_job_context = False
         for param_name, param in sig.parameters.items():
-            if not param.kind == param.KEYWORD_ONLY:
+            if param.kind != param.KEYWORD_ONLY:
                 continue
 
             if not param.annotation:
@@ -161,10 +188,89 @@ class Executor(abc.ABC):
             try:
                 if issubclass(param.annotation, QueuedJob):
                     kwargs[param_name] = job
+                    has_job_context = True
             except TypeError:
                 continue
 
+        return func, kwargs, has_job_context
+
+    @staticmethod
+    def get_function_and_kwargs(job: QueuedJob) -> tuple[Callable, dict]:
+        """
+        Find the function which should be executed for the given job and
+        return its keyword arguments.
+
+        :param job: The job instance to get the function and arguments for.
+        :return: A tuple containing the function and its keyword arguments.
+        """
+        func, kwargs, _ = Executor._resolve_function_and_kwargs(job)
+
         return func, kwargs
+
+    @staticmethod
+    def get_limit(job: QueuedJob, limit_type: Limit.Type) -> int | None:
+        """Return the first configured limit of a given type."""
+        return next(
+            (limit.value for limit in job.limits if limit.type_ == limit_type),
+            None,
+        )
+
+    @classmethod
+    def prepare_job_for_execution(
+        cls, job: QueuedJob
+    ) -> tuple[QueuedJob, Callable, dict]:
+        """Validate and prepare a job according to executor capabilities."""
+        capabilities = cls.get_capabilities()
+        time_limit = cls.get_limit(job, Limit.Type.TIME)
+
+        if cls.get_limit(job, Limit.Type.MEMORY) is not None and not (
+            capabilities & cls.Capability.MEMORY_LIMITS
+        ):
+            raise ValueError(f"{cls.__name__} does not support memory limits.")
+
+        cooperative_time_limit = False
+        if time_limit is not None and not (
+            capabilities & cls.Capability.AUTOMATIC_TIME_LIMITS
+        ):
+            if not (capabilities & cls.Capability.COOPERATIVE_TIME_LIMITS):
+                raise ValueError(
+                    f"{cls.__name__} does not support time limits."
+                )
+            job = job._with_time_limit(time_limit)
+            cooperative_time_limit = True
+
+        func, kwargs, has_job_context = cls._resolve_function_and_kwargs(job)
+        function_capability = (
+            cls.Capability.ASYNC_JOBS
+            if inspect.iscoroutinefunction(func)
+            else cls.Capability.SYNC_JOBS
+        )
+        if not (capabilities & function_capability):
+            function_type = (
+                "asynchronous"
+                if function_capability == cls.Capability.ASYNC_JOBS
+                else "synchronous"
+            )
+            raise ValueError(
+                f"{cls.__name__} does not support {function_type} jobs."
+            )
+
+        if cooperative_time_limit and not has_job_context:
+            raise ValueError(
+                "Jobs using cooperative time limits must accept a"
+                " keyword-only QueuedJob context and call"
+                " context.checkpoint()."
+            )
+
+        return job, func, kwargs
+
+    @staticmethod
+    def run_function(func: Callable, kwargs: dict) -> Any:
+        """Run a synchronous or asynchronous function to completion."""
+        if not inspect.iscoroutinefunction(func):
+            return func(**kwargs)
+
+        return asyncio.run(func(**kwargs))
 
     @abc.abstractmethod
     async def stop(self):
@@ -187,6 +293,35 @@ class Executor(abc.ABC):
 
         :param ref: The reference to the job to cancel.
         """
+
+    def get_running_job(self, ref: Reference) -> QueuedJob | None:
+        """
+        Get a running job by its reference.
+
+        :param ref: The reference to the job to find.
+        :return: The job if found, None otherwise.
+        """
+        for job in self.get_running_jobs():
+            if job.id == ref.identifier:
+                return job
+        return None
+
+    @abc.abstractmethod
+    def get_running_jobs(self) -> list[QueuedJob]:
+        """
+        Get all jobs currently running in this executor.
+
+        :return: A list of running jobs.
+        """
+
+    def is_job_running(self, ref: Reference) -> bool:
+        """
+        Check if a job is currently running in this executor.
+
+        :param ref: The reference to the job to check.
+        :return: True if the job is running, False otherwise.
+        """
+        return self.get_running_job(ref) is not None
 
     @abc.abstractmethod
     def get_default_concurrency(self) -> int:
@@ -234,7 +369,7 @@ class ConcurrentExecutor(Executor, ABC):
     class with common functionality.
     """
 
-    def __init__(self, worker: "Worker", queue: "Queue"):
+    def __init__(self, worker: "Worker", queue: chancy.queue.Queue):
         super().__init__(worker, queue)
         self.jobs: dict[Future, QueuedJob] = {}
 
@@ -244,5 +379,16 @@ class ConcurrentExecutor(Executor, ABC):
                 future.cancel()
                 return
 
+    def get_running_jobs(self) -> list[QueuedJob]:
+        return list(self.jobs.values())
+
     def __len__(self):
         return len(self.jobs)
+
+    @classmethod
+    def job_wrapper(cls, job: QueuedJob) -> tuple[QueuedJob, Any]:
+        """Run a job with cooperative limit handling."""
+        job, func, kwargs = cls.prepare_job_for_execution(job)
+        result = cls.run_function(func, kwargs)
+        job.checkpoint()
+        return job, result

@@ -36,9 +36,12 @@ html_title = "Chancy"
 
 html_js_files = [
     (
-        "https://plausible.io/js/script.js",
-        {"data-domain": "tkte.ch", "defer": "defer"},
-    ),
+        "https://cloud.umami.is/script.js",
+        {
+            "data-website-id": "06fdfd37-2088-44f8-885d-3a2519a2266b",
+            "defer": "defer",
+        },
+    )
 ]
 
 # -- Options for todo extension ----------------------------------------------

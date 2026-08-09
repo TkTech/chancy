@@ -3,24 +3,25 @@ import datetime
 import enum
 import functools
 import logging
-from typing import Any, Iterator, AsyncGenerator
-from functools import cached_property, cache
+from collections.abc import AsyncGenerator, Iterator
+from functools import cache, cached_property
+from typing import Any
 
-from psycopg import sql, Cursor, AsyncCursor
-from psycopg.rows import dict_row, DictRow
+from psycopg import AsyncCursor, Cursor, sql
+from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
+from chancy.job import IsAJob, Job, QueuedJob, Reference
 from chancy.migrate import Migrator
-from chancy.queue import Queue
-from chancy.job import Reference, Job, QueuedJob, IsAJob
 from chancy.plugin import Plugin
+from chancy.queue import Queue
 from chancy.utils import (
+    DatabaseConnection,
     chancy_uuid,
     chunked,
-    json_dumps,
-    DatabaseConnection,
     get_database_dsn,
+    json_dumps,
 )
 
 
@@ -185,7 +186,7 @@ class Chancy:
         self,
         dsn: str | DatabaseConnection,
         *,
-        plugins: list[Plugin] = None,
+        plugins: list[Plugin] | None = None,
         prefix: str = "chancy_",
         min_connection_pool_size: int = 1,
         max_connection_pool_size: int = 10,
@@ -343,17 +344,19 @@ class Chancy:
         available migrations. If the database is up to date, returns `True`.
         """
         migrator = Migrator("chancy", "chancy.migrations", prefix=self.prefix)
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            if await migrator.is_migration_required(cursor):
+                return False
+
+            for plugin in self.plugins.values():
+                migrator = plugin.migrator(self)
+                if migrator is None:
+                    continue
                 if await migrator.is_migration_required(cursor):
                     return False
-
-                for plugin in self.plugins.values():
-                    migrator = plugin.migrator(self)
-                    if migrator is None:
-                        continue
-                    if await migrator.is_migration_required(cursor):
-                        return False
 
         return True
 
@@ -390,11 +393,13 @@ class Chancy:
             exists. Defaults to `False`.
         :return: The queue as it exists in the database.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                queue = await self.declare_ex(cursor, queue, upsert=upsert)
-                await self.notify(cursor, "queue.declared", {"q": queue.name})
-                return queue
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            queue = await self.declare_ex(cursor, queue, upsert=upsert)
+            await self.notify(cursor, "queue.declared", {"q": queue.name})
+            return queue
 
     @_ensure_sync_pool_is_open
     def sync_declare(self, queue: Queue, *, upsert: bool = False) -> Queue:
@@ -416,11 +421,13 @@ class Chancy:
             exists. Defaults to `False`.
         :return: The queue as it exists in the database.
         """
-        with self.sync_pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                queue = self.sync_declare_ex(cursor, queue, upsert=upsert)
-                self.sync_notify(cursor, "queue.declared", {"q": queue.name})
-                return queue
+        with (
+            self.sync_pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            queue = self.sync_declare_ex(cursor, queue, upsert=upsert)
+            self.sync_notify(cursor, "queue.declared", {"q": queue.name})
+            return queue
 
     async def declare_ex(
         self,
@@ -536,9 +543,11 @@ class Chancy:
         :param job: The job to push onto the queue.
         :return: A reference to the job in the queue.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                return (await self.push_many_ex(cursor, [job]))[0]
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            return (await self.push_many_ex(cursor, [job]))[0]
 
     @_ensure_pool_is_open
     async def push_ex(
@@ -583,9 +592,11 @@ class Chancy:
         :param job: The job to push onto the queue.
         :return: A reference to the job in the queue.
         """
-        with self.sync_pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                return self.sync_push_many_ex(cursor, [job])[0]
+        with (
+            self.sync_pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            return self.sync_push_many_ex(cursor, [job])[0]
 
     @_ensure_pool_is_open_async_iter
     async def push_many(
@@ -617,11 +628,13 @@ class Chancy:
             to 1000.
         :return: An iterator of lists of references to the jobs in the queue.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                for chunk in chunked(jobs, batch_size):
-                    async with conn.transaction():
-                        yield await self.push_many_ex(cursor, chunk)
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            for chunk in chunked(jobs, batch_size):
+                async with conn.transaction():
+                    yield await self.push_many_ex(cursor, chunk)
 
     @_ensure_sync_pool_is_open
     def sync_push_many(
@@ -645,11 +658,13 @@ class Chancy:
             to 1000.
         :return: An iterator of lists of references to the jobs in the queue.
         """
-        with self.sync_pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                for chunk in chunked(jobs, batch_size):
-                    with conn.transaction():
-                        yield self.sync_push_many_ex(cursor, chunk)
+        with (
+            self.sync_pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            for chunk in chunked(jobs, batch_size):
+                with conn.transaction():
+                    yield self.sync_push_many_ex(cursor, chunk)
 
     async def push_many_ex(
         self, cursor: AsyncCursor[DictRow], jobs: list[Job | IsAJob[..., Any]]
@@ -684,10 +699,10 @@ class Chancy:
             references.append(Reference(record["id"]))
 
         if self.notifications:
-            for queue in set(
+            for queue in {
                 job.queue if isinstance(job, Job) else job.job.queue
                 for job in jobs
-            ):
+            }:
                 await self.notify(cursor, "queue.pushed", {"q": queue})
 
         return references
@@ -719,7 +734,7 @@ class Chancy:
             record = cursor.fetchone()
             references.append(Reference(record["id"]))
 
-        for queue in set(job.queue for job in jobs):
+        for queue in {job.queue for job in jobs}:
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
 
         return references
@@ -733,13 +748,15 @@ class Chancy:
 
         :param ref: The reference to the job to retrieve.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_job_sql(), [ref.identifier])
-                record = await cursor.fetchone()
-                if record is None:
-                    return None
-                return QueuedJob.unpack(record)
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(self._get_job_sql(), [ref.identifier])
+            record = await cursor.fetchone()
+            if record is None:
+                return None
+            return QueuedJob.unpack(record)
 
     @_ensure_pool_is_open
     async def get_jobs(self, refs: list[Reference]) -> list[QueuedJob]:
@@ -755,16 +772,18 @@ class Chancy:
         if not refs:
             return []
 
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    self._get_jobs_sql(), [[ref.identifier for ref in refs]]
-                )
-                return [
-                    QueuedJob.unpack(record)
-                    async for record in cursor
-                    if record is not None
-                ]
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(
+                self._get_jobs_sql(), [[ref.identifier for ref in refs]]
+            )
+            return [
+                QueuedJob.unpack(record)
+                async for record in cursor
+                if record is not None
+            ]
 
     @_ensure_sync_pool_is_open
     def sync_get_job(self, ref: Reference) -> QueuedJob | None:
@@ -775,20 +794,22 @@ class Chancy:
 
         :param ref: The reference to the job to retrieve.
         """
-        with self.sync_pool.connection() as conn:
-            with conn.cursor(row_factory=dict_row) as cursor:
-                cursor.execute(self._get_job_sql(), [ref.identifier])
-                record = cursor.fetchone()
-                if record is None:
-                    return None
-                return QueuedJob.unpack(record)
+        with (
+            self.sync_pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            cursor.execute(self._get_job_sql(), [ref.identifier])
+            record = cursor.fetchone()
+            if record is None:
+                return None
+            return QueuedJob.unpack(record)
 
     async def wait_for_job(
         self,
         ref: Reference,
         *,
         interval: int = 1,
-        timeout: float | int | None = None,
+        timeout: float | None = None,
         states: set[QueuedJob.State] | None = None,
     ) -> QueuedJob | None:
         """
@@ -823,7 +844,7 @@ class Chancy:
         refs: list[Reference],
         *,
         interval: int = 1,
-        timeout: float | int | None = None,
+        timeout: float | None = None,
         states: set[QueuedJob.State] | None = None,
     ):
         """
@@ -854,8 +875,9 @@ class Chancy:
             completed = []
             while pending:
                 jobs = await self.get_jobs(list(pending))
+                pending.intersection_update(Reference(job.id) for job in jobs)
                 for job in jobs:
-                    if job is None or job.state in states:
+                    if job.state in states:
                         completed.append(job)
                         pending.remove(Reference(job.id))
                 if pending:
@@ -868,10 +890,12 @@ class Chancy:
         Get all queues known to the cluster, regardless of their status
         or if they're assigned to any workers.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_all_queues_sql())
-                return [Queue.unpack(record) async for record in cursor]
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(self._get_all_queues_sql())
+            return [Queue.unpack(record) async for record in cursor]
 
     @_ensure_pool_is_open
     async def get_queue(self, name: str) -> Queue:
@@ -880,13 +904,15 @@ class Chancy:
 
         :param name: The name of the queue to retrieve.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_queue_sql(), [name])
-                record = await cursor.fetchone()
-                if record is None:
-                    raise KeyError(f"Queue {name!r} not found.")
-                return Queue.unpack(record)
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(self._get_queue_sql(), [name])
+            record = await cursor.fetchone()
+            if record is None:
+                raise KeyError(f"Queue {name!r} not found.")
+            return Queue.unpack(record)
 
     @_ensure_pool_is_open
     async def delete_queue(self, name: str, *, purge_jobs: bool = True):
@@ -901,9 +927,11 @@ class Chancy:
             along with the queue. If `False`, the jobs will be left in the
             database.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await self.delete_queue_ex(cursor, name, purge_jobs=purge_jobs)
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await self.delete_queue_ex(cursor, name, purge_jobs=purge_jobs)
 
     @_ensure_pool_is_open
     async def pause_queue(
@@ -926,16 +954,15 @@ class Chancy:
         :param resume_at: A datetime at which the queue should automatically
                           resume, or a timedelta from the current time.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                # Normalize timedelta to absolute datetime if needed
-                if isinstance(resume_at, datetime.timedelta):
-                    resume_at = (
-                        datetime.datetime.now(tz=datetime.timezone.utc)
-                        + resume_at
-                    )
-                await self.pause_queue_ex(cursor, name, resume_at=resume_at)
-                await self.notify(cursor, "queue.paused", {"q": name})
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            # Normalize timedelta to absolute datetime if needed
+            if isinstance(resume_at, datetime.timedelta):
+                resume_at = datetime.datetime.now(tz=datetime.UTC) + resume_at
+            await self.pause_queue_ex(cursor, name, resume_at=resume_at)
+            await self.notify(cursor, "queue.paused", {"q": name})
 
     @_ensure_pool_is_open
     async def resume_queue(self, name: str):
@@ -950,10 +977,12 @@ class Chancy:
 
         :param name: The name of the queue to resume.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await self.resume_queue_ex(cursor, name)
-                await self.notify(cursor, "queue.resumed", {"q": name})
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await self.resume_queue_ex(cursor, name)
+            await self.notify(cursor, "queue.resumed", {"q": name})
 
     async def delete_queue_ex(
         self,
@@ -1072,10 +1101,12 @@ class Chancy:
         """
         Get all workers known to the cluster, regardless of their status.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(self._get_all_workers_sql())
-                return [record async for record in cursor]
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(self._get_all_workers_sql())
+            return [record async for record in cursor]
 
     async def notify(
         self, cursor: AsyncCursor[DictRow], event: str, payload: dict[str, Any]
@@ -1134,16 +1165,16 @@ class Chancy:
 
         :param ref: The reference to the job to cancel.
         """
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    await self.cancel_job_ex(cursor, ref)
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            await self.cancel_job_ex(cursor, ref)
 
-                    # Tell any workers that might have already snagged the job
-                    # to cancel it.
-                    await self.notify(
-                        cursor, "job.cancelled", {"j": ref.identifier}
-                    )
+            # Tell any workers that might have already snagged the job
+            # to cancel it.
+            await self.notify(cursor, "job.cancelled", {"j": ref.identifier})
 
     async def cancel_job_ex(
         self, cursor: AsyncCursor[DictRow], ref: Reference
@@ -1208,13 +1239,15 @@ class Chancy:
         if not refs:
             return
 
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    queues = await self.retry_jobs_ex(cursor, refs)
-                    if self.notifications and queues:
-                        for q in queues:
-                            await self.notify(cursor, "queue.pushed", {"q": q})
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            queues = await self.retry_jobs_ex(cursor, refs)
+            if self.notifications and queues:
+                for q in queues:
+                    await self.notify(cursor, "queue.pushed", {"q": q})
 
     @_ensure_pool_is_open
     async def purge_jobs(self, refs: list[Reference]):
@@ -1230,9 +1263,11 @@ class Chancy:
         if not refs:
             return
 
-        async with self.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await self.purge_jobs_ex(cursor, refs)
+        async with (
+            self.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await self.purge_jobs_ex(cursor, refs)
 
     async def retry_jobs_ex(
         self, cursor: AsyncCursor[DictRow], refs: list[Reference]
@@ -1489,8 +1524,8 @@ class Chancy:
         }
 
 
-from chancy.plugins.pruner import Pruner  # noqa: E402
-from chancy.plugins.recovery import Recovery  # noqa: E402
-from chancy.plugins.leadership import Leadership  # noqa: E402
-from chancy.plugins.metrics import Metrics  # noqa: E402
-from chancy.plugins.workflow import WorkflowPlugin  # noqa: E402
+from chancy.plugins.leadership import Leadership
+from chancy.plugins.metrics import Metrics
+from chancy.plugins.pruner import Pruner
+from chancy.plugins.recovery import Recovery
+from chancy.plugins.workflow import WorkflowPlugin

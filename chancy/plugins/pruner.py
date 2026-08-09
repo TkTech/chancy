@@ -2,10 +2,10 @@ from psycopg import AsyncCursor, sql
 from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
-from chancy.worker import Worker
 from chancy.plugin import Plugin
-from chancy.rule import SQLAble, JobRules
+from chancy.rule import JobRules, SQLAble
 from chancy.utils import timed_block
+from chancy.worker import Worker
 
 
 class Pruner(Plugin):
@@ -86,13 +86,15 @@ class Pruner(Plugin):
 
     def __init__(
         self,
-        rule: SQLAble = Rules.Age() > 60 * 60 * 24,
+        rule: SQLAble | None = None,
         *,
         maximum_to_prune: int = 10000,
         poll_interval: int = 60,
     ):
         super().__init__()
-        self.rule = rule
+        self.rule = (
+            rule if rule is not None else self.Rules.Age() > 60 * 60 * 24
+        )
         self.maximum_to_prune = maximum_to_prune
         self.poll_interval = poll_interval
 
@@ -107,24 +109,26 @@ class Pruner(Plugin):
     async def run(self, worker: Worker, chancy: Chancy):
         while await self.sleep(self.poll_interval):
             await self.wait_for_leader(worker)
-            async with chancy.pool.connection() as conn:
-                async with conn.cursor(row_factory=dict_row) as cursor:
-                    with timed_block() as chancy_time:
-                        rows_removed = await self.prune(chancy, cursor)
-                        chancy.log.info(
-                            f"Pruner removed {rows_removed} row(s) from the"
-                            f" database. Took {chancy_time.elapsed:.2f}"
-                            f" seconds."
-                        )
+            async with (
+                chancy.pool.connection() as conn,
+                conn.cursor(row_factory=dict_row) as cursor,
+            ):
+                with timed_block() as chancy_time:
+                    rows_removed = await self.prune(chancy, cursor)
+                    chancy.log.info(
+                        f"Pruner removed {rows_removed} row(s) from the"
+                        f" database. Took {chancy_time.elapsed:.2f}"
+                        f" seconds."
+                    )
 
-                        await chancy.notify(
-                            cursor,
-                            "pruner.removed",
-                            {
-                                "elapsed": chancy_time.elapsed,
-                                "rows_removed": rows_removed,
-                            },
-                        )
+                    await chancy.notify(
+                        cursor,
+                        "pruner.removed",
+                        {
+                            "elapsed": chancy_time.elapsed,
+                            "rows_removed": rows_removed,
+                        },
+                    )
 
             for plugin in chancy.plugins.values():
                 rows = await plugin.cleanup(chancy)

@@ -71,12 +71,15 @@ export const ResolutionSelector = ({ resolution, setResolution }: {
 
 const tooltipStyles = {
   wrapperStyle: {
-    backgroundColor: "#1a1a1a",
-    border: "1px solid #2d2d2d",
+    backgroundColor: "var(--bs-card-bg)",
+    border: "1px solid var(--bs-border-color)",
+    borderRadius: "0.375rem",
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
   },
   contentStyle: {
     backgroundColor: 'transparent',
     border: "none",
+    color: "var(--bs-body-color)",
   },
 };
 

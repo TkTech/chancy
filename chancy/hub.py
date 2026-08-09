@@ -1,8 +1,8 @@
 import asyncio
 import inspect
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from itertools import chain
-from typing import Callable, Awaitable
 
 
 @dataclass
@@ -110,7 +110,9 @@ class Hub:
         for e in event:
             future = asyncio.get_running_loop().create_future()
             future.add_done_callback(
-                lambda _: self._waiters.get(e, set()).discard(future)
+                lambda _, event=e, waiter=future: self._waiters.get(
+                    event, set()
+                ).discard(waiter)
             )
             self._waiters.setdefault(e, set()).add(future)
             futures.append(future)

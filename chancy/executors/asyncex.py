@@ -3,7 +3,7 @@ from asyncio import CancelledError
 
 from chancy import Reference
 from chancy.executors.base import Executor
-from chancy.job import QueuedJob, Limit
+from chancy.job import Limit, QueuedJob
 
 
 class AsyncExecutor(Executor):
@@ -31,6 +31,12 @@ class AsyncExecutor(Executor):
             )
     """
 
+    capabilities = (
+        Executor.Capability.ASYNC_JOBS
+        | Executor.Capability.CANCELLATION
+        | Executor.Capability.AUTOMATIC_TIME_LIMITS
+    )
+
     def __init__(self, worker, queue):
         super().__init__(worker, queue)
         self.jobs: dict[asyncio.Task, QueuedJob] = {}
@@ -46,27 +52,14 @@ class AsyncExecutor(Executor):
 
     async def _job_wrapper(self, job: QueuedJob):
         try:
-            func, kwargs = Executor.get_function_and_kwargs(job)
-            if not asyncio.iscoroutinefunction(func):
-                raise ValueError(
-                    f"Function {job.func!r} is not an async function, which is"
-                    f" required for the AsyncExecutor. Please use the"
-                    f" ThreadedExecutor or ProcessExecutor instead."
-                )
-
-            timeout = next(
-                (
-                    limit.value
-                    for limit in job.limits
-                    if limit.type_ == Limit.Type.TIME
-                ),
-                None,
-            )
+            job, func, kwargs = self.prepare_job_for_execution(job)
+            timeout = self.get_limit(job, Limit.Type.TIME)
 
             async with asyncio.timeout(timeout):
                 result = await func(**kwargs)
             await self.on_job_completed(job=job, result=result)
-        except (Exception, CancelledError) as exc:
+        # User jobs may raise any exception; this boundary records the failure.
+        except (Exception, CancelledError) as exc:  # noqa: BLE001
             await self.on_job_completed(job=job, exc=exc, result=None)
 
     async def cancel(self, ref: Reference):
@@ -74,6 +67,9 @@ class AsyncExecutor(Executor):
             if job.id == ref.identifier:
                 task.cancel()
                 return
+
+    def get_running_jobs(self) -> list["QueuedJob"]:
+        return list(self.jobs.values())
 
     async def stop(self):
         """

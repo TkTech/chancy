@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from chancy.contrib.django.models import Job, Worker, Queue
+from chancy.contrib.django.models import Job, Queue, Worker
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):

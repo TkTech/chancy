@@ -1,14 +1,11 @@
-import os
 import asyncio
-import threading
 import functools
+import os
+import sys
 from concurrent.futures import Future
 
-import sys
-from typing import Any
-
-from chancy.worker import Worker
 from chancy.queue import Queue
+from chancy.worker import Worker
 
 try:
     # Only available in 3.14+
@@ -24,8 +21,8 @@ except ImportError:
             "The SubInterpreterExecutor requires Python 3.13 or later."
         )
 
-from chancy.executors.base import Executor, ConcurrentExecutor
-from chancy.job import QueuedJob, Limit
+from chancy.executors.base import ConcurrentExecutor, Executor
+from chancy.job import QueuedJob
 
 
 class SubInterpreterExecutor(ConcurrentExecutor):
@@ -64,6 +61,12 @@ class SubInterpreterExecutor(ConcurrentExecutor):
     :param queue: The queue that this executor is associated with.
     """
 
+    capabilities = (
+        Executor.Capability.SYNC_JOBS
+        | Executor.Capability.ASYNC_JOBS
+        | Executor.Capability.COOPERATIVE_TIME_LIMITS
+    )
+
     def __init__(self, worker: Worker, queue: Queue):
         super().__init__(worker, queue)
         self.pool = InterpreterPoolExecutor(
@@ -97,50 +100,6 @@ class SubInterpreterExecutor(ConcurrentExecutor):
             )
         )
         return future
-
-    @classmethod
-    def job_wrapper(cls, job: QueuedJob) -> tuple[QueuedJob, Any]:
-        """
-        This is the function that is actually started by the sub-interpreter
-        executor. It's responsible for setting up necessary limits,
-        running the job, and returning the result.
-        """
-        func, kwargs = Executor.get_function_and_kwargs(job)
-
-        time_limit = next(
-            (
-                limit.value
-                for limit in job.limits
-                if limit.type_ == Limit.Type.TIME
-            ),
-            None,
-        )
-
-        timer = None
-        if time_limit:
-            timer = threading.Timer(time_limit, cls._timeout_handler)
-            timer.start()
-
-        try:
-            if asyncio.iscoroutinefunction(func):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    result = loop.run_until_complete(func(**kwargs))
-                finally:
-                    loop.run_until_complete(loop.shutdown_asyncgens())
-                    loop.close()
-            else:
-                result = func(**kwargs)
-        finally:
-            if timer:
-                timer.cancel()
-
-        return job, result
-
-    @staticmethod
-    def _timeout_handler():
-        raise TimeoutError("Job timed out.")
 
     def _on_job_completed(
         self, future: Future, loop: asyncio.AbstractEventLoop

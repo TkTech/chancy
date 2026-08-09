@@ -4,8 +4,8 @@ import pytest
 from psycopg.rows import dict_row
 
 from chancy import Chancy, Queue, Worker, job
-from chancy.plugins.pruner import Pruner
 from chancy.plugins.leadership import ImmediateLeadership
+from chancy.plugins.pruner import Pruner
 
 
 @job()
@@ -37,9 +37,11 @@ async def test_pruner_functionality(chancy: Chancy, worker: Worker):
     initial_job = await chancy.wait_for_job(ref)
     assert initial_job is not None, "Job should exist before pruning"
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            await p.prune(chancy, cursor)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        await p.prune(chancy, cursor)
 
     pruned_job = await chancy.get_job(ref)
     assert pruned_job is None, "Job should be pruned"
@@ -51,18 +53,22 @@ async def test_pruner_functionality(chancy: Chancy, worker: Worker):
     initial_job = await chancy.wait_for_job(ref)
     assert initial_job is not None, "Job should exist before pruning"
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            await p.prune(chancy, cursor)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        await p.prune(chancy, cursor)
 
     not_pruned_job = await chancy.get_job(ref)
     assert not_pruned_job is not None, "Job should not be pruned yet"
 
     await asyncio.sleep(10)
 
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            await p.prune(chancy, cursor)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        await p.prune(chancy, cursor)
 
     pruned_job = await chancy.get_job(ref)
     assert pruned_job is None, "Job should be pruned"

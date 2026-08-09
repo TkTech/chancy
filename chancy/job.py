@@ -1,14 +1,14 @@
 import dataclasses
 import enum
-from datetime import datetime, timezone
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import (
     Any,
-    Optional,
+    ParamSpec,
+    Protocol,
     TypedDict,
     TypeVar,
-    ParamSpec,
-    Callable,
-    Protocol,
     Union,
 )
 from uuid import UUID
@@ -119,7 +119,7 @@ class Job:
     max_attempts: int = 1
     #: The time at which this job should be scheduled to run.
     scheduled_at: datetime = dataclasses.field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
+        default_factory=lambda: datetime.now(tz=UTC)
     )
     #: A list of resource limits that should be applied to this job.
     limits: list[Limit] = dataclasses.field(default_factory=list)
@@ -197,7 +197,7 @@ class Job:
             kwargs=data["k"],
             priority=data["p"],
             max_attempts=data["a"],
-            scheduled_at=datetime.fromtimestamp(data["s"], tz=timezone.utc),
+            scheduled_at=datetime.fromtimestamp(data["s"], tz=UTC),
             limits=[Limit.deserialize(limit) for limit in data["l"]],
             unique_key=data["u"],
             queue=data["q"],
@@ -221,24 +221,63 @@ class QueuedJob(Job):
         SUCCEEDED = "succeeded"
 
     #: The unique identifier for this job instance.
-    id: str
+    id: UUID
     #: The time at which this job was created.
     created_at: datetime
     #: The time at which this job was started, if it has been started.
-    started_at: Optional[datetime] = None
+    started_at: datetime | None = None
     #: The time at which this job was completed, if it has been completed.
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
     #: The number of times this job has been attempted.
     attempts: int = 0
     #: The current state of this job instance.
     state: State = State.PENDING
     #: A list of errors that occurred during the execution of this job.
     errors: list[ErrorT] = dataclasses.field(default_factory=list)
+    _time_limit_deadline: float | None = dataclasses.field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
+
+    @property
+    def time_remaining(self) -> float | None:
+        """
+        Return the number of seconds remaining before the job's cooperative
+        time limit expires.
+
+        Returns ``None`` when the executor has not configured a cooperative
+        time limit for this execution.
+        """
+        if self._time_limit_deadline is None:
+            return None
+        return max(0.0, self._time_limit_deadline - time.monotonic())
+
+    def checkpoint(self) -> None:
+        """
+        Raise :class:`TimeoutError` if the cooperative time limit has expired.
+
+        Jobs running in a threaded or sub-interpreter executor should call this
+        method periodically at points where execution can be safely
+        interrupted.
+        """
+        if (
+            self._time_limit_deadline is not None
+            and time.monotonic() >= self._time_limit_deadline
+        ):
+            raise TimeoutError("Job timed out.")
+
+    def _with_time_limit(self, seconds: int) -> "QueuedJob":
+        return dataclasses.replace(
+            self,
+            _time_limit_deadline=time.monotonic() + seconds,
+        )
 
     @classmethod
     def unpack(cls, data: dict) -> "QueuedJob":
+        id_ = data["id"]
         return cls(
-            id=str(data["id"]),
+            id=id_ if isinstance(id_, UUID) else UUID(id_),
             func=data["func"],
             kwargs=data["kwargs"],
             priority=data["priority"],
