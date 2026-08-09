@@ -42,6 +42,9 @@ Changelog
   how do we cleanup a job that's holding a cross-thread lock?)
 - `wait_for_jobs()` could wait forever if a job was purged and no timeout was
   provided.
+- Fixed a very rare split-brain issue where a worker becoming the leader could
+  extend the leadership of the previous leader, causing duplicate work for 1
+  cycle.
 
 0.25.1
 ------

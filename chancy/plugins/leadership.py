@@ -83,7 +83,8 @@ class Leadership(Plugin):
             """
             INSERT INTO {table} (id, worker_id, expires_at)
             VALUES (1, %(worker_id)s, %(expires_at)s)
-            ON CONFLICT (id) DO UPDATE SET expires_at = %(expires_at)s
+            ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at
+            WHERE {table}.worker_id = EXCLUDED.worker_id
             """
         ).format(table=sql.Identifier(f"{chancy.prefix}leader"))
         insert_q = sql.SQL(
