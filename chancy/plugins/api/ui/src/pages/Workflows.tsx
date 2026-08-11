@@ -31,7 +31,7 @@ export function Workflow() {
   const handleStepClick = (step: any, step_id: string) => {
     if (step.job_id) {
       // Job has started, show the running job details
-      drawer.open(<JobDetailsView job_id={step.job_id} />, { title: `Job Details - ${step_id}` });
+      drawer.open(<JobDetailsView job_id={step.job_id} onPurged={drawer.close} />, { title: `Job Details - ${step_id}` });
     } else if (step.job) {
       // Step is pending, show the packed job definition
       drawer.open(

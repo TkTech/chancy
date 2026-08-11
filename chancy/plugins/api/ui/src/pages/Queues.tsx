@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {Link, useParams} from 'react-router-dom';
+import {Link, useNavigate, useParams} from 'react-router-dom';
 import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
 import {useWorkers} from '../hooks/useWorkers.tsx';
@@ -46,6 +46,7 @@ function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl
 
 export function Queue() {
   const { name } = useParams<{name: string}>();
+  const navigate = useNavigate();
   const { url } = useServerConfiguration();
   const { data: queues, isLoading } = useQueues(url);
   const { data: workers, isLoading: workersLoading } = useWorkers(url);
@@ -101,7 +102,12 @@ export function Queue() {
                 const ok = await confirm({ title: 'Delete Queue', message: 'Delete queue? You can choose to also purge all jobs in this queue in the next step.' });
                 if (!ok) return;
                 const purge = await confirm({ title: 'Purge Jobs', message: 'Also purge jobs in this queue?' });
-                remove.mutate({ name: queue.name, purge_jobs: !!purge });
+                try {
+                  await remove.mutateAsync({ name: queue.name, purge_jobs: !!purge });
+                } catch {
+                  return;
+                }
+                navigate('/queues');
               }}>Delete</button>
             </>
           ) : (
