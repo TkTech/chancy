@@ -32,7 +32,6 @@ export async function request<T>(baseUrl: string, path: string, options: Request
 
   const init: RequestInit = {
     method: options.method || 'GET',
-    credentials: 'include',
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',

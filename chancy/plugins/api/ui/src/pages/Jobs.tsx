@@ -3,7 +3,7 @@ import {Loading} from '../components/Loading.tsx';
 import {useJobs, FilterTriple} from '../hooks/useJobs.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import React from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useJobActions } from '../hooks/useJobActions.tsx';
 import { useConfirm } from '../components/common/ConfirmDialog.tsx';
 import { JobDetailsView } from '../features/jobs/JobDetailsView';
@@ -18,10 +18,11 @@ import { JobStateBarGraph } from '../components/JobStateBarGraph';
 
 export function Job() {
   const { job_id } = useParams<{job_id: string}>();
+  const navigate = useNavigate();
   return (
     <div className={"container-fluid"}>
       <h2 className={"mb-4"}>Job - {job_id}</h2>
-      {job_id && <JobDetailsView job_id={job_id} />}
+      {job_id && <JobDetailsView job_id={job_id} onPurged={() => navigate('/jobs')} />}
     </div>
   );
 }
@@ -203,7 +204,7 @@ export function Jobs() {
                 onClick={(e) => {
                   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
                   e.preventDefault();
-                  drawer.open(<JobDetailsView job_id={job.id} />, { title: 'Job Details' });
+                  drawer.open(<JobDetailsView job_id={job.id} onPurged={drawer.close} />, { title: 'Job Details' });
                 }}
               >
                 {job.func}

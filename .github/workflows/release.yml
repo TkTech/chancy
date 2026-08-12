@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4.1.6
+    - uses: actions/checkout@v5
 
     - name: Set up Python
       uses: actions/setup-python@v6.0.0
@@ -81,7 +81,7 @@ jobs:
       PYTHON: ${{ matrix.python-version }}
 
     steps:
-      - uses: actions/checkout@v4.1.6
+      - uses: actions/checkout@v5
 
       - uses: ikalnytskyi/action-setup-postgres@v8
         with:
@@ -129,7 +129,7 @@ jobs:
     if: github.event_name == 'pull_request'
 
     steps:
-      - uses: actions/checkout@v4.1.6
+      - uses: actions/checkout@v5
 
       - uses: ikalnytskyi/action-setup-postgres@v8
         with:
@@ -164,7 +164,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4.1.6
+      - uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v6.0.0

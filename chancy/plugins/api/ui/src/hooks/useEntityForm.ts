@@ -37,7 +37,10 @@ export function useEntityForm<TSchema extends z.ZodType, TMutationData, TError =
     },
     onSubmit: async ({ value }) => {
       try {
-        await mutation.mutateAsync(value as z.output<TSchema>);
+        // Validators never transform form state; parse to apply the schema's
+        // transforms before submitting.
+        const parsed = schema.parse(value) as z.output<TSchema>;
+        await mutation.mutateAsync(parsed);
         onSuccess?.();
       } catch (error) {
         // Error handling is done by the mutation's onError callback

@@ -156,6 +156,8 @@ def json_dumps(obj, **kwargs):
             return o.value
         elif is_dataclass(o):
             return asdict(o)
+        elif isinstance(o, (set, frozenset)):
+            return list(o)
 
         raise TypeError(
             f"Object of type {o.__class__.__name__} is not JSON serializable"
