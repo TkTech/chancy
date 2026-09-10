@@ -31,6 +31,9 @@ Changelog
   `Executor.get_capabilities()`, such as time out and memory limit support.
 - Threaded and sub-interpreter executors now support co-operative timeouts
   by periodically calling `QueuedJob.checkpoint()`.
+- `Executor.get_function_and_kwargs()` is now a classmethod used by every
+  built-in executor, so subclasses can override it to inject their own keyword
+  arguments into jobs (@PaulM5406, #46).
 
 🐛 Fixes
 
