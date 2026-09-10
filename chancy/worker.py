@@ -24,7 +24,7 @@ from chancy.hub import Event, Hub
 from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
-from chancy.utils import TaskManager, import_string, sleep
+from chancy.utils import TaskManager, import_string, lock_order_key, sleep
 
 
 class Worker:
@@ -634,6 +634,15 @@ class Worker:
 
             self.chancy.log.debug(
                 f"Processing {len(pending_updates)} outgoing updates."
+            )
+
+            # Lock rows in the same order as push_many_ex does, or a batch of
+            # updates overlapping a push of the same unique keys deadlocks.
+            pending_updates.sort(
+                key=lambda update: (
+                    lock_order_key(update.unique_key),
+                    update.id,
+                )
             )
 
             try:
