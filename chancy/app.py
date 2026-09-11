@@ -22,6 +22,7 @@ from chancy.utils import (
     chunked,
     get_database_dsn,
     json_dumps,
+    lock_order_key,
 )
 
 
@@ -689,14 +690,17 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
-        references = []
-        for job in jobs:
+        # Jobs are inserted in unique_key order so that concurrent pushes and
+        # the worker's batched job updates (which sort the same way) always
+        # acquire row locks in the same order and cannot deadlock (#89).
+        references: list[Reference | None] = [None] * len(jobs)
+        for index, job in self._in_lock_order(jobs):
             await cursor.execute(
                 self._push_job_sql(),
                 self._get_job_params(job),
             )
             record = await cursor.fetchone()
-            references.append(Reference(record["id"]))
+            references[index] = Reference(record["id"])
 
         if self.notifications:
             for queue in {
@@ -725,14 +729,15 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
-        references = []
-        for job in jobs:
+        # See push_many_ex for why jobs are inserted in unique_key order.
+        references: list[Reference | None] = [None] * len(jobs)
+        for index, job in self._in_lock_order(jobs):
             cursor.execute(
                 self._push_job_sql(),
                 self._get_job_params(job),
             )
             record = cursor.fetchone()
-            references.append(Reference(record["id"]))
+            references[index] = Reference(record["id"])
 
         for queue in {job.queue for job in jobs}:
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
@@ -1497,6 +1502,26 @@ class Chancy:
         ).format(
             queues=sql.Identifier(f"{self.prefix}queues"),
             action=action,
+        )
+
+    @staticmethod
+    def _in_lock_order(
+        jobs: list[Job | IsAJob[..., Any]],
+    ) -> list[tuple[int, Job | IsAJob[..., Any]]]:
+        """
+        Pair each job with its original index and order the pairs by
+        unique_key, which is the order in which row locks must be acquired.
+
+        Jobs without a unique_key never conflict with an existing row, so
+        their relative order does not matter and they are grouped first.
+        """
+        return sorted(
+            enumerate(jobs),
+            key=lambda pair: lock_order_key(
+                (
+                    pair[1] if isinstance(pair[1], Job) else pair[1].job
+                ).unique_key
+            ),
         )
 
     @staticmethod

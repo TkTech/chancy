@@ -122,6 +122,18 @@ def import_string(name):
     return getattr(module, func_name)
 
 
+def lock_order_key(unique_key: str | None) -> str:
+    """
+    The key used to order job rows before locking them.
+
+    Every code path that takes row locks on several jobs in one transaction
+    (pushing jobs with unique keys, the worker's batched job updates) must
+    sort by this key so that overlapping transactions acquire their locks in
+    the same order and cannot deadlock. See issue #89.
+    """
+    return unique_key or ""
+
+
 def chancy_uuid() -> uuid.UUID:
     """
     Generate a UUID suitable for use as a job ID.
