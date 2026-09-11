@@ -152,16 +152,30 @@ class Executor(abc.ABC):
         await self.worker.queue_update(new_instance)
         await self.worker.on_job_completed(queue=self.queue, job=new_instance)
 
-    @staticmethod
-    def _resolve_function_and_kwargs(
-        job: QueuedJob,
-    ) -> tuple[Callable, dict, bool]:
+    @classmethod
+    def get_function_and_kwargs(cls, job: QueuedJob) -> tuple[Callable, dict]:
         """
-        Finds the function which should be executed for the given job and
-        returns its keyword arguments and whether it accepts job context.
+        Find the function which should be executed for the given job and
+        return its keyword arguments.
+
+        Subclasses can override this method to resolve the function
+        differently or to inject additional keyword arguments, such as
+        application-level dependencies, before the job runs. Every built-in
+        executor goes through this method via
+        :meth:`prepare_job_for_execution`.
+
+        .. note::
+
+            This method runs wherever the executor runs the job: in the
+            worker's event loop, in a pool thread, in a sub-interpreter or in
+            a child process. Nothing is shared across that boundary: the
+            executor subclass is imported again on the other side, so it must
+            be importable by name, and anything injected must be created there
+            (for example from :meth:`on_initialize_worker`), never handed over
+            from the worker process.
 
         :param job: The job instance to get the function and arguments for.
-        :return: The function, keyword arguments, and context support.
+        :return: A tuple containing the function and its keyword arguments.
         """
         mod_name, func_name = job.func.rsplit(".", 1)
         mod = __import__(mod_name, fromlist=[func_name])
@@ -177,7 +191,6 @@ class Executor(abc.ABC):
         # keyword argument.
         sig = inspect.signature(func)
         kwargs = dict(job.kwargs or {})
-        has_job_context = False
         for param_name, param in sig.parameters.items():
             if param.kind != param.KEYWORD_ONLY:
                 continue
@@ -188,22 +201,8 @@ class Executor(abc.ABC):
             try:
                 if issubclass(param.annotation, QueuedJob):
                     kwargs[param_name] = job
-                    has_job_context = True
             except TypeError:
                 continue
-
-        return func, kwargs, has_job_context
-
-    @staticmethod
-    def get_function_and_kwargs(job: QueuedJob) -> tuple[Callable, dict]:
-        """
-        Find the function which should be executed for the given job and
-        return its keyword arguments.
-
-        :param job: The job instance to get the function and arguments for.
-        :return: A tuple containing the function and its keyword arguments.
-        """
-        func, kwargs, _ = Executor._resolve_function_and_kwargs(job)
 
         return func, kwargs
 
@@ -239,7 +238,8 @@ class Executor(abc.ABC):
             job = job._with_time_limit(time_limit)
             cooperative_time_limit = True
 
-        func, kwargs, has_job_context = cls._resolve_function_and_kwargs(job)
+        func, kwargs = cls.get_function_and_kwargs(job)
+        has_job_context = any(value is job for value in kwargs.values())
         function_capability = (
             cls.Capability.ASYNC_JOBS
             if inspect.iscoroutinefunction(func)
