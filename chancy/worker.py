@@ -25,7 +25,7 @@ from chancy.hub import Event, Hub
 from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
-from chancy.utils import TaskManager, import_string, sleep
+from chancy.utils import TaskManager, import_string, lock_order_key, sleep
 
 
 class Worker:
@@ -675,6 +675,10 @@ class Worker:
         cancelled, its batch is retained ahead of newer updates for a later
         attempt. Earlier batches may already be committed.
 
+        Within each batch, database writes follow unique-key order to avoid
+        deadlocks with concurrent pushes. Updates to the same job retain their
+        original order, as do the plugin callbacks.
+
         .. code-block:: python
 
             await worker.queue_update(updated_job)
@@ -691,6 +695,17 @@ class Worker:
 
                 self.chancy.log.debug(
                     f"Processing {len(pending_updates)} outgoing updates."
+                )
+
+                # Match push_many_ex's lock order. The stable sort preserves
+                # updates to the same job; keep the retained batch and hooks
+                # in their original order.
+                ordered_updates = sorted(
+                    pending_updates,
+                    key=lambda update: (
+                        lock_order_key(update.unique_key),
+                        update.id,
+                    ),
                 )
 
                 async with (
@@ -730,7 +745,7 @@ class Worker:
                                 "meta": Json(update.meta),
                                 "max_attempts": update.max_attempts,
                             }
-                            for update in pending_updates
+                            for update in ordered_updates
                         ],
                     )
 

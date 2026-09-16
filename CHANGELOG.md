@@ -45,6 +45,9 @@ Changelog
 - Fixed a very rare split-brain issue where a worker becoming the leader could
   extend the leadership of the previous leader, causing duplicate work for 1
   cycle.
+- Pushing jobs with unique keys and the worker's batched job updates now lock
+  rows in the same order, fixing a deadlock between overlapping pushes and
+  updates that could fail either side (@AudeCstg, #89).
 
 0.25.1
 ------
