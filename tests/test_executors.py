@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from conftest import executor_params
 
 from chancy import Chancy, Limit, Queue, Worker
 from chancy.executors.asyncex import AsyncExecutor
@@ -137,16 +136,15 @@ def test_get_function_and_kwargs_is_overridable():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("executor", executor_params())
 async def test_injected_kwargs_reach_jobs_on_every_executor(
-    chancy: Chancy, worker: Worker, executor: str
+    chancy: Chancy, worker: Worker, job_executor: str
 ):
     """
     The override runs wherever the executor runs the job (event loop, pool
     thread, sub-interpreter or child process), so injected keyword arguments
     reach the job on every built-in executor (#46).
     """
-    executor_class = import_string(executor)
+    executor_class = import_string(job_executor)
     injecting_executor = f"{__name__}.Injecting{executor_class.__name__}"
     job_func = (
         job_with_injected_kwarg

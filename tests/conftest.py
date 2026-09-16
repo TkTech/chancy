@@ -144,6 +144,12 @@ def sync_job_executor(request):
     return request.param
 
 
+@pytest.fixture(params=executor_params())
+def job_executor(request):
+    """Provide each built-in executor."""
+    return request.param
+
+
 @pytest.fixture(params=executor_params(Executor.Capability.ASYNC_JOBS))
 def async_job_executor(request):
     """Provide each executor that supports asynchronous jobs."""

@@ -65,16 +65,18 @@ jobs:
         retention-days: 1
 
   test:
-    name: "${{ matrix.os }} - Py${{ matrix.python-version }} - PG${{ matrix.pg }}"
+    name: "${{ matrix.os }} - Py${{ matrix.python-version }} - Django${{ matrix.django }} - PG${{ matrix.pg }}"
     needs: [build]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     if: github.event_name == 'pull_request'
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.14"]
         os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        # Django 5.2 supports both Python endpoints and PostgreSQL 14+.
+        django: ["5.2"]
         pg: ["14", "18"]
     env:
       OS: ${{ matrix.os }}
@@ -101,15 +103,19 @@ jobs:
         run: pip install uv
 
       - name: Installing dependencies (Python)
-        run: uv sync --all-extras
+        run: |
+          uv sync --all-extras
+          uv pip install --upgrade "django==${{ matrix.django }}.*"
+          uv run --no-sync python -m django --version
 
+      # Keep the selected Django version instead of restoring the lockfile's.
       - name: Running tests (parallel)
         run: |
-          uv run pytest -n auto -v --cov=chancy --cov-report=xml
+          uv run --no-sync pytest -n auto -v --cov=chancy --cov-report=xml
 
       - name: Running Django ORM tests (sequential)
         run: |
-          uv run pytest tests/contrib/django/test_models.py -v --cov=chancy --cov-report=xml --cov-append
+          uv run --no-sync pytest tests/contrib/django/test_models.py -v --cov=chancy --cov-report=xml --cov-append
 
       - name: Uploading coverage
         uses: codecov/codecov-action@v4
@@ -121,12 +127,23 @@ jobs:
           verbose: true
           slug: TkTech/chancy
 
-  test-django6:
-    name: "Django 6 Tests (Ubuntu, Py3.12)"
+  test-django:
+    name: "Django${{ matrix.compatibility.django }} - Py${{ matrix.python-version }} - PG${{ matrix.compatibility.pg }}"
     needs: [build]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+        # Test the oldest supported PostgreSQL and the newest for each Django.
+        # Django 6.0 supports PostgreSQL 14+; Django 6.1 requires 15+.
+        compatibility:
+          - {django: "6.0", pg: "14"}
+          - {django: "6.0", pg: "18"}
+          - {django: "6.1", pg: "15"}
+          - {django: "6.1", pg: "18"}
 
     steps:
       - uses: actions/checkout@v4.1.6
@@ -137,26 +154,26 @@ jobs:
           password: localtest
           database: postgres
           port: 8190
-          postgres-version: "18"
+          postgres-version: ${{ matrix.compatibility.pg }}
         id: postgres
 
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6.0.0
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
       - name: Installing uv
         run: pip install uv
 
       - name: Installing dependencies (Python)
-        run: uv sync --all-extras
-
-      - name: Installing Django 6
-        run: uv pip install 'django>=6.0'
-
-      - name: Running Django Tasks tests
         run: |
-          uv run pytest tests/contrib/django/ -s -v
+          uv sync --all-extras
+          uv pip install --upgrade "django==${{ matrix.compatibility.django }}.*"
+          uv run --no-sync python -m django --version
+
+      - name: Running Django integration tests
+        run: |
+          uv run --no-sync pytest tests/contrib/django/ -s -v
 
   docs:
     name: Building Documentation
