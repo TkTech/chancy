@@ -1,27 +1,419 @@
-$enable-rounded: false;
+// ============================================
+// Chancy Dashboard - Main Stylesheet
+// ============================================
+// 1. Import theme customizations (SCSS variables)
+// 2. Import Bootstrap (uses our customizations)
+// 3. Add custom component styles
+
+@import "./theme";
 @import "node_modules/bootstrap/scss/bootstrap";
 
-
+// ============================================
+// Layout
+// ============================================
 body,
 #root {
     height: 100vh;
     width: 100vw;
+    overflow: hidden;
+}
+
+// ============================================
+// Theme Refinements
+// ============================================
+// Custom pink accent available in both themes
+:root,
+[data-bs-theme="light"] {
+    --chancy-pink: #fad0d7;
+    --chancy-pink-dark: #f4a6b4;
+    --chancy-pink-emphasis: #e87d94;
 }
 
 [data-bs-theme="dark"] {
-    --bs-body-bg: #1a1a1a;
-    --bs-border-color: #2d2d2d;
+    --chancy-pink: #fad0d7;
+    --chancy-pink-dark: #f4a6b4;
+    --chancy-pink-emphasis: #e87d94;
+    --bs-body-bg-rgb: 13, 14, 18;
+    --bs-card-bg: #16171d;
+    --bs-border-color: #2a2b33;
+    --bs-secondary-color: #b4b6bb;
+}
 
-    #sidebar {
-        background-color: #1a1c1e;
+// ============================================
+// Sidebar
+// ============================================
+#sidebar {
+    background-color: var(--bs-secondary-bg);
+    border-right: var(--bs-border-width) solid var(--bs-border-color) !important;
+}
+
+// ============================================
+// Component Enhancements
+// ============================================
+
+// Links
+a {
+    transition: color 0.15s ease-in-out;
+}
+
+// Navigation
+.nav-link {
+    transition: all 0.2s ease-in-out;
+    border-radius: $border-radius;
+    color: var(--bs-secondary-color);
+
+    &:hover:not(.active) {
+        background-color: var(--bs-secondary-bg);
+        color: var(--bs-body-color);
     }
 
-    .nav-pills {
-        --bs-nav-pills-link-active-bg: #2d2d2d;
-        --bs-nav-pills-link-active-color: #fff;
+    &.active {
+        color: white;
     }
 }
 
-a {
-    text-decoration: none;
+// Buttons
+.btn {
+    transition: all 0.15s ease-in-out;
+}
+
+// Cards
+.card {
+    transition: box-shadow 0.2s ease-in-out;
+
+    .card-header {
+        font-weight: 600;
+        border-bottom-color: var(--bs-border-color);
+    }
+}
+
+[data-bs-theme="light"] .card {
+    --bs-card-bg: #f8f9fa;
+    --bs-card-cap-bg: #e9ecef;
+}
+
+[data-bs-theme="dark"] .card {
+    --bs-card-bg: #16171d;
+    --bs-card-cap-bg: #1e1f26;
+}
+
+// Pink accent utilities
+.text-chancy-pink {
+    color: var(--chancy-pink-emphasis) !important;
+}
+
+.bg-chancy-pink {
+    background-color: var(--chancy-pink) !important;
+    color: #1a1d23 !important;
+}
+
+.border-chancy-pink {
+    border-color: var(--chancy-pink-dark) !important;
+}
+
+// Subtle pink emphasis for highlights
+.badge-pink {
+    background-color: var(--chancy-pink);
+    color: #1a1d23;
+}
+
+[data-bs-theme="dark"] .badge-pink {
+    background-color: var(--chancy-pink-emphasis);
+    color: #0d0e12;
+}
+
+// Tables
+.table {
+    > thead th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+        color: var(--bs-secondary-color);
+        border-bottom-width: 2px;
+        background-color: var(--bs-secondary-bg);
+    }
+
+    &.table-hover tbody tr {
+        transition: background-color 0.15s ease-in-out;
+        cursor: pointer;
+    }
+}
+
+// Badges
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+// ============================================
+// Custom Components
+// ============================================
+
+// Status indicator dot
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+// Custom scrollbars
+.overflow-auto,
+.overflow-x-scroll,
+.overflow-y-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(107, 114, 128, 0.3) transparent;
+
+    &::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background-color: rgba(107, 114, 128, 0.3);
+        border-radius: 4px;
+
+        &:hover {
+            background-color: rgba(107, 114, 128, 0.5);
+        }
+    }
+}
+
+[data-bs-theme="dark"] {
+    .overflow-auto,
+    .overflow-x-scroll,
+    .overflow-y-scroll {
+        scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+
+        &::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.1);
+
+            &:hover {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+        }
+    }
+}
+
+// Loading spinner
+.chancy-spinner {
+    width: 128px;
+    height: 128px;
+    animation: chancy-spin 1s linear infinite;
+    image-rendering: auto;
+}
+
+@keyframes chancy-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+// Login form
+.login-form-container {
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+// Icon circle
+.icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.25rem;
+}
+
+// Page transitions
+.page-enter {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+.page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+// ============================================
+// Job State Histogram
+// ============================================
+.job-state-histogram {
+    width: 100%;
+    position: relative;
+    z-index: 10;
+}
+
+// ============================================
+// Search Filter Component
+// ============================================
+.search-filter {
+    position: relative;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.search-filter-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bs-body-bg);
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: $border-radius;
+    min-height: 2.5rem;
+    transition: border-color 0.15s ease-in-out;
+
+    &:focus-within {
+        border-color: var(--bs-primary);
+        box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
+    }
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--bs-primary);
+    color: white;
+    border-radius: $border-radius-sm;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    max-width: 100%;
+
+    &.filter-chip-partial {
+        background: var(--bs-secondary-bg);
+        color: var(--bs-secondary-color);
+        opacity: 0.7;
+    }
+}
+
+.filter-chip-content {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    overflow: hidden;
+}
+
+.filter-chip-field {
+    font-weight: 500;
+}
+
+.filter-chip-operator {
+    opacity: 0.8;
+    font-weight: 400;
+}
+
+.filter-chip-value {
+    opacity: 0.9;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.filter-chip-remove {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0;
+    margin-left: 0.25rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.15s ease-in-out;
+
+    &:hover {
+        opacity: 1;
+    }
+
+    &:focus {
+        outline: none;
+        opacity: 1;
+    }
+}
+
+.search-filter-input-wrapper {
+    flex: 1;
+    min-width: 120px;
+    position: relative;
+}
+
+.search-filter-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    padding: 0.25rem;
+    width: 100%;
+    color: var(--bs-body-color);
+    font-size: 0.9375rem;
+
+    &::placeholder {
+        color: var(--bs-secondary-color);
+    }
+}
+
+.search-filter-loading {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--bs-secondary-color);
+}
+
+.search-filter-dropdown {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    right: 0;
+    background: var(--bs-body-bg);
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: $border-radius;
+    box-shadow: $box-shadow-lg;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.search-filter-dropdown-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+
+    &:hover,
+    &.selected {
+        background: var(--bs-secondary-bg);
+    }
+
+    &:first-child {
+        border-top-left-radius: $border-radius;
+        border-top-right-radius: $border-radius;
+    }
+
+    &:last-child {
+        border-bottom-left-radius: $border-radius;
+        border-bottom-right-radius: $border-radius;
+    }
+}
+
+.search-filter-dropdown-item-label {
+    font-weight: 500;
+    color: var(--bs-body-color);
+}
+
+.search-filter-dropdown-item-description {
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+    margin-top: 0.125rem;
 }

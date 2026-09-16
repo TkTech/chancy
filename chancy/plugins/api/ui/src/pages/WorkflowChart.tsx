@@ -1,11 +1,10 @@
 import {useRef} from 'react';
 import type {NodeProps} from '@xyflow/react';
-import {Edge, Handle, MarkerType, Node, NodeTypes, Position, ReactFlow,} from '@xyflow/react';
+import {Edge, Handle, MarkerType, Node, NodeTypes, Position, ReactFlow, Background} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import {Workflow} from '../hooks/useWorkflows.tsx';
-import {Link} from 'react-router-dom';
-import {statusToColor} from '../utils.tsx';
+import {statusToColor, extractFunctionName} from '../utils.tsx';
 
 interface WorkflowChartProps {
   workflow: Workflow;
@@ -16,29 +15,38 @@ type CustomNode = Node<{
   jobId: string,
   state: string,
   job: {
-    func: string
+    func: string,
+    queue: string,
+    kwargs: unknown,
+    priority: number,
+    max_attempts: number,
+    limits: {
+      key: string,
+      value: number
+    }[]
   }
 }, 'custom'>;
 
 const CustomNode = ({ data }: NodeProps<CustomNode>) => {
   const nodeRef = useRef<HTMLDivElement>(null);
+  const functionName = extractFunctionName(data.job?.func || '');
 
   return (
     <div ref={nodeRef} style={{
-      minWidth: "350px",
+      minWidth: "250px",
     }}>
       <Handle type="target" position={Position.Left} style={{
         opacity: 0,
       }} />
-      <div className={`p-3 border border-2 border-${statusToColor(data.state)}`}>
-        <div className={"fw-bolder"}>{data.label}</div>
-        <div className="text-xs">
-          {data.jobId ? (
-            <Link to={`/jobs/${data.jobId}`}>
-              {data.jobId}
-            </Link>
-          ) : "-"}
+      <div className={`p-3 border border-2 border-${statusToColor(data.state)} bg-body`}>
+        <div className={"fw-bold text-truncate"} title={data.label}>
+          {data.label}
         </div>
+        {functionName && (
+          <div className={"text-muted small text-truncate"} title={data.job?.func}>
+            {functionName}
+          </div>
+        )}
       </div>
       <Handle type="source" position={Position.Right} style={{
         opacity: 0,
@@ -55,10 +63,14 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  dagreGraph.setGraph({ rankdir: direction });
+  dagreGraph.setGraph({
+    rankdir: direction,
+    nodesep: 80,  // Horizontal spacing between nodes at the same rank
+    ranksep: 120, // Vertical spacing between ranks
+  });
 
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: 350, height: 80 });
+    dagreGraph.setNode(node.id, { width: 250, height: 70 });
   });
 
   edges.forEach((edge) => {
@@ -103,7 +115,7 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
                 id: `e${dependencyId}-${stepId}`,
                 source: dependencyId,
                 target: stepId,
-                animated: workflow.steps[stepId].state === null,
+                animated: workflow.steps?.[stepId].state === null,
                 style: {
                   strokeWidth: 2,
                 },
@@ -128,7 +140,9 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
                     hideAttribution: true,
                 }}
                 fitView
-            />
+            >
+                <Background gap={20} size={1} />
+            </ReactFlow>
         </div>
     );
 };

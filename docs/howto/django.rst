@@ -11,6 +11,62 @@ Install chancy:
     $ pip install chancy[cli,django]
 
 
+Django Tasks Backend
+--------------------
+
+.. note::
+
+    This feature requires Django 6.0+ and is experimental. Feedback is welcome!
+
+Chancy provides a backend for Django's built-in tasks framework, allowing you
+to use the standard Django Tasks API with Chancy as the underlying queue.
+
+Configure the backend in your Django settings:
+
+.. code-block:: python
+
+    # settings.py
+    TASKS = {
+        "default": {
+            "BACKEND": "chancy.contrib.django.backend.ChancyBackend",
+            "OPTIONS": {
+                "dsn": None,  # Uses DATABASES["default"] if not set
+                "prefix": "chancy_",
+            },
+        },
+    }
+
+Then use the standard Django Tasks API:
+
+.. code-block:: python
+
+    from django.tasks import task
+
+    @task
+    def my_task(arg1, arg2):
+        return arg1 + arg2
+
+    # Enqueue the task
+    result = my_task.enqueue(1, 2)
+
+    # Check the result
+    result = result.refresh()
+    if result.is_successful:
+        print(result.return_value)
+
+The Chancy backend supports:
+
+- Synchronous and asynchronous tasks
+- Task priorities
+- Deferred execution (``run_after``)
+- Task context (``takes_context=True``)
+- Result retrieval
+
+You'll still need to use the Chancy CLI or library to declare your queues
+and run workers. See the :doc:`How To guides </howto/index>` for details on
+setting up workers.
+
+
 Using Django models and features in Chancy
 ------------------------------------------
 

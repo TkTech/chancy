@@ -1,10 +1,12 @@
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from psycopg import sql
 
 from chancy.app import Chancy
-from chancy.worker import Worker
 from chancy.plugins.leadership import ImmediateLeadership, Leadership
+from chancy.worker import Worker
 
 
 @pytest.mark.parametrize(
@@ -46,6 +48,78 @@ async def test_leadership(chancy: Chancy, worker: Worker):
     """
     await asyncio.sleep(10)
     assert worker.is_leader.is_set()
+
+
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [
+                Leadership(poll_interval=60, timeout=120),
+            ],
+            "no_default_plugins": True,
+        }
+    ],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_leadership_renewal_requires_ownership(
+    chancy: Chancy, worker: Worker
+):
+    """
+    Ensures that a stale leader cannot renew another worker's lease.
+    """
+    leadership = chancy.plugins[Leadership.get_identifier()]
+
+    gained = asyncio.create_task(
+        worker.hub.wait_for("leadership.gained", timeout=5)
+    )
+    await asyncio.sleep(0)
+    leadership.wake_up()
+    assert await gained
+    assert worker.is_leader.is_set()
+
+    other_worker_id = "another-worker"
+    other_expiry = datetime.now(tz=UTC) + timedelta(hours=1)
+    leader_table = sql.Identifier(f"{chancy.prefix}leader")
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL(
+                """
+                    UPDATE {leader}
+                    SET worker_id = %s, expires_at = %s
+                    WHERE id = 1
+                    """
+            ).format(leader=leader_table),
+            (other_worker_id, other_expiry),
+        )
+
+    result = asyncio.create_task(
+        worker.hub.wait_for(
+            ["leadership.lost", "leadership.renewed"], timeout=5
+        )
+    )
+    await asyncio.sleep(0)
+    leadership.wake_up()
+    events = await result
+    assert events
+
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL(
+                """
+                    SELECT worker_id, expires_at
+                    FROM {leader}
+                    WHERE id = 1
+                    """
+            ).format(leader=leader_table)
+        )
+        recorded_worker_id, recorded_expiry = await cursor.fetchone()
+
+    assert recorded_worker_id == other_worker_id
+    assert recorded_expiry == other_expiry
+    assert events[0].name == "leadership.lost"
+    assert not worker.is_leader.is_set()
 
 
 @pytest.mark.parametrize(

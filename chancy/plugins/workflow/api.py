@@ -38,33 +38,122 @@ class WorkflowApiPlugin(ApiPlugin):
     @requires(["authenticated"])
     async def get_workflows(request, *, chancy, worker):
         """
-        Get all known workflows.
+        Get all known workflows with optional filtering.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
+        from chancy.plugins.api.core import parse_filters
+        from chancy.rule import Rule
+
+        # Get filter parameters
+        filters_param = request.query_params.get("filters")
+        try:
+            limit = min(int(request.query_params.get("limit", "100")), 100)
+        except (ValueError, TypeError):
+            limit = 100
+
+        # Process filter triples using helper
+        field_config = {
+            "state": (Rule("state"), ["="]),
+            "name": (Rule("name"), ["=", "~"]),
+        }
+
+        rule, error = parse_filters(filters_param, field_config)
+        if error:
+            return error
+
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            if rule:
+                query = sql.SQL(
+                    """
                         SELECT
-                            w.*
+                            w.id,
+                            w.name,
+                            w.state,
+                            w.created_at,
+                            w.updated_at,
+                            COALESCE(stats.pending_steps, 0) as pending_steps,
+                            COALESCE(stats.running_steps, 0) as running_steps,
+                            COALESCE(stats.succeeded_steps, 0) as succeeded_steps,
+                            COALESCE(stats.failed_steps, 0) as failed_steps,
+                            COALESCE(stats.retrying_steps, 0) as retrying_steps
                         FROM
                             {workflows_table} w
+                        LEFT JOIN (
+                            SELECT
+                                ws.workflow_id,
+                                COUNT(CASE WHEN j.state = 'pending' THEN 1 END) as pending_steps,
+                                COUNT(CASE WHEN j.state = 'running' THEN 1 END) as running_steps,
+                                COUNT(CASE WHEN j.state = 'succeeded' THEN 1 END) as succeeded_steps,
+                                COUNT(CASE WHEN j.state = 'failed' THEN 1 END) as failed_steps,
+                                COUNT(CASE WHEN j.state = 'retrying' THEN 1 END) as retrying_steps
+                            FROM {workflow_steps_table} ws
+                            LEFT JOIN {jobs_table} j ON ws.job_id = j.id
+                            GROUP BY ws.workflow_id
+                        ) stats ON w.id = stats.workflow_id
+                        WHERE ({rule})
                         ORDER BY
-                            created_at DESC;
+                            w.created_at DESC
+                        LIMIT {limit}
                         """
-                    ).format(
-                        workflows_table=sql.Identifier(
-                            f"{chancy.prefix}workflows"
-                        ),
-                    )
+                ).format(
+                    workflows_table=sql.Identifier(f"{chancy.prefix}workflows"),
+                    workflow_steps_table=sql.Identifier(
+                        f"{chancy.prefix}workflow_steps"
+                    ),
+                    jobs_table=sql.Identifier(f"{chancy.prefix}jobs"),
+                    rule=rule.to_sql(),
+                    limit=sql.Literal(limit),
+                )
+            else:
+                query = sql.SQL(
+                    """
+                        SELECT
+                            w.id,
+                            w.name,
+                            w.state,
+                            w.created_at,
+                            w.updated_at,
+                            COALESCE(stats.pending_steps, 0) as pending_steps,
+                            COALESCE(stats.running_steps, 0) as running_steps,
+                            COALESCE(stats.succeeded_steps, 0) as succeeded_steps,
+                            COALESCE(stats.failed_steps, 0) as failed_steps,
+                            COALESCE(stats.retrying_steps, 0) as retrying_steps
+                        FROM
+                            {workflows_table} w
+                        LEFT JOIN (
+                            SELECT
+                                ws.workflow_id,
+                                COUNT(CASE WHEN j.state = 'pending' THEN 1 END) as pending_steps,
+                                COUNT(CASE WHEN j.state = 'running' THEN 1 END) as running_steps,
+                                COUNT(CASE WHEN j.state = 'succeeded' THEN 1 END) as succeeded_steps,
+                                COUNT(CASE WHEN j.state = 'failed' THEN 1 END) as failed_steps,
+                                COUNT(CASE WHEN j.state = 'retrying' THEN 1 END) as retrying_steps
+                            FROM {workflow_steps_table} ws
+                            LEFT JOIN {jobs_table} j ON ws.job_id = j.id
+                            GROUP BY ws.workflow_id
+                        ) stats ON w.id = stats.workflow_id
+                        ORDER BY
+                            w.created_at DESC
+                        LIMIT {limit}
+                        """
+                ).format(
+                    workflows_table=sql.Identifier(f"{chancy.prefix}workflows"),
+                    workflow_steps_table=sql.Identifier(
+                        f"{chancy.prefix}workflow_steps"
+                    ),
+                    jobs_table=sql.Identifier(f"{chancy.prefix}jobs"),
+                    limit=sql.Literal(limit),
                 )
 
-                results = await cursor.fetchall()
+            await cursor.execute(query)
+            results = await cursor.fetchall()
 
-                return Response(
-                    json_dumps(results),
-                    media_type="application/json",
-                )
+            return Response(
+                json_dumps(results),
+                media_type="application/json",
+            )
 
     @staticmethod
     @requires(["authenticated"])

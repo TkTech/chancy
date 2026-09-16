@@ -18,6 +18,13 @@ import {Job, Jobs} from './pages/Jobs.tsx';
 import {Cron, Crons} from './pages/Crons.tsx';
 import {Workflow, Workflows} from './pages/Workflows.tsx';
 import {Metrics, MetricDetail} from './pages/Metrics.tsx';
+import {Gossip} from './pages/Gossip.tsx';
+import {Dashboard} from './pages/Dashboard.tsx';
+import {System} from './pages/System.tsx';
+import { ToastProvider } from './components/common/ToastProvider.tsx';
+import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
+import { ThemeProvider } from './contexts/ThemeContext.tsx';
+import { WebSocketProvider } from './contexts/WebSocketContext.tsx';
 
 const queryClient = new QueryClient();
 
@@ -25,34 +32,40 @@ const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: "/", loader: () => redirect("/jobs") },
+      { path: "/", loader: () => redirect("/dashboard") },
+      { path: "/dashboard", element: <Dashboard /> },
       { path: "/queues", element: <Queues /> },
       { path: "/queues/:name", element: <Queue /> },
       { path: "/workers",  element: <Workers /> },
       { path: "/workers/:worker_id",  element: <WorkerDetails /> },
-      { path: "/jobs", element: <Jobs />, loader: () => redirect("/jobs/pending") },
-      { path: "/jobs/pending", element: <Jobs />},
-      { path: "/jobs/running", element: <Jobs />},
-      { path: "/jobs/succeeded", element: <Jobs />},
-      { path: "/jobs/failed", element: <Jobs />},
-      { path: "/jobs/retrying", element: <Jobs />},
-      { path: "/jobs/:job_id", element: <Job />},
+      { path: "/jobs", element: <Jobs /> },
+      { path: "/jobs/:job_id", element: <Job /> },
       { path: "/crons", element: <Crons />},
       { path: "/crons/:cron_id", element: <Cron />},
       { path: "/workflows", element: <Workflows />},
       { path: "/workflows/:workflow_id", element: <Workflow />},
       { path: "/metrics", element: <Metrics />},
       { path: "/metrics/:metricKey", element: <MetricDetail />},
+      { path: "/gossip", element: <Gossip />},
+      { path: "/system", element: <System />},
     ]
   }
 ]);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ServerConfigurationProvider>
-        <RouterProvider router={router} />
-      </ServerConfigurationProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ToastProvider>
+          <ServerConfigurationProvider>
+            <WebSocketProvider>
+              <ErrorBoundary>
+                <RouterProvider router={router} />
+              </ErrorBoundary>
+            </WebSocketProvider>
+          </ServerConfigurationProvider>
+        </ToastProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </StrictMode>,
 )

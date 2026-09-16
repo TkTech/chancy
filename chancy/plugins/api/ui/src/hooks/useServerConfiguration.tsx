@@ -1,5 +1,6 @@
-import {useSessionStorage} from './useSessionStorage.tsx';
+import {useLocalStorage} from './useLocalStorage.tsx';
 import {useQuery} from '@tanstack/react-query';
+import { request, ApiError } from '../services/http';
 import React, {useMemo} from 'react';
 
 interface ServerConfiguration {
@@ -9,16 +10,23 @@ interface ServerConfiguration {
 const ServerContext = React.createContext<ServerConfiguration | null>(null);
 
 export function useServerConfiguration() {
-  const [host, setHost] = useSessionStorage<string>('settings.host', "http://localhost");
-  const [port, setPort] = useSessionStorage<number>('settings.port', 8000);
+  const [host, setHost] = useLocalStorage<string>('settings.host', "http://localhost");
+  const [port, setPort] = useLocalStorage<number>('settings.port', 8000);
 
-  const { data, isLoading, refetch } = useQuery<ServerConfiguration>({
-    queryKey: ['configuration', host, port],
+  const { data, isLoading, refetch } = useQuery<ServerConfiguration | null>({
+    queryKey: ['configuration'],
     queryFn: async () => {
-      const response = await fetch(`${host}:${port}/api/v1/configuration`);
-      return await response.json();
+      try {
+        return await request<ServerConfiguration>(`${host}:${port}`, `/api/v1/configuration`);
+      } catch (e: any) {
+        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+          return null; // not authenticated
+        }
+        throw e;
+      }
     },
-    enabled: false
+    enabled: false, // Never auto-run, only via explicit refetch() calls
+    staleTime: Infinity,
   });
 
   const url = useMemo(() => {
@@ -30,7 +38,7 @@ export function useServerConfiguration() {
   }, [host, port]);
 
   return {
-    configuration: data || null,
+    configuration: data ?? null,
     isLoading,
     setHost,
     setPort,

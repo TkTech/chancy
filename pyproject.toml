@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.25.1"
+version = "0.26.0"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -56,7 +56,8 @@ dev = [
     "pytest-benchmark>=5.1.0",
     "pytest-django>=4.8.0",
     "pre-commit>=4.3.0",
-    "ruff>=0.14.2",
+    "ruff==0.16.2",
+    "pytest-xdist>=3.8.0",
 ]
 
 [project.scripts]
@@ -68,6 +69,10 @@ artifacts = [
 ]
 
 [tool.hatch.build.targets.sdist]
+only-include = [
+    "chancy",
+    "CHANGELOG.md",
+]
 artifacts = [
     "chancy/plugins/api/dist/**"
 ]

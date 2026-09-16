@@ -1,13 +1,12 @@
 import pytest
 
-from chancy import job, Queue
+from chancy import Queue, job
 from chancy.plugins.cron import Cron
 
 
 @job()
 def test_job():
     """Simple job function for testing"""
-    pass
 
 
 @pytest.mark.parametrize(

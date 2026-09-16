@@ -36,3 +36,29 @@ export function statusToColor (status: string) {
     retrying: 'warning'
   }[status] || 'secondary';
 }
+
+export function extractFunctionName(funcPath: string): string {
+  // Extract just the function name from a full import path
+  // e.g., "pastes.jobs.delete_expired_paste" -> "delete_expired_paste"
+  if (!funcPath) return '';
+  const parts = funcPath.split('.');
+  return parts[parts.length - 1];
+}
+
+export function abbreviateFunctionName(funcPath: string, maxLength: number = 30): string {
+  // Abbreviate a function path for display
+  // e.g., "my.very.long.module.path.function_name" -> "m.v.l.m.p.function_name"
+  if (!funcPath) return '';
+
+  const parts = funcPath.split('.');
+  if (funcPath.length <= maxLength) return funcPath;
+
+  // Always show the full function name (last part)
+  const functionName = parts[parts.length - 1];
+
+  // If just the function name fits, return it
+  if (functionName.length <= maxLength) return functionName;
+
+  // Otherwise truncate the function name itself
+  return functionName.substring(0, maxLength - 3) + '...';
+}

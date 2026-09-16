@@ -1,14 +1,14 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from psycopg import sql
 from croniter import croniter
+from psycopg import sql
 from psycopg.rows import dict_row
 
+from chancy.app import Chancy
+from chancy.job import IsAJob, Job
 from chancy.plugin import Plugin
 from chancy.worker import Worker
-from chancy.app import Chancy
-from chancy.job import Job, IsAJob
 
 
 class Cron(Plugin):
@@ -108,12 +108,14 @@ class Cron(Plugin):
                 # the next_run time is less than or equal to the current time,
                 # lock it, update the next_run time, and then push the job onto
                 # the queue.
-                now = datetime.now(tz=timezone.utc)
-                async with conn.cursor(row_factory=dict_row) as cursor:
-                    async with conn.transaction():
-                        await cursor.execute(
-                            sql.SQL(
-                                """
+                now = datetime.now(tz=UTC)
+                async with (
+                    conn.cursor(row_factory=dict_row) as cursor,
+                    conn.transaction(),
+                ):
+                    await cursor.execute(
+                        sql.SQL(
+                            """
                                 SELECT
                                     unique_key,
                                     cron,
@@ -122,40 +124,40 @@ class Cron(Plugin):
                                 WHERE next_run <= %(now)s
                                 FOR UPDATE SKIP LOCKED
                                 """
-                            ).format(table=table),
-                            {"now": now},
+                        ).format(table=table),
+                        {"now": now},
+                    )
+
+                    for row in await cursor.fetchall():
+                        # If we're using our built-in default queue, we
+                        # can push this as part of our transaction.
+                        await chancy.push_many_ex(
+                            cursor,
+                            [Job.unpack(row["job"])],
                         )
 
-                        for row in await cursor.fetchall():
-                            # If we're using our built-in default queue, we
-                            # can push this as part of our transaction.
-                            await chancy.push_many_ex(
-                                cursor,
-                                [Job.unpack(row["job"])],
-                            )
+                        chancy.log.debug(
+                            f"Pushed scheduled cron job {row['unique_key']!r}"
+                        )
 
-                            chancy.log.debug(
-                                f"Pushed scheduled cron job {row['unique_key']!r}"
-                            )
-
-                            await cursor.execute(
-                                sql.SQL(
-                                    """
+                        await cursor.execute(
+                            sql.SQL(
+                                """
                                     UPDATE {table}
                                     SET
                                         next_run = %(next_run)s,
                                         last_run = %(last_run)s
                                     WHERE unique_key = %(unique_key)s
                                     """
-                                ).format(table=table),
-                                {
-                                    "next_run": croniter(
-                                        row["cron"], now
-                                    ).get_next(datetime),
-                                    "last_run": now,
-                                    "unique_key": row["unique_key"],
-                                },
-                            )
+                            ).format(table=table),
+                            {
+                                "next_run": croniter(row["cron"], now).get_next(
+                                    datetime
+                                ),
+                                "last_run": now,
+                                "unique_key": row["unique_key"],
+                            },
+                        )
 
     def migrate_key(self) -> str | None:
         return "cron"
@@ -176,7 +178,7 @@ class Cron(Plugin):
 
     @classmethod
     async def get_schedules(
-        cls, chancy: Chancy, *, unique_keys: list[str] = None
+        cls, chancy: Chancy, *, unique_keys: list[str] | None = None
     ) -> dict[str, dict]:
         """
         Get scheduled cron jobs by their unique keys.
@@ -197,11 +199,13 @@ class Cron(Plugin):
         """
         table = sql.Identifier(f"{chancy.prefix}cron")
 
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(
+                sql.SQL(
+                    """
                         SELECT
                             unique_key,
                             job,
@@ -213,20 +217,20 @@ class Cron(Plugin):
                             (%(unique_keys)s::text[] IS NULL
                                 OR unique_key = ANY(%(unique_keys)s))
                         """
-                    ).format(table=table),
-                    {"unique_keys": unique_keys},
-                )
+                ).format(table=table),
+                {"unique_keys": unique_keys},
+            )
 
-                return {
-                    result["unique_key"]: {
-                        "unique_key": result["unique_key"],
-                        "job": Job.unpack(result["job"]),
-                        "cron": result["cron"],
-                        "last_run": result["last_run"],
-                        "next_run": result["next_run"],
-                    }
-                    async for result in cursor
+            return {
+                result["unique_key"]: {
+                    "unique_key": result["unique_key"],
+                    "job": Job.unpack(result["job"]),
+                    "cron": result["cron"],
+                    "last_run": result["last_run"],
+                    "next_run": result["next_run"],
                 }
+                async for result in cursor
+            }
 
     @classmethod
     async def unschedule(cls, chancy: Chancy, *unique_keys: str):
@@ -240,18 +244,20 @@ class Cron(Plugin):
         :param chancy: The Chancy application.
         :param unique_keys: The unique keys of the jobs to unschedule.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    await cursor.execute(
-                        sql.SQL(
-                            """
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            await cursor.execute(
+                sql.SQL(
+                    """
                             DELETE FROM {table}
                             WHERE unique_key = ANY(%(unique_keys)s)
                             """
-                        ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
-                        {"unique_keys": list(unique_keys)},
-                    )
+                ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
+                {"unique_keys": list(unique_keys)},
+            )
 
     @classmethod
     async def schedule(cls, chancy: Chancy, cron: str, *jobs: Job | IsAJob):
@@ -269,7 +275,7 @@ class Cron(Plugin):
                      job.
         :param jobs: The jobs to run.
         """
-        jobs = list(job if isinstance(job, Job) else job.job for job in jobs)
+        jobs = [job if isinstance(job, Job) else job.job for job in jobs]
         for job in jobs:
             if not job.unique_key:
                 raise ValueError(
@@ -277,14 +283,16 @@ class Cron(Plugin):
                     " requires that each job has a unique_key set."
                 )
 
-        base = datetime.now(tz=timezone.utc)
+        base = datetime.now(tz=UTC)
 
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    await cursor.executemany(
-                        sql.SQL(
-                            """
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            await cursor.executemany(
+                sql.SQL(
+                    """
                             INSERT INTO {table} (
                                 unique_key,
                                 cron,
@@ -302,16 +310,14 @@ class Cron(Plugin):
                                 job = %(job)s,
                                 next_run = %(next_run)s
                             """
-                        ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
-                        [
-                            {
-                                "unique_key": job.unique_key,
-                                "cron": cron,
-                                "job": json.dumps(job.pack()),
-                                "next_run": croniter(cron, base).get_next(
-                                    datetime
-                                ),
-                            }
-                            for job in jobs
-                        ],
-                    )
+                ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
+                [
+                    {
+                        "unique_key": job.unique_key,
+                        "cron": cron,
+                        "job": json.dumps(job.pack()),
+                        "next_run": croniter(cron, base).get_next(datetime),
+                    }
+                    for job in jobs
+                ],
+            )

@@ -1,4 +1,5 @@
 import {useQuery} from '@tanstack/react-query';
+import { request } from '../services/http';
 
 interface Cron {
   unique_key: string;
@@ -22,8 +23,7 @@ export function useCrons ({ url }: { url: string | null }) {
   return useQuery<Cron[]>({
     queryKey: ['crons', url],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/crons`);
-      return await response.json();
+      return await request<Cron[]>(url as string, `/api/v1/crons`);
     },
     enabled: url !== null
   });

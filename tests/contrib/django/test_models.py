@@ -1,10 +1,22 @@
 """
 Tests for the Django models integration.
+
+Note: These tests cannot run in parallel (pytest-xdist) because Django ORM
+models have table names set at import time, not runtime.
 """
+
+import os
 
 import pytest
 
 from chancy import job
+
+# Skip these tests when running with pytest-xdist since Django model
+# table names are set at import time and can't be made worker-specific
+pytestmark = pytest.mark.skipif(
+    os.environ.get("PYTEST_XDIST_WORKER") is not None,
+    reason="Django ORM models have static table names incompatible with parallel tests",
+)
 
 
 @job()

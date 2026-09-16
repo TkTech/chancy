@@ -1,15 +1,16 @@
 import asyncio
+
 import pytest
 
 from chancy import Chancy, Queue, job
+from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.workflow import (
-    Workflow,
-    WorkflowPlugin,
-    Sequence,
     CircularDependencyError,
     InvalidDependencyError,
+    Sequence,
+    Workflow,
+    WorkflowPlugin,
 )
-from chancy.plugins.leadership import ImmediateLeadership
 from chancy.utils import chancy_uuid
 
 

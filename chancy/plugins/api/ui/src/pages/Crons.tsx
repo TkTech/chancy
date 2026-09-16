@@ -3,6 +3,10 @@ import {useCrons} from '../hooks/useCrons.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router-dom';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
+import { PageHeader } from '../components/common/PageHeader';
+import { CronTimeline } from '../components/cron/CronTimeline';
+import { useDrawer } from '../components/common/DrawerProvider';
+import { CronDetailView } from '../components/cron/CronDetailView';
 
 export function Cron() {
   const { url } = useServerConfiguration();
@@ -16,118 +20,15 @@ export function Cron() {
   if (!cron) {
     return (
       <div className={"container-fluid"}>
-        <h2 className={"mb-4"}>Cron - {cron_id}</h2>
-        <div className={"alert alert-danger"}>Cron not found.</div>
+        <h2 className={"mb-4"}>Scheduled Job - {cron_id}</h2>
+        <div className={"alert alert-danger"}>Scheduled job not found.</div>
       </div>
     );
   }
 
   return (
     <div className={"container-fluid"}>
-      <div className={'card'}>
-        <div className={'card-header'}>
-          Cron - {cron_id}
-        </div>
-        <table className={"table mb-0"}>
-          <tbody>
-          <tr>
-            <th>Unique Key</th>
-            <td>
-              {cron.unique_key}
-            </td>
-          </tr>
-          <tr>
-            <th>Expression</th>
-            <td>
-              <code>{cron.cron}</code>
-            </td>
-          </tr>
-          <tr>
-            <th>Next Run</th>
-            <td>
-              {cron.next_run}
-            </td>
-          </tr>
-          <tr>
-            <th>Last Run</th>
-            <td>
-              {cron.last_run}
-            </td>
-          </tr>
-          </tbody>
-        </table>
-      </div>
-      <div className={"card mt-4"}>
-        <div className={"card-header"}>
-          Job Definition
-        </div>
-        <table className={"table mb-0"}>
-          <tbody>
-          <tr>
-            <th>Function</th>
-            <td>
-              <code>{cron.job.func}</code>
-            </td>
-          </tr>
-          <tr>
-            <th>Arguments</th>
-            <td>
-              <pre className={"mb-0"}><code>{JSON.stringify(cron.job.kwargs)}</code></pre>
-            </td>
-          </tr>
-          <tr>
-            <th>Queue</th>
-            <td>
-              <Link to={`/queues/${cron.job.queue}`}>
-                {cron.job.queue}
-              </Link>
-            </td>
-          </tr>
-          <tr>
-            <th>Priority</th>
-            <td>
-              {cron.job.priority}
-            </td>
-          </tr>
-          <tr>
-            <th>Max Attempts</th>
-            <td>
-              {cron.job.max_attempts}
-            </td>
-          </tr>
-          <tr>
-            <th>Limits</th>
-            <td>
-              {cron.job.limits.length === 0 ? (
-                <div className={"alert alert-info mb-0"}>
-                  No resource limits defined.
-                </div>
-              ) : (
-                <table className={"table table-sm mb-0"}>
-                  <thead>
-                  <tr>
-                    <th>Key</th>
-                    <th>Value</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {cron.job.limits.map(limit => (
-                    <tr key={limit.key}>
-                      <td>{limit.key}</td>
-                      <td>{limit.value}</td>
-                    </tr>
-                  ))}
-                  </tbody>
-                </table>
-              )}
-            </td>
-            </tr>
-          </tbody>
-        </table>
-        <div className={"card-footer text-muted fst-italic"}>
-          This is the job that will be run when the cron expression is satisfied.
-        </div>
-      </div>
+      <CronDetailView cron={cron} />
     </div>
   );
 }
@@ -135,12 +36,30 @@ export function Cron() {
 export function Crons() {
   const { url } = useServerConfiguration();
   const { data: crons, isLoading } = useCrons({ url });
+  const drawer = useDrawer();
 
   if (isLoading) return <Loading />;
 
+  const handleCronClick = (cron: any) => {
+    drawer.open(
+      <CronDetailView cron={cron} />,
+      { title: `Scheduled Job` }
+    );
+  };
+
   return (
     <div className={"container-fluid"}>
-      <h2 className={"mb-4"}>Crons</h2>
+      <PageHeader
+        title="Scheduled Jobs"
+        description="Jobs scheduled to run on a recurring basis using cron expressions"
+      />
+
+      {/* Timeline view */}
+      <div className="mb-4">
+        <CronTimeline crons={crons || []} />
+      </div>
+
+      {/* Table view */}
       <table className={"table mb-0"}>
         <thead>
         <tr>
@@ -155,14 +74,21 @@ export function Crons() {
         {crons?.length === 0 && (
           <tr>
             <td colSpan={5} className={"text-center table-info"}>
-              No crons found.
+              No scheduled jobs found.
             </td>
           </tr>
         )}
         {crons?.map(cron => (
           <tr key={cron.unique_key}>
             <td>
-              <Link to={`/crons/${cron.unique_key}`}>
+              <Link
+                to={`/crons/${cron.unique_key}`}
+                onClick={(e) => {
+                  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  handleCronClick(cron);
+                }}
+              >
                 {cron.unique_key}
               </Link>
             </td>

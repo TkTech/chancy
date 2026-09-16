@@ -4,8 +4,8 @@ Unmanaged Django models for the workflow plugin.
 
 __all__ = ("Workflow", "WorkflowStep")
 
-from django.db import models
 from django.conf import settings
+from django.db import models
 
 from chancy.utils import chancy_uuid
 

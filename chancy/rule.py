@@ -4,6 +4,7 @@ conditions of a Plugin.
 """
 
 from typing import Any
+
 from psycopg import sql
 
 
@@ -16,10 +17,10 @@ class Rule(SQLAble):
     def __init__(self, field: str):
         self.field = field
 
-    def __eq__(self, other: Any) -> "Condition":
+    def __eq__(self, other: object) -> "Condition":
         return Condition(self.to_sql(), "=", other)
 
-    def __ne__(self, other: Any) -> "Condition":
+    def __ne__(self, other: object) -> "Condition":
         return Condition(self.to_sql(), "!=", other)
 
     def __lt__(self, other: Any) -> "Condition":
@@ -45,6 +46,12 @@ class Rule(SQLAble):
         String contains a lowercase string.
         """
         return Condition(self.to_sql(), "ILIKE", f"%{value}%")
+
+    def ilike(self, value: str) -> "Condition":
+        """
+        String ILIKE match (case-insensitive pattern matching).
+        """
+        return Condition(self.to_sql(), "ILIKE", value)
 
     def to_sql(self) -> sql.Composable:
         return sql.Identifier(self.field)
@@ -139,3 +146,11 @@ class JobRules:
     class ID(Rule):
         def __init__(self):
             super().__init__("id")
+
+    class Priority(Rule):
+        def __init__(self):
+            super().__init__("priority")
+
+    class Attempts(Rule):
+        def __init__(self):
+            super().__init__("attempts")

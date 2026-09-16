@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { request } from '../services/http';
 
 export type MetricType = 'counter' | 'gauge' | 'histogram';
 
@@ -24,8 +25,7 @@ export function useMetricsOverview({ url }: { url: string | null }) {
   return useQuery<MetricsOverview>({
     queryKey: ['metrics-overview', url],
     queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/metrics`);
-      return response.json();
+      return await request<MetricsOverview>(url as string, `/api/v1/metrics`);
     },
     enabled: url !== null,
     refetchInterval: 10000,
@@ -59,11 +59,9 @@ export function useMetricDetail({
         params.append('worker_id', worker_id);
       }
       
-      const response = await fetch(`${url}/api/v1/metrics/${key}?${params.toString()}`);
-      return response.json();
+      return await request<Record<string, MetricData>>(url as string, `/api/v1/metrics/${key}?${params.toString()}`);
     },
     enabled: enabled,
     refetchInterval: 10000,
   });
 }
-

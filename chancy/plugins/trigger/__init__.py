@@ -2,15 +2,14 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
-from psycopg import sql, AsyncCursor
-from psycopg.rows import dict_row, DictRow
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow, dict_row
 
-from chancy.plugin import Plugin
 from chancy.app import Chancy
-from chancy.job import Job, IsAJob
+from chancy.job import IsAJob, Job
+from chancy.plugin import Plugin
 
 
 @dataclass
@@ -21,7 +20,7 @@ class TriggerConfig:
     table_name: str
     schema_name: str
     trigger_name: str
-    operations: List[str]
+    operations: list[str]
     job_template: Job
     enabled: bool
     created_at: datetime
@@ -31,6 +30,11 @@ class Trigger(Plugin):
     """
     Install database triggers on non-Chancy tables that create jobs when rows
     change.
+
+    .. warning::
+
+        This plugin is still considered experimental and its API may change in
+        future releases. Feedback is welcome!
 
     The Trigger plugin allows you to automatically create jobs in response to
     database changes on any table. It uses PostgreSQL statement-level triggers
@@ -118,7 +122,7 @@ class Trigger(Plugin):
         chancy: Chancy,
         *,
         table_name: str,
-        operations: List[str],
+        operations: list[str],
         job_template: Job | IsAJob,
         schema_name: str = "public",
         enabled: bool = True,
@@ -157,18 +161,20 @@ class Trigger(Plugin):
         :return: The unique trigger identifier (UUID).
         :raises ValueError: If operations list is empty or contains invalid operations.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    return await cls.register_trigger_ex(
-                        cursor,
-                        chancy,
-                        table_name,
-                        operations,
-                        job_template,
-                        schema_name=schema_name,
-                        enabled=enabled,
-                    )
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            return await cls.register_trigger_ex(
+                cursor,
+                chancy,
+                table_name,
+                operations,
+                job_template,
+                schema_name=schema_name,
+                enabled=enabled,
+            )
 
     @classmethod
     async def register_trigger_ex(
@@ -176,7 +182,7 @@ class Trigger(Plugin):
         cursor: AsyncCursor[DictRow],
         chancy: Chancy,
         table_name: str,
-        operations: List[str],
+        operations: list[str],
         job_template: Job | IsAJob,
         *,
         schema_name: str = "public",
@@ -277,10 +283,12 @@ class Trigger(Plugin):
         :param trigger_id: The unique trigger identifier to remove (UUID or string).
         :raises ValueError: If the trigger_id does not exist.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    await cls.unregister_trigger_ex(cursor, chancy, trigger_id)
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            await cls.unregister_trigger_ex(cursor, chancy, trigger_id)
 
     @classmethod
     async def unregister_trigger_ex(
@@ -351,12 +359,12 @@ class Trigger(Plugin):
         :return: True if the trigger was enabled, False if it was already enabled.
         :raises ValueError: If the trigger_id does not exist.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    return await cls.enable_trigger_ex(
-                        cursor, chancy, trigger_id
-                    )
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            return await cls.enable_trigger_ex(cursor, chancy, trigger_id)
 
     @classmethod
     async def enable_trigger_ex(
@@ -392,12 +400,12 @@ class Trigger(Plugin):
         :return: True if the trigger was disabled, False if it was already disabled.
         :raises ValueError: If the trigger_id does not exist.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                async with conn.transaction():
-                    return await cls.disable_trigger_ex(
-                        cursor, chancy, trigger_id
-                    )
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            return await cls.disable_trigger_ex(cursor, chancy, trigger_id)
 
     @classmethod
     async def disable_trigger_ex(
@@ -490,7 +498,7 @@ class Trigger(Plugin):
         cls,
         chancy: Chancy,
         *,
-        trigger_ids: List[UUID | str] | None = None,
+        trigger_ids: list[UUID | str] | None = None,
     ) -> dict[UUID, TriggerConfig]:
         """
         Get registered triggers by their IDs.
@@ -514,11 +522,13 @@ class Trigger(Plugin):
         :param trigger_ids: Optional list of trigger IDs to filter by (UUID or string).
         :return: Dictionary mapping trigger UUID to TriggerConfig.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                return await cls.get_triggers_ex(
-                    cursor, chancy, trigger_ids=trigger_ids
-                )
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            return await cls.get_triggers_ex(
+                cursor, chancy, trigger_ids=trigger_ids
+            )
 
     @classmethod
     async def get_triggers_ex(
@@ -526,7 +536,7 @@ class Trigger(Plugin):
         cursor: AsyncCursor[DictRow],
         chancy: Chancy,
         *,
-        trigger_ids: List[UUID | str] | None = None,
+        trigger_ids: list[UUID | str] | None = None,
     ) -> dict[UUID, TriggerConfig]:
         """
         Get registered triggers by their IDs (transaction-aware version).

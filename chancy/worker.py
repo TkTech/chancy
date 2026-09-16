@@ -1,30 +1,31 @@
+import asyncio
 import dataclasses
 import datetime
-import re
-import asyncio
 import json
+import platform
+import random
+import re
+import signal
+import socket
+import sys
 import time
 import uuid
-import socket
-import signal
-import platform
-import sys
 import warnings
 from collections import defaultdict
+from contextlib import AsyncExitStack
 
-from psycopg import sql
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, InterfaceError, OperationalError, sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Json
 
 from chancy.app import Chancy
 from chancy.errors import MigrationsNeededError
 from chancy.executors.base import Executor
-from chancy.hub import Hub, Event
+from chancy.hub import Event, Hub
+from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
-from chancy.utils import TaskManager, import_string, sleep
-from chancy.job import QueuedJob, Reference
+from chancy.utils import TaskManager, import_string, lock_order_key, sleep
 
 
 class Worker:
@@ -122,6 +123,17 @@ class Worker:
                                 before forcing the worker to stop.
     :param tags: Extra tags to associate with the worker.
     :param register_signal_handlers: Whether to register signal handlers.
+    :param backoff_initial: The initial ceiling in seconds for retry
+                            delays after a transient database error in
+                            internal maintenance loops. Each actual delay
+                            is drawn uniformly from ``[0, ceiling]`` (full
+                            jitter), so workers don't reconnect in
+                            lockstep.
+    :param backoff_max: The maximum ceiling in seconds. Exponential
+                        growth of the ceiling is capped at this value.
+    :param backoff_max_retries: The maximum number of consecutive retries
+                                before allowing the error to propagate.
+                                If ``None``, retries indefinitely.
     """
 
     def __init__(
@@ -135,6 +147,9 @@ class Worker:
         shutdown_timeout: int = 30,
         tags: set[str] | None = None,
         register_signal_handlers: bool = True,
+        backoff_initial: float = 1.0,
+        backoff_max: float = 60.0,
+        backoff_max_retries: int | None = None,
     ):
         #: The Chancy application that the worker is associated with.
         self.chancy = chancy
@@ -158,6 +173,15 @@ class Worker:
         self.hub = Hub()
         #: Whether to register signal handlers on startup of the worker.
         self.register_signal_handlers = register_signal_handlers
+        #: Initial backoff delay in seconds for transient errors in
+        #: internal maintenance loops.
+        self.backoff_initial = backoff_initial
+        #: Maximum backoff delay in seconds for transient errors in
+        #: internal maintenance loops.
+        self.backoff_max = backoff_max
+        #: Maximum consecutive retries before propagating the error,
+        #: or ``None`` for unlimited retries.
+        self.backoff_max_retries = backoff_max_retries
         # Extra tags to associate with the worker.
         self._extra_tags = tags or set()
 
@@ -167,14 +191,18 @@ class Worker:
 
         #: A queue of updates waiting to be sent to the database.
         self.outgoing: asyncio.Queue[QueuedJob] = asyncio.Queue()
+        self._outgoing_lock = asyncio.Lock()
+        # Keep an uncommitted batch ahead of new updates across flush attempts.
+        self._pending_updates: list[QueuedJob] = []
+        self._accepting_updates = True
 
         #: An event that is set when the worker is the leader.
         #: This functionality is not enabled by default - a leadership plugin
         #: must be used to enable this event.
         self.is_leader = asyncio.Event()
-        #: An event that is set when the worker is shutting down due to
-        #: receiving a signal.
+        #: An event that is set when the worker is shutting down.
         self.shutdown_event = asyncio.Event()
+        self._signal_received = False
         #: Events set whenever a job is pushed to a queue.
         self.queue_wake_events: dict[str, asyncio.Event] = defaultdict(
             asyncio.Event
@@ -186,6 +214,10 @@ class Worker:
         self._queues: dict[str, Queue] = {}
         # The executors that the worker is currently using.
         self._executors: dict[str, Executor] = {}
+        # Shared by signal handlers, context manager cleanup, and callers.
+        self._stop_task: asyncio.Task[bool] | None = None
+        # Preserve the teardown result if final persistence needs a retry.
+        self._drain_result: bool | None = None
 
     async def start(self):
         """
@@ -253,7 +285,7 @@ class Worker:
             for sig in {signal.SIGTERM, signal.SIGINT}:
                 loop.add_signal_handler(
                     sig,
-                    lambda: asyncio.create_task(self.on_signal(sig)),
+                    lambda s=sig: asyncio.create_task(self.on_signal(s)),
                 )
 
         await self.chancy.declare(Queue(name="default"))
@@ -261,9 +293,29 @@ class Worker:
 
     async def wait_for_shutdown(self):
         """
-        Wait until the worker is stopped.
+        Wait until the worker is stopped, including its final job updates.
         """
         await self.manager.wait_for_shutdown()
+        if self._stop_task is not None:
+            await asyncio.shield(self._stop_task)
+
+    def _calculate_backoff(self, consecutive_failures: int) -> float:
+        """Calculate capped exponential backoff delay with full jitter.
+
+        Applies the "full jitter" strategy: the delay is a uniform random
+        value between 0 and the capped exponential ceiling. This prevents
+        multiple workers from reconnecting in lockstep after a shared
+        outage.
+
+        :param consecutive_failures: The number of consecutive failures so
+                                     far (0-indexed).
+        :returns: The delay in seconds before the next retry.
+        """
+        ceiling = min(
+            self.backoff_initial * (2**consecutive_failures),
+            self.backoff_max,
+        )
+        return random.uniform(0, ceiling)
 
     async def _maintain_queues(self):
         """
@@ -273,48 +325,68 @@ class Worker:
         that the worker should be processing, and update the worker's queues
         accordingly.
         """
+        consecutive_failures = 0
         while True:
-            self.chancy.log.debug("Polling for queue changes.")
-            tags = self.worker_tags()
-            # Tags in the database is a list of regexes, while the tags
-            # in the worker are a set of strings. We need to filter the
-            # queues based on the worker's tags.
-            db_queues = {
-                q.name: q
-                for q in await self.chancy.get_all_queues()
-                if any(re.match(t, tag) for tag in tags for t in q.tags)
-            }
+            try:
+                self.chancy.log.debug("Polling for queue changes.")
+                tags = self.worker_tags()
+                # Tags in the database is a list of regexes, while the
+                # tags in the worker are a set of strings. We need to
+                # filter the queues based on the worker's tags.
+                db_queues = {
+                    q.name: q
+                    for q in await self.chancy.get_all_queues()
+                    if any(re.match(t, tag) for tag in tags for t in q.tags)
+                }
 
-            for queue_name in list(self._queues.keys()):
-                if queue_name not in db_queues:
-                    del self._queues[queue_name]
-                    self.queue_wake_events.pop(queue_name, None)
-                    self.chancy.log.info(f"Removed queue {queue_name}")
+                for queue_name in list(self._queues.keys()):
+                    if queue_name not in db_queues:
+                        del self._queues[queue_name]
+                        self.queue_wake_events.pop(queue_name, None)
+                        self.chancy.log.info(f"Removed queue {queue_name}")
 
-            for queue_name, queue in db_queues.items():
-                if queue_name not in self._queues:
-                    self._queues[queue_name] = queue
-                    self.manager.add(
-                        f"queue_{queue_name}", self._maintain_queue(queue)
-                    )
-                    self.chancy.log.info(
-                        f"Adding queue {queue_name!r} to worker using executor"
-                        f" {queue.executor!r}."
-                    )
-                else:
-                    if self._queues[queue_name] != queue:
+                for queue_name, queue in db_queues.items():
+                    if queue_name not in self._queues:
                         self._queues[queue_name] = queue
-                        self.chancy.log.info(
-                            f"Updated configuration for the queue"
-                            f" {queue_name!r}."
+                        self.manager.add(
+                            f"queue_{queue_name}",
+                            self._maintain_queue(queue),
                         )
+                        self.chancy.log.info(
+                            f"Adding queue {queue_name!r} to worker"
+                            f" using executor {queue.executor!r}."
+                        )
+                    else:
+                        if self._queues[queue_name] != queue:
+                            self._queues[queue_name] = queue
+                            self.chancy.log.info(
+                                f"Updated configuration for the"
+                                f" queue {queue_name!r}."
+                            )
+
+                consecutive_failures = 0
+            except (OperationalError, InterfaceError):
+                consecutive_failures += 1
+                if (
+                    self.backoff_max_retries is not None
+                    and consecutive_failures > self.backoff_max_retries
+                ):
+                    raise
+                delay = self._calculate_backoff(consecutive_failures - 1)
+                self.chancy.log.exception(
+                    f"Transient error in queue maintenance, retrying"
+                    f" in {delay:.1f}s (attempt"
+                    f" {consecutive_failures})."
+                )
+                await asyncio.sleep(delay)
+                continue
 
             try:
                 await self.hub.wait_for(
                     ["queue.declared", "queue.paused", "queue.resumed"],
                     timeout=self.queue_change_poll_interval,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     async def _maintain_queue(self, queue: Queue):
@@ -326,120 +398,166 @@ class Worker:
 
         :param queue: The queue to maintain.
         """
+        consecutive_failures = 0
         while queue := self._queues.get(queue.name):
-            cls = import_string(queue.executor)
+            try:
+                cls = import_string(queue.executor)
 
-            async with cls(self, queue, **queue.executor_options) as executor:
-                try:
-                    self._executors[queue.name] = executor
+                async with AsyncExitStack() as stack:
+                    stack.callback(self._executors.pop, queue.name, None)
+                    async with cls(
+                        self, queue, **queue.executor_options
+                    ) as executor:
+                        self._executors[queue.name] = executor
 
-                    concurrency = queue.concurrency
-                    if queue.concurrency is None:
-                        concurrency = executor.get_default_concurrency()
+                        concurrency = queue.concurrency
+                        if queue.concurrency is None:
+                            concurrency = executor.get_default_concurrency()
 
-                    await self.hub.emit(
-                        "worker.queue.started",
-                        {
-                            "queue": queue,
-                            "executor": executor,
-                            "worker": self,
-                        },
-                    )
+                        await self.hub.emit(
+                            "worker.queue.started",
+                            {
+                                "queue": queue,
+                                "executor": executor,
+                                "worker": self,
+                            },
+                        )
 
-                    # Start with the event set so the loop runs immediately on
-                    # the first iteration.
-                    self.queue_wake_events[queue.name].set()
+                        # Start with the event set so the loop runs
+                        # immediately on the first iteration.
+                        self.queue_wake_events[queue.name].set()
 
-                    while await sleep(
-                        queue.polling_interval,
-                        events=[self.queue_wake_events[queue.name].wait()],
-                    ):
-                        self.queue_wake_events[queue.name].clear()
-                        new_queue = self._queues.get(queue.name)
+                        while await sleep(
+                            queue.polling_interval,
+                            events=[self.queue_wake_events[queue.name].wait()],
+                        ):
+                            consecutive_failures = 0
+                            self.queue_wake_events[queue.name].clear()
+                            new_queue = self._queues.get(queue.name)
 
-                        # There's been a change in the state of the queue,
-                        # we'll let the executor drain before we do anything
-                        # else.
-                        if new_queue != queue and len(executor) > 0:
-                            continue
-                        # The queue was completely removed and the executor
-                        # has been drained, terminate.
-                        elif new_queue is None:
-                            await self.hub.emit(
-                                "worker.queue.removed",
-                                {
-                                    "queue": queue,
-                                    "executor": executor,
-                                    "worker": self,
-                                },
-                            )
-                            return
-                        # The queue still exists but has been reconfigured,
-                        # so we break out to the outer loop to start a new
-                        # executor.
-                        elif new_queue != queue and new_queue:
-                            await self.hub.emit(
-                                "worker.queue.updated",
-                                {
-                                    "queue": queue,
-                                    "executor": executor,
-                                    "worker": self,
-                                },
-                            )
-                            break
-                        # Do nothing at all if the queue is paused, unless it
-                        # had an automatic resume time set.
-                        elif queue.state == Queue.State.PAUSED:
-                            if (
-                                queue.resume_at is not None
-                                and queue.resume_at
-                                < datetime.datetime.now(
-                                    tz=queue.resume_at.tzinfo
-                                )
-                            ):
-                                await self.chancy.resume_queue(queue.name)
-                                queue = dataclasses.replace(
-                                    queue, state=Queue.State.ACTIVE
-                                )
-                        # Otherwise, we can fetch jobs from the queue until
-                        # the executor is full.
-                        else:
-                            maximum_jobs_to_poll = concurrency - len(executor)
-                            if maximum_jobs_to_poll <= 0:
+                            # There's been a change in the state of the
+                            # queue, we'll let the executor drain before
+                            # we do anything else.
+                            if new_queue != queue and len(executor) > 0:
+                                continue
+                            # The queue was completely removed and the
+                            # executor has been drained, terminate.
+                            elif new_queue is None:
                                 await self.hub.emit(
-                                    "worker.queue.full",
+                                    "worker.queue.removed",
                                     {
                                         "queue": queue,
                                         "executor": executor,
                                         "worker": self,
                                     },
                                 )
-                                continue
-
-                            async with self.chancy.pool.connection() as conn:
-                                jobs = await self.fetch_jobs(
-                                    queue, conn, up_to=maximum_jobs_to_poll
+                                return
+                            # The queue still exists but has been
+                            # reconfigured, so we break out to the outer
+                            # loop to start a new executor.
+                            elif new_queue != queue and new_queue:
+                                await self.hub.emit(
+                                    "worker.queue.updated",
+                                    {
+                                        "queue": queue,
+                                        "executor": executor,
+                                        "worker": self,
+                                    },
                                 )
-
-                            for job in jobs:
-                                self.chancy.log.info(
-                                    f"Pulled {job.id!r} ({job.func!r}) for"
-                                    f" queue {job.queue!r}"
+                                break
+                            # Do nothing at all if the queue is paused,
+                            # unless it had an automatic resume time set.
+                            elif queue.state == Queue.State.PAUSED:
+                                if (
+                                    queue.resume_at is not None
+                                    and queue.resume_at
+                                    < datetime.datetime.now(
+                                        tz=queue.resume_at.tzinfo
+                                    )
+                                ):
+                                    await self.chancy.resume_queue(queue.name)
+                                    queue = dataclasses.replace(
+                                        queue,
+                                        state=Queue.State.ACTIVE,
+                                    )
+                            # Otherwise, we can fetch jobs from the queue
+                            # until the executor is full.
+                            else:
+                                maximum_jobs_to_poll = concurrency - len(
+                                    executor
                                 )
-                                await executor.push(job)
-                finally:
-                    self._executors.pop(queue.name, None)
+                                if maximum_jobs_to_poll <= 0:
+                                    await self.hub.emit(
+                                        "worker.queue.full",
+                                        {
+                                            "queue": queue,
+                                            "executor": executor,
+                                            "worker": self,
+                                        },
+                                    )
+                                    continue
+
+                                async with (
+                                    self.chancy.pool.connection() as conn
+                                ):
+                                    jobs = await self.fetch_jobs(
+                                        queue,
+                                        conn,
+                                        up_to=maximum_jobs_to_poll,
+                                    )
+
+                                for job in jobs:
+                                    self.chancy.log.info(
+                                        f"Pulled {job.id!r}"
+                                        f" ({job.func!r}) for"
+                                        f" queue {job.queue!r}"
+                                    )
+                                    await executor.push(job)
+            except (OperationalError, InterfaceError):
+                consecutive_failures += 1
+                if (
+                    self.backoff_max_retries is not None
+                    and consecutive_failures > self.backoff_max_retries
+                ):
+                    raise
+                delay = self._calculate_backoff(consecutive_failures - 1)
+                self.chancy.log.exception(
+                    f"Transient error maintaining queue"
+                    f" {queue.name!r}, retrying in {delay:.1f}s"
+                    f" (attempt {consecutive_failures})."
+                )
+                await asyncio.sleep(delay)
 
     async def _maintain_heartbeat(self):
         """
         Announces the worker to the cluster, and maintains a periodic heartbeat
         to ensure that the worker is still alive.
         """
+        consecutive_failures = 0
         while True:
-            async with self.chancy.pool.connection() as conn:
-                async with conn.transaction():
+            try:
+                async with (
+                    self.chancy.pool.connection() as conn,
+                    conn.transaction(),
+                ):
                     self.chancy.log.debug("Announcing worker to the cluster.")
                     await self.announce_worker(conn)
+                consecutive_failures = 0
+            except (OperationalError, InterfaceError):
+                consecutive_failures += 1
+                if (
+                    self.backoff_max_retries is not None
+                    and consecutive_failures > self.backoff_max_retries
+                ):
+                    raise
+                delay = self._calculate_backoff(consecutive_failures - 1)
+                self.chancy.log.exception(
+                    f"Transient error sending heartbeat, retrying"
+                    f" in {delay:.1f}s (attempt"
+                    f" {consecutive_failures})."
+                )
+                await asyncio.sleep(delay)
+                continue
             await asyncio.sleep(self.heartbeat_poll_interval)
 
     async def _maintain_notifications(self):
@@ -455,19 +573,50 @@ class Worker:
             separate from the shared connection pool and is not counted against
             the pool's connection limit.
         """
-        connection = await AsyncConnection.connect(
-            self.chancy.dsn, autocommit=True
-        )
-        await connection.execute(
-            sql.SQL("LISTEN {channel};").format(
-                channel=sql.Identifier(f"{self.chancy.prefix}events")
-            )
-        )
-        self.chancy.log.info("Started listening for realtime notifications.")
-        self._notifications_ready_event.set()
-        async for notification in connection.notifies():
-            j = json.loads(notification.payload)
-            await self.hub.emit(j.pop("t"), j)
+        consecutive_failures = 0
+        ever_connected = False
+        while True:
+            connection = None
+            try:
+                connection = await AsyncConnection.connect(
+                    self.chancy.dsn, autocommit=True
+                )
+                await connection.execute(
+                    sql.SQL("LISTEN {channel};").format(
+                        channel=sql.Identifier(f"{self.chancy.prefix}events")
+                    )
+                )
+                self.chancy.log.info(
+                    "Started listening for realtime notifications."
+                )
+                self._notifications_ready_event.set()
+                ever_connected = True
+                consecutive_failures = 0
+                async for notification in connection.notifies():
+                    j = json.loads(notification.payload)
+                    await self.hub.emit(j.pop("t"), j)
+            except (OperationalError, InterfaceError):
+                if not ever_connected:
+                    raise
+                consecutive_failures += 1
+                if (
+                    self.backoff_max_retries is not None
+                    and consecutive_failures > self.backoff_max_retries
+                ):
+                    raise
+                delay = self._calculate_backoff(consecutive_failures - 1)
+                self.chancy.log.exception(
+                    f"Transient error in notifications listener,"
+                    f" reconnecting in {delay:.1f}s (attempt"
+                    f" {consecutive_failures})."
+                )
+                await asyncio.sleep(delay)
+            finally:
+                if connection is not None:
+                    try:
+                        await connection.close()
+                    except (OperationalError, InterfaceError):
+                        pass
 
     async def _maintain_updates(self):
         """
@@ -480,78 +629,132 @@ class Worker:
         controlled by setting the `send_outgoing_interval` attribute on the
         worker.
         """
+        consecutive_failures = 0
         while True:
-            if self.outgoing.empty():
+            if not self._pending_updates and self.outgoing.empty():
                 await asyncio.sleep(self.send_outgoing_interval)
                 continue
 
-            pending_updates = []
-            while len(pending_updates) < 1000:
-                try:
-                    pending_updates.append(self.outgoing.get_nowait())
-                except asyncio.QueueEmpty:
-                    break
+            try:
+                await self.flush()
+            except (OperationalError, InterfaceError):
+                consecutive_failures += 1
+                if (
+                    self.backoff_max_retries is not None
+                    and consecutive_failures > self.backoff_max_retries
+                ):
+                    raise
+                delay = self._calculate_backoff(consecutive_failures - 1)
+                self.chancy.log.exception(
+                    f"Transient error applying outgoing job updates,"
+                    f" retrying in {delay:.1f}s"
+                    f" (attempt {consecutive_failures})."
+                )
+                await asyncio.sleep(delay)
+                continue
+            except Exception:
+                self.chancy.log.exception(
+                    "Failed while processing outgoing job updates."
+                )
+                raise
 
-            self.chancy.log.debug(
-                f"Processing {len(pending_updates)} outgoing updates."
-            )
-
-            async with self.chancy.pool.connection() as conn:
-                async with conn.cursor(row_factory=dict_row) as cursor:
-                    async with conn.transaction():
-                        try:
-                            await cursor.executemany(
-                                sql.SQL(
-                                    """
-                                    UPDATE
-                                        {jobs}
-                                    SET
-                                        state = %(state)s,
-                                        started_at = %(started_at)s,
-                                        completed_at = %(completed_at)s,
-                                        scheduled_at = %(scheduled_at)s,
-                                        attempts = %(attempts)s,
-                                        errors = %(errors)s,
-                                        meta = %(meta)s,
-                                        max_attempts = %(max_attempts)s
-                                    WHERE
-                                        id = %(id)s
-                                    """
-                                ).format(
-                                    jobs=sql.Identifier(
-                                        f"{self.chancy.prefix}jobs"
-                                    )
-                                ),
-                                [
-                                    {
-                                        "id": update.id,
-                                        "state": update.state.value,
-                                        "started_at": update.started_at,
-                                        "completed_at": update.completed_at,
-                                        "scheduled_at": update.scheduled_at,
-                                        "attempts": update.attempts,
-                                        "errors": Json(update.errors),
-                                        "meta": Json(update.meta),
-                                        "max_attempts": update.max_attempts,
-                                    }
-                                    for update in pending_updates
-                                ],
-                            )
-                        except Exception:
-                            # If we were unable to apply the updates, we should
-                            # re-queue them for the next poll.
-                            self.chancy.log.exception(
-                                "Failed to apply updates to job instances."
-                            )
-                            for update in pending_updates:
-                                await self.outgoing.put(update)
-                            raise
-
-            for update in pending_updates:
-                for plugin in self.chancy.plugins.values():
-                    await plugin.on_job_updated(job=update, worker=self)
-
+            consecutive_failures = 0
             await asyncio.sleep(self.send_outgoing_interval)
+
+    async def flush(self) -> None:
+        """
+        Persist pending job updates without stopping the worker.
+
+        Updates accepted by :meth:`queue_update` are written in batches until
+        the outgoing queue is empty. This also waits for each batch's
+        ``on_job_updated`` plugin hooks, but does not wait for running jobs to
+        finish. Concurrent calls, including the periodic writer and shutdown,
+        are serialized.
+
+        Database errors propagate to the caller. If a write fails or is
+        cancelled, its batch is retained ahead of newer updates for a later
+        attempt. Earlier batches may already be committed.
+
+        Within each batch, database writes follow unique-key order to avoid
+        deadlocks with concurrent pushes. Updates to the same job retain their
+        original order, as do the plugin callbacks.
+
+        .. code-block:: python
+
+            await worker.queue_update(updated_job)
+            await worker.flush()
+        """
+        async with self._outgoing_lock:
+            while self._pending_updates or not self.outgoing.empty():
+                pending_updates = self._pending_updates
+                while len(pending_updates) < 1000:
+                    try:
+                        pending_updates.append(self.outgoing.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+
+                self.chancy.log.debug(
+                    f"Processing {len(pending_updates)} outgoing updates."
+                )
+
+                # Match push_many_ex's lock order. The stable sort preserves
+                # updates to the same job; keep the retained batch and hooks
+                # in their original order.
+                ordered_updates = sorted(
+                    pending_updates,
+                    key=lambda update: (
+                        lock_order_key(update.unique_key),
+                        update.id,
+                    ),
+                )
+
+                async with (
+                    self.chancy.pool.connection() as conn,
+                    conn.cursor(row_factory=dict_row) as cursor,
+                    conn.transaction(),
+                ):
+                    await cursor.executemany(
+                        sql.SQL(
+                            """
+                            UPDATE
+                                {jobs}
+                            SET
+                                state = %(state)s,
+                                started_at = %(started_at)s,
+                                completed_at = %(completed_at)s,
+                                scheduled_at = %(scheduled_at)s,
+                                attempts = %(attempts)s,
+                                errors = %(errors)s,
+                                meta = %(meta)s,
+                                max_attempts = %(max_attempts)s
+                            WHERE
+                                id = %(id)s
+                            """
+                        ).format(
+                            jobs=sql.Identifier(f"{self.chancy.prefix}jobs")
+                        ),
+                        [
+                            {
+                                "id": update.id,
+                                "state": update.state.value,
+                                "started_at": update.started_at,
+                                "completed_at": update.completed_at,
+                                "scheduled_at": update.scheduled_at,
+                                "attempts": update.attempts,
+                                "errors": Json(update.errors),
+                                "meta": Json(update.meta),
+                                "max_attempts": update.max_attempts,
+                            }
+                            for update in ordered_updates
+                        ],
+                    )
+
+                # Only discard the batch once its transaction has committed.
+                self._pending_updates = []
+
+                for update in pending_updates:
+                    for plugin in self.chancy.plugins.values():
+                        await plugin.on_job_updated(job=update, worker=self)
 
     async def announce_worker(self, conn: AsyncConnection):
         """
@@ -562,21 +765,18 @@ class Worker:
 
         :param conn: The connection to use for the announcement.
         """
-        async with conn.cursor(row_factory=dict_row) as cur:
-            async with conn.transaction():
-                await cur.execute(
-                    sql.SQL(
-                        """
+        async with conn.cursor(row_factory=dict_row) as cur, conn.transaction():
+            await cur.execute(
+                sql.SQL(
+                    """
                         DELETE FROM {workers}
                         WHERE expires_at < NOW()
                         """
-                    ).format(
-                        workers=sql.Identifier(f"{self.chancy.prefix}workers")
-                    )
-                )
-                await cur.execute(
-                    sql.SQL(
-                        """
+                ).format(workers=sql.Identifier(f"{self.chancy.prefix}workers"))
+            )
+            await cur.execute(
+                sql.SQL(
+                    """
                         INSERT INTO {workers}
                             (worker_id, last_seen, expires_at, tags, queues)
                         VALUES (
@@ -592,21 +792,19 @@ class Worker:
                                 tags = EXCLUDED.tags,
                                 queues = EXCLUDED.queues
                         """
-                    ).format(
-                        workers=sql.Identifier(f"{self.chancy.prefix}workers"),
-                        timeout=sql.Literal(
-                            f"{self.heartbeat_timeout} seconds"
-                        ),
-                    ),
-                    {
-                        "worker_id": self.worker_id,
-                        "tags": list(self.worker_tags()),
-                        "queues": list(self._queues.keys()),
-                    },
-                )
-                await self.chancy.notify(
-                    cur, "worker.announced", {"worker_id": self.worker_id}
-                )
+                ).format(
+                    workers=sql.Identifier(f"{self.chancy.prefix}workers"),
+                    timeout=sql.Literal(f"{self.heartbeat_timeout} seconds"),
+                ),
+                {
+                    "worker_id": self.worker_id,
+                    "tags": list(self.worker_tags()),
+                    "queues": list(self._queues.keys()),
+                },
+            )
+            await self.chancy.notify(
+                cur, "worker.announced", {"worker_id": self.worker_id}
+            )
 
     def worker_tags(self) -> set[str]:
         """
@@ -627,18 +825,24 @@ class Worker:
             *self._extra_tags,
         }
 
-    async def queue_update(self, update: QueuedJob):
+    async def queue_update(self, update: QueuedJob) -> bool:
         """
         Enqueue an update to a job instance.
 
         This method will queue an update to a job instance to be processed in
         periodic batches, reducing the number of transactions that need to be
         made. You can control the frequency of these updates by setting the
-        `send_outgoing_interval` attribute on the worker.
+        `send_outgoing_interval` attribute on the worker. Await :meth:`flush`
+        after an accepted update to persist it immediately.
 
         :param update: The job instance to update.
+        :return: Whether the update was accepted by the worker.
         """
-        await self.outgoing.put(update)
+        if not self._accepting_updates:
+            return False
+
+        self.outgoing.put_nowait(update)
+        return True
 
     async def fetch_jobs(
         self,
@@ -666,18 +870,20 @@ class Worker:
             f"{self.chancy.prefix}queue_rate_limits"
         )
 
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            async with conn.transaction():
-                # If the queue is configured to use a rate limit, we need to
-                # check if there's any remaining capacity in the current
-                # window.
-                if queue.rate_limit:
-                    now = int(time.time())
-                    window_start = now - (now % queue.rate_limit_window)
+        async with (
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            # If the queue is configured to use a rate limit, we need to
+            # check if there's any remaining capacity in the current
+            # window.
+            if queue.rate_limit:
+                now = int(time.time())
+                window_start = now - (now % queue.rate_limit_window)
 
-                    await cursor.execute(
-                        sql.SQL(
-                            """
+                await cursor.execute(
+                    sql.SQL(
+                        """
                             INSERT INTO {rate_limits_table} (
                                 queue,
                                 window_start,
@@ -695,24 +901,24 @@ class Worker:
                                 window_start = EXCLUDED.window_start
                             RETURNING count
                             """
-                        ).format(rate_limits_table=rate_limits_table),
-                        (queue.name, window_start),
-                    )
+                    ).format(rate_limits_table=rate_limits_table),
+                    (queue.name, window_start),
+                )
 
-                    result = await cursor.fetchone()
-                    current_count = result["count"]
+                result = await cursor.fetchone()
+                current_count = result["count"]
 
-                    # If we've hit the rate limit, return early with no jobs
-                    # fetched.
-                    if current_count >= queue.rate_limit:
-                        return []
+                # If we've hit the rate limit, return early with no jobs
+                # fetched.
+                if current_count >= queue.rate_limit:
+                    return []
 
-                    # Adjust up_to based on remaining rate limit
-                    up_to = min(up_to, queue.rate_limit - current_count)
+                # Adjust up_to based on remaining rate limit
+                up_to = min(up_to, queue.rate_limit - current_count)
 
-                await cursor.execute(
-                    sql.SQL(
-                        """
+            await cursor.execute(
+                sql.SQL(
+                    """
                         WITH selected_jobs AS (
                             SELECT
                                 id
@@ -745,33 +951,33 @@ class Worker:
                             {jobs}.id = selected_jobs.id
                         RETURNING {jobs}.*
                         """
-                    ).format(
-                        jobs=jobs_table,
-                    ),
-                    {
-                        "queue": queue.name,
-                        "maximum_jobs_to_fetch": up_to,
-                        "worker_id": self.worker_id,
-                    },
-                )
+                ).format(
+                    jobs=jobs_table,
+                ),
+                {
+                    "queue": queue.name,
+                    "maximum_jobs_to_fetch": up_to,
+                    "worker_id": self.worker_id,
+                },
+            )
 
-                records = await cursor.fetchall()
+            records = await cursor.fetchall()
 
-                # If a rate limit is configured, and we ended up fetching jobs,
-                # we need to increment the rate limit counter.
-                if queue.rate_limit and records:
-                    await cursor.execute(
-                        sql.SQL(
-                            """
+            # If a rate limit is configured, and we ended up fetching jobs,
+            # we need to increment the rate limit counter.
+            if queue.rate_limit and records:
+                await cursor.execute(
+                    sql.SQL(
+                        """
                             UPDATE {rate_limits_table}
                             SET count = count + %s
                             WHERE queue = %s
                             """
-                        ).format(rate_limits_table=rate_limits_table),
-                        (len(records), queue.name),
-                    )
+                    ).format(rate_limits_table=rate_limits_table),
+                    (len(records), queue.name),
+                )
 
-                return [QueuedJob.unpack(record) for record in records]
+            return [QueuedJob.unpack(record) for record in records]
 
     async def on_signal(self, signum: int):
         """
@@ -781,16 +987,18 @@ class Worker:
         the signal is received again, it will force a shutdown.
         """
         if signum in (signal.SIGTERM, signal.SIGINT):
-            # If the worker is already shutting down, we force an immediate
-            # shutdown.
-            if self.shutdown_event.is_set():
+            if self._signal_received:
                 self.chancy.log.warning(
                     "Received signal again, forcing shutdown."
                 )
-                asyncio.get_running_loop().stop()
+                self._force_shutdown()
+                return
 
-            self.shutdown_event.set()
-            await self.manager.cancel_all()
+            self._signal_received = True
+            await self.stop()
+
+    def _force_shutdown(self):
+        asyncio.get_running_loop().stop()
 
     async def on_job_completed(self, *, queue: Queue, job: QueuedJob):
         """
@@ -802,51 +1010,97 @@ class Worker:
         if queue.eager_polling and queue.name in self._queues:
             self.queue_wake_events[queue.name].set()
 
-    async def stop(self) -> bool:
+    async def stop(self, *, timeout: float | None = None) -> bool:
         """
         Stop the worker.
 
-        Attempts to stop the worker gracefully, sending a CancelledError to all
-        running tasks and waiting up to `shutdown_timeout` seconds for them to
-        complete before returning.
+        Stops polling for new work and gives active executors up to
+        `shutdown_timeout` seconds to drain. If that deadline expires, worker
+        maintenance tasks are cancelled and any job updates already produced
+        are flushed before this method returns. Jobs already running in a
+        thread or sub-interpreter cannot be forcibly interrupted and may
+        continue in the background. Their later updates are ignored, leaving
+        the jobs for recovery by another worker.
 
-        Returns True if the worker was stopped cleanly, or False if the worker
-        returned due to the timeout expiring.
+        Returns True if the executors drained before the deadline, or False if
+        forced teardown was required.
+
+        If final persistence fails, a later call retries it without repeating
+        completed teardown or changing the original drain result.
+
+        :param timeout: An optional timeout in seconds to wait for the worker to
+            stop before forcing a shutdown. If not provided, the worker's
+            `shutdown_timeout` attribute will be used.
         """
+        if (
+            self._stop_task is not None
+            and self._stop_task.done()
+            and (
+                self._stop_task.cancelled()
+                or self._stop_task.exception() is not None
+            )
+        ):
+            self._stop_task = None
+
+        if self._stop_task is None:
+            timeout = timeout if timeout is not None else self.shutdown_timeout
+            self._stop_task = asyncio.create_task(self._stop(timeout))
+
+        return await asyncio.shield(self._stop_task)
+
+    async def _stop(self, timeout: float) -> bool:
+        """Share teardown and finish persisting the accepted job updates."""
+        if self._drain_result is None:
+            self._drain_result = await self._drain(timeout)
+
+        await self.flush()
+        await self.hub.emit(
+            "worker.stopped"
+            if self._drain_result
+            else "worker.shutdown_timeout",
+            {"worker": self},
+        )
+        return self._drain_result
+
+    async def _drain(self, timeout: float) -> bool:
+        """Drain executors and tear down the worker's maintenance tasks."""
+        self.shutdown_event.set()
+        clean = True
+
         try:
-            async with asyncio.timeout(self.shutdown_timeout) as cm:
+            async with asyncio.timeout(timeout) as cm:
                 # Stop accepting new queues and queue changes.
                 try:
                     await self.manager.cancel("queues")
                 except KeyError:
                     pass
-                # Delete all the queues we know about so the executors can
-                # clean up.
+
+                # Stop queue loops from fetching more work and wake them so
+                # they can observe the removal immediately.
                 self._queues.clear()
+                for wake_event in self.queue_wake_events.values():
+                    wake_event.set()
+
+                # Keep persisting completions while jobs drain: a running job
+                # may be waiting for another job's saved result.
                 while self._executors:
-                    await asyncio.sleep(0.1)
-                # And finally axe everything else started by this worker.
-                await self.manager.cancel_all()
+                    await asyncio.sleep(0.01)
         except TimeoutError:
             # We check this instead of depending on the exception in case the
             # exception wasn't really raised by us but a nested timeout.
             if cm.expired():
-                await self.hub.emit(
-                    "worker.shutdown_timeout",
-                    {
-                        "worker": self,
-                    },
-                )
-                return False
-            raise
+                clean = False
+            else:
+                raise
 
-        await self.hub.emit(
-            "worker.stopped",
-            {
-                "worker": self,
-            },
-        )
-        return True
+        # From this point on, completions from abandoned jobs are ignored.
+        # Anything accepted before the cutoff is persisted by the final flush.
+        self._accepting_updates = False
+
+        # Teardown must happen even when the graceful drain exceeded its
+        # timeout. Preserve its result before attempting final persistence.
+        await self.manager.cancel_all()
+        return clean
 
     async def _handle_cancellation(self, event: Event):
         self.chancy.log.info(
@@ -869,6 +1123,54 @@ class Worker:
         :return: A dictionary of executors keyed by queue name.
         """
         return self._executors
+
+    async def increment_counter(self, metric_key: str, value: float):
+        """
+        Increment a counter metric by the specified value.
+
+        This method emits a metrics.counter event that metrics plugins can
+        subscribe to. If no metrics plugin is active, the event is simply
+        ignored with no overhead.
+
+        :param metric_key: The hierarchical key for the metric (e.g.,
+            "workflow:created", "queue:default:throughput")
+        :param value: The value to increment the counter by
+        """
+        await self.hub.emit(
+            "metrics.counter", {"key": metric_key, "value": value}
+        )
+
+    async def record_gauge(self, metric_key: str, value: float):
+        """
+        Record a gauge metric value.
+
+        This method emits a metrics.gauge event that metrics plugins can
+        subscribe to. If no metrics plugin is active, the event is simply
+        ignored with no overhead.
+
+        :param metric_key: The hierarchical key for the metric (e.g.,
+            "workflow:active_count", "queue:default:size")
+        :param value: The current gauge value
+        """
+        await self.hub.emit(
+            "metrics.gauge", {"key": metric_key, "value": value}
+        )
+
+    async def record_histogram_value(self, metric_key: str, value: float):
+        """
+        Record a value for a histogram metric.
+
+        This method emits a metrics.histogram event that metrics plugins can
+        subscribe to. If no metrics plugin is active, the event is simply
+        ignored with no overhead.
+
+        :param metric_key: The hierarchical key for the metric (e.g.,
+            "workflow:execution_time", "job:my_function:duration")
+        :param value: The value to record in the histogram
+        """
+        await self.hub.emit(
+            "metrics.histogram", {"key": metric_key, "value": value}
+        )
 
     def __repr__(self):
         return f"<Worker({self.worker_id!r})>"

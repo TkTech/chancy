@@ -1,6 +1,57 @@
 Changelog
 =========
 
+0.26.0
+------
+
+✨ Improvements
+
+- Reworked the dashboard, much more informative for operational insights,
+  light/dark themes.
+- Added much, much better composable filtering widgets to both jobs and
+  workflows.
+- Added a visualization of your upcoming (and past) cron schedule, making it
+  easy to identify overloaded periods.
+- Added a realtime view of the internal Chancy communication traffic, helping
+  to debug and identify pain points (like using `push()` in a loop instead of
+  a single `push_many()`).
+- HTTP API now supports mutation - create queues on the fly, move jobs around,
+  retry workflows, etc...
+- HTTP API is now stable, with documentation still a work in progress.
+- HTTP API now includes an unauthenticated endpoint for health checks, meant
+  for docker/containers (#54).
+- Added dozens of new metrics, including metrics on workflows.
+- The starlette app can now be created without being started for advanced use
+  cases, and the mounting prefix for the SPA can be changed (@jklaise, #64).
+- Workflow performance has been significantly improved and can now handle
+  many, individual workflows with thousands of jobs without issue.
+- Can now be used as a django-tasks backend, albeit with less functionality
+  than using Chancy directly.
+- Executors now declare their capabilities with `Executor.supports` and
+  `Executor.get_capabilities()`, such as time out and memory limit support.
+- Threaded and sub-interpreter executors now support co-operative timeouts
+  by periodically calling `QueuedJob.checkpoint()`.
+- `Executor.get_function_and_kwargs()` is now a classmethod used by every
+  built-in executor, so subclasses can override it to inject their own keyword
+  arguments into jobs (@PaulM5406, #46).
+
+🐛 Fixes
+
+- Respect CLI flags for API plugin configuration by @alfawal (#68).
+- Fixed an issue that allowed the reprioritize plugin to update the same job
+  multiple times in different batches of the same run.
+- Job timeouts on the threaded and sub-interpreter executors are now
+  co-operative - non-cooperative timeouts are not reliable in CPython's model (
+  how do we cleanup a job that's holding a cross-thread lock?)
+- `wait_for_jobs()` could wait forever if a job was purged and no timeout was
+  provided.
+- Fixed a very rare split-brain issue where a worker becoming the leader could
+  extend the leadership of the previous leader, causing duplicate work for 1
+  cycle.
+- Pushing jobs with unique keys and the worker's batched job updates now lock
+  rows in the same order, fixing a deadlock between overlapping pushes and
+  updates that could fail either side (@AudeCstg, #89).
+
 0.25.1
 ------
 
