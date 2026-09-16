@@ -70,9 +70,13 @@ async def test_flush_preserves_update_order_on_retry(
 ):
     """An interrupted batch must stay ahead of newer updates on retry."""
     await chancy.declare(Queue("default"))
-    ref = await chancy.push(job_to_run.job)
+    ref = await chancy.push(job_to_run.job.with_unique_key("b"))
+    other_ref = await chancy.push(job_to_run.job.with_unique_key("a"))
     queued_job = await chancy.get_job(ref)
     await worker_no_start.queue_update(queued_job.with_meta({"revision": 1}))
+    await worker_no_start.queue_update(
+        (await chancy.get_job(other_ref)).with_meta({"revision": 1})
+    )
 
     async def interrupt_write(*args, **kwargs):
         await worker_no_start.queue_update(
@@ -87,6 +91,7 @@ async def test_flush_preserves_update_order_on_retry(
 
     await worker_no_start.flush()
     assert (await chancy.get_job(ref)).meta == {"revision": 2}
+    assert (await chancy.get_job(other_ref)).meta == {"revision": 1}
 
 
 @pytest.mark.asyncio
