@@ -168,11 +168,12 @@ class Executor(abc.ABC):
 
             This method runs wherever the executor runs the job: in the
             worker's event loop, in a pool thread, in a sub-interpreter or in
-            a child process. Nothing is shared across that boundary: the
-            executor subclass is imported again on the other side, so it must
-            be importable by name, and anything injected must be created there
-            (for example from :meth:`on_initialize_worker`), never handed over
-            from the worker process.
+            a child process. For process and sub-interpreter executors, the
+            executor subclass must be importable by name, and injected
+            resources should be created in that execution context (for
+            example from ``on_initialize_worker``). Async and threaded
+            executors share the worker's memory; injected resources must be
+            compatible with the event loop or thread where the job runs.
 
         :param job: The job instance to get the function and arguments for.
         :return: A tuple containing the function and its keyword arguments.
