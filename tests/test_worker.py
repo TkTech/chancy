@@ -1,8 +1,9 @@
 import asyncio
 import time
+from unittest.mock import Mock
 
 import pytest
-from psycopg import OperationalError
+from psycopg import AsyncCursor, OperationalError
 
 from chancy import Chancy, Queue, QueuedJob, Worker, job
 from chancy.errors import MigrationsNeededError
@@ -21,6 +22,71 @@ def job_that_fails():
 @job()
 def job_that_sleeps():
     time.sleep(0.5)
+
+
+@pytest.mark.asyncio
+async def test_flush_persists_pending_updates(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """Updates can be persisted on demand while the worker stays usable."""
+    await chancy.declare(Queue("default"))
+    ref = await chancy.push(job_to_run.job)
+    queued_job = await chancy.get_job(ref)
+
+    for revision in (1, 2):
+        update = queued_job.with_meta({"revision": revision})
+        assert await worker_no_start.queue_update(update)
+        await worker_no_start.flush()
+        assert (await chancy.get_job(ref)).meta == update.meta
+
+
+@pytest.mark.asyncio
+async def test_flush_preserves_updates_after_database_error(
+    chancy: Chancy, worker_no_start: Worker, monkeypatch
+):
+    """An update survives a failed flush and is persisted on retry."""
+    await chancy.declare(Queue("default"))
+    ref = await chancy.push(job_to_run.job)
+    update = (await chancy.get_job(ref)).with_meta({"flushed": True})
+    await worker_no_start.queue_update(update)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            chancy.pool,
+            "connection",
+            Mock(side_effect=OperationalError("Transient failure")),
+        )
+        with pytest.raises(OperationalError, match="Transient failure"):
+            await worker_no_start.flush()
+
+    await worker_no_start.flush()
+    assert (await chancy.get_job(ref)).meta == update.meta
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [asyncio.CancelledError, OperationalError])
+async def test_flush_preserves_update_order_on_retry(
+    chancy: Chancy, worker_no_start: Worker, monkeypatch, error
+):
+    """An interrupted batch must stay ahead of newer updates on retry."""
+    await chancy.declare(Queue("default"))
+    ref = await chancy.push(job_to_run.job)
+    queued_job = await chancy.get_job(ref)
+    await worker_no_start.queue_update(queued_job.with_meta({"revision": 1}))
+
+    async def interrupt_write(*args, **kwargs):
+        await worker_no_start.queue_update(
+            queued_job.with_meta({"revision": 2})
+        )
+        raise error()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AsyncCursor, "executemany", interrupt_write)
+        with pytest.raises(error):
+            await worker_no_start.flush()
+
+    await worker_no_start.flush()
+    assert (await chancy.get_job(ref)).meta == {"revision": 2}
 
 
 @pytest.mark.asyncio

@@ -101,25 +101,6 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         )
         return future
 
-    def _on_job_completed(
-        self, future: Future, loop: asyncio.AbstractEventLoop
-    ):
-        job = self.jobs.pop(future)
-
-        result = None
-        exc = future.exception()
-        if exc is None:
-            job, result = future.result()
-
-        asyncio.run_coroutine_threadsafe(
-            self.on_job_completed(job=job, exc=exc, result=result),
-            loop,
-        )
-
-    async def stop(self):
-        self.pool.shutdown(cancel_futures=True)
-        await super().stop()
-
     def get_default_concurrency(self) -> int:
         """
         Get the default concurrency level for this executor.

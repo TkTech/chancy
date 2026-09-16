@@ -71,14 +71,24 @@ class AsyncExecutor(Executor):
     def get_running_jobs(self) -> list["QueuedJob"]:
         return list(self.jobs.values())
 
+    def _cancel_jobs(self) -> list[asyncio.Task]:
+        tasks = list(self.jobs)
+        for task in tasks:
+            task.cancel()
+        return tasks
+
     async def stop(self):
         """
         Stop the executor, giving it a chance to clean up any resources it
         may have allocated to running jobs.
         """
-        for task in self.jobs:
-            task.cancel()
-        await asyncio.gather(*self.jobs)
+        await asyncio.gather(
+            *self._cancel_jobs(),
+            return_exceptions=True,
+        )
+
+    async def _stop_on_cancel(self):
+        self._cancel_jobs()
 
     def get_default_concurrency(self):
         """

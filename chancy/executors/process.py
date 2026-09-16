@@ -139,12 +139,12 @@ class ProcessExecutor(ConcurrentExecutor):
             self.pids_for_job,
             self.pending_cancellations,
         )
+        self.jobs[future] = job
         future.add_done_callback(
             functools.partial(
                 self._on_job_completed, loop=asyncio.get_running_loop()
             )
         )
-        self.jobs[future] = job
         time_limit = self.get_limit(job, Limit.Type.TIME)
         if time_limit is not None and self.supports(
             Executor.Capability.AUTOMATIC_TIME_LIMITS
@@ -238,28 +238,39 @@ class ProcessExecutor(ConcurrentExecutor):
     def _on_job_completed(
         self, future: Future, loop: asyncio.AbstractEventLoop
     ):
-        job = self.jobs.pop(future)
+        job = self.jobs.get(future)
+        if job is None:
+            return
 
         timeout_task = self.timeouts.pop(job.id, None)
         if timeout_task is not None:
             timeout_task.cancel()
 
-        result = None
-        exc = future.exception()
-        if exc is None:
-            job, result = future.result()
+        super()._on_job_completed(future, loop)
 
-        asyncio.run_coroutine_threadsafe(
-            self.on_job_completed(job=job, exc=exc, result=result),
-            loop,
-        )
+    def _shutdown_blocking(self):
+        super()._shutdown_blocking()
+        self.manager.shutdown()
 
     async def stop(self):
         for task in self.timeouts.values():
             task.cancel()
 
-        self.pool.shutdown(cancel_futures=True)
-        self.manager.shutdown()
+        await super().stop()
+
+    async def _stop_on_cancel(self):
+        for task in self.timeouts.values():
+            task.cancel()
+
+        if hasattr(signal, "SIGUSR1"):
+            for pid in list(self.pids_for_job.values()):
+                try:
+                    os.kill(pid, signal.SIGUSR1)
+                except (ProcessLookupError, PermissionError):
+                    pass
+
+        await super()._stop_on_cancel()
+        await asyncio.to_thread(self.manager.shutdown)
 
     async def cancel(self, ref: Reference):
         """

@@ -81,7 +81,7 @@ class Executor(abc.ABC):
         self,
         *,
         job: QueuedJob,
-        exc: Exception | None = None,
+        exc: BaseException | None = None,
         result: Any = None,
     ):
         """
@@ -282,6 +282,10 @@ class Executor(abc.ABC):
         called.
         """
 
+    async def _stop_on_cancel(self):
+        """Start executor teardown while its queue task is being cancelled."""
+        await self.stop()
+
     @abc.abstractmethod
     async def cancel(self, ref: Reference):
         """
@@ -360,7 +364,12 @@ class Executor(abc.ABC):
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
-        await self.stop()
+        if exc_type is not None and issubclass(
+            exc_type, asyncio.CancelledError
+        ):
+            await self._stop_on_cancel()
+        else:
+            await self.stop()
 
 
 class ConcurrentExecutor(Executor, ABC):
@@ -373,6 +382,18 @@ class ConcurrentExecutor(Executor, ABC):
         super().__init__(worker, queue)
         self.jobs: dict[Future, QueuedJob] = {}
 
+    def _shutdown_blocking(self):
+        """Shut down the underlying pool without blocking the event loop."""
+        self.pool.shutdown(wait=True, cancel_futures=True)
+
+    async def stop(self):
+        await asyncio.to_thread(self._shutdown_blocking)
+
+    async def _stop_on_cancel(self):
+        # Running threads and sub-interpreters cannot be interrupted. Do not
+        # wait for them after the worker's graceful drain has expired.
+        self.pool.shutdown(wait=False, cancel_futures=True)
+
     async def cancel(self, ref: Reference):
         for future, job in self.jobs.items():
             if job.id == ref.identifier:
@@ -381,6 +402,43 @@ class ConcurrentExecutor(Executor, ABC):
 
     def get_running_jobs(self) -> list[QueuedJob]:
         return list(self.jobs.values())
+
+    def _on_job_completed(
+        self, future: Future, loop: asyncio.AbstractEventLoop
+    ):
+        """Queue a job update before considering its future fully drained."""
+        job = self.jobs.get(future)
+        if job is None:
+            return
+
+        result = None
+        if future.cancelled():
+            exc: BaseException | None = asyncio.CancelledError(
+                "Job was cancelled before it could complete."
+            )
+        else:
+            exc = future.exception()
+            if exc is None:
+                job, result = future.result()
+
+        completion = self._complete_job(future, job, exc, result)
+        try:
+            asyncio.run_coroutine_threadsafe(completion, loop)
+        except RuntimeError:
+            completion.close()
+            self.jobs.pop(future, None)
+
+    async def _complete_job(
+        self,
+        future: Future,
+        job: QueuedJob,
+        exc: BaseException | None,
+        result: Any,
+    ):
+        try:
+            await self.on_job_completed(job=job, exc=exc, result=result)
+        finally:
+            self.jobs.pop(future, None)
 
     def __len__(self):
         return len(self.jobs)
