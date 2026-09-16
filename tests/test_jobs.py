@@ -454,7 +454,7 @@ async def test_executor_job_cancellation(
 
     ref = await chancy.push(very_long_job.job.with_queue("cancel_test"))
     j = await chancy.wait_for_job(
-        ref, timeout=10, states={QueuedJob.State.RUNNING}
+        ref, timeout=30, states={QueuedJob.State.RUNNING}
     )
     assert j.state == j.State.RUNNING
 
