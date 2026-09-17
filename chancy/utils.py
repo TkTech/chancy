@@ -29,6 +29,15 @@ class DatabaseConnection(TypedDict):
     OPTIONS: NotRequired[dict[str, Any]]
 
 
+def raise_if_cancelled() -> None:
+    """Restore cancellation swallowed by a dependency before polling again."""
+    # Python 3.11's wait_for() can lose CancelledError but leaves this count
+    # set. Check at polling boundaries, after database contexts have exited.
+    # https://github.com/python/cpython/issues/86296
+    if asyncio.current_task().cancelling():
+        raise asyncio.CancelledError
+
+
 async def sleep(
     seconds: int, *, events: Iterable[Coroutine] | None = None
 ) -> bool:
@@ -37,11 +46,13 @@ async def sleep(
     occurs.
     """
     if not events:
+        raise_if_cancelled()
         await asyncio.sleep(seconds)
         return True
 
     tasks = [asyncio.create_task(event) for event in events]
     try:
+        raise_if_cancelled()
         _done, pending = await asyncio.wait(
             tasks,
             timeout=seconds,
