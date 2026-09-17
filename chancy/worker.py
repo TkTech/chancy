@@ -25,7 +25,13 @@ from chancy.hub import Event, Hub
 from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
-from chancy.utils import TaskManager, import_string, lock_order_key, sleep
+from chancy.utils import (
+    TaskManager,
+    import_string,
+    lock_order_key,
+    raise_if_cancelled,
+    sleep,
+)
 
 
 class Worker:
@@ -338,6 +344,7 @@ class Worker:
                     for q in await self.chancy.get_all_queues()
                     if any(re.match(t, tag) for tag in tags for t in q.tags)
                 }
+                raise_if_cancelled()
 
                 for queue_name in list(self._queues.keys()):
                     if queue_name not in db_queues:
@@ -378,7 +385,7 @@ class Worker:
                     f" in {delay:.1f}s (attempt"
                     f" {consecutive_failures})."
                 )
-                await asyncio.sleep(delay)
+                await sleep(delay)
                 continue
 
             try:
@@ -526,7 +533,7 @@ class Worker:
                     f" {queue.name!r}, retrying in {delay:.1f}s"
                     f" (attempt {consecutive_failures})."
                 )
-                await asyncio.sleep(delay)
+                await sleep(delay)
 
     async def _maintain_heartbeat(self):
         """
@@ -556,9 +563,9 @@ class Worker:
                     f" in {delay:.1f}s (attempt"
                     f" {consecutive_failures})."
                 )
-                await asyncio.sleep(delay)
+                await sleep(delay)
                 continue
-            await asyncio.sleep(self.heartbeat_poll_interval)
+            await sleep(self.heartbeat_poll_interval)
 
     async def _maintain_notifications(self):
         """
@@ -592,9 +599,13 @@ class Worker:
                 self._notifications_ready_event.set()
                 ever_connected = True
                 consecutive_failures = 0
-                async for notification in connection.notifies():
-                    j = json.loads(notification.payload)
-                    await self.hub.emit(j.pop("t"), j)
+                while True:
+                    raise_if_cancelled()
+                    # Return to a cancellation checkpoint even when idle.
+                    async for notification in connection.notifies(timeout=1):
+                        raise_if_cancelled()
+                        j = json.loads(notification.payload)
+                        await self.hub.emit(j.pop("t"), j)
             except (OperationalError, InterfaceError):
                 if not ever_connected:
                     raise
@@ -610,7 +621,7 @@ class Worker:
                     f" reconnecting in {delay:.1f}s (attempt"
                     f" {consecutive_failures})."
                 )
-                await asyncio.sleep(delay)
+                await sleep(delay)
             finally:
                 if connection is not None:
                     try:
@@ -632,7 +643,7 @@ class Worker:
         consecutive_failures = 0
         while True:
             if not self._pending_updates and self.outgoing.empty():
-                await asyncio.sleep(self.send_outgoing_interval)
+                await sleep(self.send_outgoing_interval)
                 continue
 
             try:
@@ -650,7 +661,7 @@ class Worker:
                     f" retrying in {delay:.1f}s"
                     f" (attempt {consecutive_failures})."
                 )
-                await asyncio.sleep(delay)
+                await sleep(delay)
                 continue
             except Exception:
                 self.chancy.log.exception(
@@ -659,7 +670,7 @@ class Worker:
                 raise
 
             consecutive_failures = 0
-            await asyncio.sleep(self.send_outgoing_interval)
+            await sleep(self.send_outgoing_interval)
 
     async def flush(self) -> None:
         """

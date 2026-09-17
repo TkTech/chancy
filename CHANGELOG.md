@@ -37,6 +37,9 @@ Changelog
 
 🐛 Fixes
 
+- Worker and plugin polling loops now restore cancellation lost inside
+  dependencies, avoiding shutdown hangs caused by Python 3.11's `wait_for()`
+  race. Notification polling also checks cancellation while idle.
 - Respect CLI flags for API plugin configuration by @alfawal (#68).
 - Fixed an issue that allowed the reprioritize plugin to update the same job
   multiple times in different batches of the same run.
