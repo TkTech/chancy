@@ -472,6 +472,7 @@ class Chancy:
                 **result,
                 "name": queue.name,
                 "tags": set(result["tags"]),
+                "state": Queue.State(result["state"]),
             }
         )
 
@@ -513,6 +514,7 @@ class Chancy:
                 **result,
                 "name": queue.name,
                 "tags": set(result["tags"]),
+                "state": Queue.State(result["state"]),
             }
         )
 

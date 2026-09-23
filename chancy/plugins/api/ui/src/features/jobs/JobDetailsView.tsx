@@ -9,7 +9,7 @@ import { JobTimers } from './JobTimers';
 import { JsonViewer } from '../../components/JsonViewer';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }) {
+export function JobDetailsView({ job_id, onPurged }: { job_id: string, compact?: boolean, onPurged?: () => void }) {
   const { url } = useServerConfiguration();
   const { data: job, isLoading } = useJob({ url, job_id });
   const { retry, cancel, purge } = useJobActions();
@@ -32,7 +32,13 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
         {['succeeded','failed'].includes(job.state) && (
           <button className="btn btn-sm btn-danger" onClick={async () => {
             const ok = await confirm({ title: 'Purge Job', message: 'This will permanently delete the job record. Continue?' });
-            if (ok) purge.mutate(job.id);
+            if (!ok) return;
+            try {
+              await purge.mutateAsync(job.id);
+            } catch {
+              return;
+            }
+            onPurged?.();
           }}>Purge Job</button>
         )}
       </div>

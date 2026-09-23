@@ -70,13 +70,11 @@ def test_suffix(xdist_worker) -> str:
     return f"_{xdist_worker}"
 
 
-@pytest.fixture(scope="session")
-def event_loop_policy():
+def pytest_asyncio_loop_factories(config, item):
     # Since psycopg's asyncio implementation cannot use the default
-    # proactor event loop on Windows, we need to use the selector event loop.
-    if sys.platform == "win32":
-        return asyncio.WindowsSelectorEventLoopPolicy()
-    return asyncio.DefaultEventLoopPolicy()
+    # proactor event loop on Windows, we need to use a selector event loop.
+    # SelectorEventLoop is already the default everywhere else.
+    return {"selector": asyncio.SelectorEventLoop}
 
 
 @pytest_asyncio.fixture()

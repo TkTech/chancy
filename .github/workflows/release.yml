@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4.1.6
+    - uses: actions/checkout@v5
 
     - name: Set up Python
       uses: actions/setup-python@v6.0.0
@@ -83,7 +83,7 @@ jobs:
       PYTHON: ${{ matrix.python-version }}
 
     steps:
-      - uses: actions/checkout@v4.1.6
+      - uses: actions/checkout@v5
 
       - uses: ikalnytskyi/action-setup-postgres@v8
         with:
@@ -146,7 +146,7 @@ jobs:
           - {django: "6.1", pg: "18"}
 
     steps:
-      - uses: actions/checkout@v4.1.6
+      - uses: actions/checkout@v5
 
       - uses: ikalnytskyi/action-setup-postgres@v8
         with:
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4.1.6
+      - uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v6.0.0

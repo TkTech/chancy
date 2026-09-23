@@ -47,9 +47,14 @@ export function useJobActions() {
       if (Array.isArray(id)) return api.batchJobs(id, 'purge');
       return api.purgeJob(id);
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, id) => {
       toast.show('Job(s) purged', 'success');
-      await invalidate();
+      // The purged jobs no longer exist; refetching their detail queries
+      // would only 404 and retry, so drop them instead.
+      for (const jobId of Array.isArray(id) ? id : [id]) {
+        qc.removeQueries({ queryKey: ['job', url, jobId] });
+      }
+      await qc.invalidateQueries({ queryKey: ['jobs'] });
     },
     onError: (e: any) => toast.show(e?.message || 'Failed to purge job(s)', 'error'),
   });

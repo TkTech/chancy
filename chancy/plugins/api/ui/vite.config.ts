@@ -6,6 +6,15 @@ import svgr from 'vite-plugin-svgr';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), svgr(), visualizer()],
+  css: {
+    preprocessorOptions: {
+      scss: {
+        // Bootstrap 5.x still uses Sass features deprecated by the modern API.
+        quietDeps: true,
+        silenceDeprecations: ['import'],
+      },
+    },
+  },
   build: {
     outDir: '../dist',
     // Since our dist directory is outside the vite root,
