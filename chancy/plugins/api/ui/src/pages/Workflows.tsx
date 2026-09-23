@@ -2,7 +2,7 @@ import React from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {useWorkflow, useWorkflows, FilterTriple} from '../hooks/useWorkflows.tsx';
 import {Loading} from '../components/Loading.tsx';
-import {Link, useParams, useSearchParams} from 'react-router-dom';
+import {Link, useParams, useSearchParams} from 'react-router';
 import { useDrawer } from '../components/common/DrawerProvider';
 import { JobDetailsView } from '../features/jobs/JobDetailsView';
 // Drawer and JobDetailsView are not directly used here; navigation state opens drawer in Layout

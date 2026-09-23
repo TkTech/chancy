@@ -1,7 +1,7 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {useCrons} from '../hooks/useCrons.tsx';
 import {Loading} from '../components/Loading.tsx';
-import {Link, useParams} from 'react-router-dom';
+import {Link, useParams} from 'react-router';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import { PageHeader } from '../components/common/PageHeader';
 import { CronTimeline } from '../components/cron/CronTimeline';

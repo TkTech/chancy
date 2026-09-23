@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useServerConfiguration } from '../hooks/useServerConfiguration';
 import { Loading } from '../components/Loading';
 import { useMetricsOverview, useMetricDetail } from '../hooks/useMetrics';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import { MetricChart, ResolutionSelector } from '../components/MetricCharts';
 
 const MetricsWrapper = ({

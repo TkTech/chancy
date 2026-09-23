@@ -3,9 +3,9 @@ import { createRoot } from 'react-dom/client'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {
   createBrowserRouter,
-  redirect,
-  RouterProvider
-} from 'react-router-dom';
+  redirect
+} from 'react-router';
+import { RouterProvider } from 'react-router/dom';
 
 import Layout from './Layout.tsx'
 import './index.scss'

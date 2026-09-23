@@ -1,4 +1,4 @@
-import {NavLink, Outlet} from 'react-router-dom';
+import {NavLink, Outlet} from 'react-router';
 import {useServerConfiguration} from './hooks/useServerConfiguration.tsx';
 import {useMutation, useQueryClient} from '@tanstack/react-query';
 import {Loading, Spinner} from './components/Loading.tsx';

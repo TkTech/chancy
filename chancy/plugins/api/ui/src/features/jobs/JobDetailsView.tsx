@@ -2,7 +2,7 @@ import {useJob} from '../../hooks/useJobs';
 import {useServerConfiguration} from '../../hooks/useServerConfiguration';
 import {Loading} from '../../components/Loading';
 import {statusToColor} from '../../utils';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useJobActions } from '../../hooks/useJobActions';
 import { useConfirm } from '../../components/common/ConfirmDialog';
 import { JobTimers } from './JobTimers';

@@ -3,7 +3,7 @@ import {Loading} from '../components/Loading.tsx';
 import {useJobs, FilterTriple} from '../hooks/useJobs.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import React from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { useJobActions } from '../hooks/useJobActions.tsx';
 import { useConfirm } from '../components/common/ConfirmDialog.tsx';
 import { JobDetailsView } from '../features/jobs/JobDetailsView';

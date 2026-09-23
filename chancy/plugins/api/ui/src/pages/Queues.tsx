@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {Link, useParams} from 'react-router-dom';
+import {Link, useParams} from 'react-router';
 import {Loading} from '../components/Loading.tsx';
 import {useQueues} from '../hooks/useQueues.tsx';
 import {useWorkers} from '../hooks/useWorkers.tsx';

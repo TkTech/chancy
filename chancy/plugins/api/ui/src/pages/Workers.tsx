@@ -1,6 +1,6 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Loading} from '../components/Loading.tsx';
-import {Link, useParams} from 'react-router-dom';
+import {Link, useParams} from 'react-router';
 import {useWorkers, Worker} from '../hooks/useWorkers.tsx';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import {PageHeader} from '../components/common/PageHeader.tsx';

@@ -1,6 +1,6 @@
 import { useMetricDetail } from '../../hooks/useMetrics';
 import { MiniSparkline } from './MiniSparkline';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 interface QueueMetricsProps {
   queueName: string;

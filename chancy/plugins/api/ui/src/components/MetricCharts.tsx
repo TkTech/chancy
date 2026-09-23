@@ -4,7 +4,7 @@ import {
 } from 'recharts';
 import { MetricPoint, useMetricDetail, MetricType } from '../hooks/useMetrics';
 import { Loading } from './Loading';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
