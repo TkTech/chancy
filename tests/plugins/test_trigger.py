@@ -733,7 +733,7 @@ async def test_schema(chancy, test_suffix):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_different_schema(chancy: Chancy, worker, test_schema):
+async def test_trigger_different_schema(chancy: Chancy, test_schema):
     """Test trigger on a table in a non-public schema"""
     schema_name, table_name = test_schema
     await chancy.declare(Queue("trigger_events"))
