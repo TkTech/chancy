@@ -8,7 +8,9 @@ authors = [
     { name = "Tyler Kennedy", email = "tk@tkte.ch" }
 ]
 dependencies = [
-    "psycopg[pool]>=3.2.1",
+    "psycopg[pool]>=3.2.1; python_version != '3.11'",
+    # See psycopg issue 1413 and CPython issue 86296
+    "psycopg[pool]>=3.3.6; python_version == '3.11'",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
