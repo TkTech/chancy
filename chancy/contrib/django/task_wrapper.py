@@ -41,6 +41,8 @@ def django_task_executor(
     :param context: The Chancy QueuedJob, used to build TaskContext
     """
     func = import_string(_task_path)
+    if isinstance(func, Task):
+        func = func.func
 
     if _takes_context:
         task = _build_task_for_context(context, func)
@@ -74,6 +76,8 @@ async def async_django_task_executor(
     :param context: The Chancy QueuedJob, used to build TaskContext
     """
     func = import_string(_task_path)
+    if isinstance(func, Task):
+        func = func.func
 
     if _takes_context:
         task = _build_task_for_context(context, func)

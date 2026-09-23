@@ -56,6 +56,18 @@ async def async_add(a: int, b: int) -> int:
     return a + b
 
 
+if django.VERSION >= (6, 0):
+    from django.tasks import task
+
+    @task(takes_context=True)
+    def decorated_sync(context, value):
+        return {"value": value, "attempt": context.attempt}
+
+    @task
+    async def decorated_async(value):
+        return {"value": value, "attempt": 1}
+
+
 @pytest.fixture
 def django_tasks_settings(settings, chancy):
     """Configure Django Tasks to use the Chancy backend."""
@@ -288,3 +300,24 @@ async def test_async_task(chancy, django_tasks_settings):
         await result.arefresh()
         assert result.status == TaskResultStatus.SUCCESSFUL
         assert result.return_value == 12
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
+@pytest.mark.parametrize("task_name", ["decorated_sync", "decorated_async"])
+async def test_module_level_decorator(
+    chancy, worker, django_tasks_settings, task_name
+):
+    """Importing a decorated task resolves to Task, rather than a callable."""
+    from django.tasks import TaskResultStatus
+
+    from chancy import Reference
+
+    decorated = globals()[task_name]
+    result = await decorated.aenqueue(42)
+    await chancy.wait_for_job(Reference(result.id), timeout=10)
+
+    retrieved = await decorated.aget_result(result.id)
+    assert retrieved.status == TaskResultStatus.SUCCESSFUL
+    assert retrieved.task.func is decorated.func
+    assert retrieved.return_value == {"value": 42, "attempt": 1}

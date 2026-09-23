@@ -249,10 +249,14 @@ class ChancyBackend(BaseTaskBackend):
         if job is None:
             raise TaskResultDoesNotExist(result_id)
 
+        func = import_string(job.kwargs["_task_path"])
+        if isinstance(func, self.task_class):
+            func = func.func
+
         return _build_task_result_from_queued_job(
             job,
             self.task_class(
-                func=import_string(job.kwargs["_task_path"]),
+                func=func,
                 backend=self.alias,
                 queue_name=job.queue,
                 priority=job.priority,
