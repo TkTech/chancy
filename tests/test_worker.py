@@ -249,6 +249,50 @@ async def test_heartbeat_recovers_from_transient_error(
 
 
 @pytest.mark.asyncio
+async def test_updates_loop_honours_cancellation_hidden_by_psycopg(
+    chancy_just_app: Chancy,
+):
+    """
+    Psycopg can replace a ``CancelledError`` with an ``OperationalError``
+    (for example when a cancellation interrupts a pipelined ``executemany``).
+    The updates loop must still stop instead of treating it as a transient
+    error, or shutdown waits on it forever.
+    """
+    worker = Worker(chancy_just_app, register_signal_handlers=False)
+    worker.backoff_initial = 0.01
+    worker.backoff_max = 0.01
+    flush_started = asyncio.Event()
+
+    async def flush_cancelled_by_psycopg():
+        flush_started.set()
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            raise OperationalError("cannot exit pipeline mode while busy")
+
+    worker.flush = flush_cancelled_by_psycopg
+    worker.outgoing.put_nowait(Mock())
+
+    task = asyncio.create_task(worker._maintain_updates())
+    await flush_started.wait()
+    task.cancel()
+
+    # Don't await the task directly: a timeout would forward another
+    # cancellation into it, which the unfixed loop would swallow again.
+    done, _ = await asyncio.wait({task}, timeout=5)
+    if task not in done:
+        # Break the loop with a non-transient error so teardown can finish.
+        async def broken_flush():
+            raise RuntimeError("stop")
+
+        worker.flush = broken_flush
+        task.cancel()
+        await asyncio.wait({task})
+        pytest.fail("the updates loop swallowed its cancellation")
+    assert task.cancelled()
+
+
+@pytest.mark.asyncio
 async def test_immediate_processing(chancy: Chancy, worker: Worker):
     """
     Test that the worker processes jobs immediately when receiving queue.pushed

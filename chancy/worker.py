@@ -28,6 +28,20 @@ from chancy.queue import Queue
 from chancy.utils import TaskManager, import_string, lock_order_key, sleep
 
 
+def _raise_if_cancelling() -> None:
+    """
+    Re-raise a cancellation that was converted into a database error.
+
+    Psycopg can replace a ``CancelledError`` with an ``OperationalError``, for
+    example when a cancellation interrupts a pipelined ``executemany()``. Our
+    maintenance loops would treat it as a transient error and keep running,
+    leaving shutdown waiting forever on the cancelled task.
+    """
+    task = asyncio.current_task()
+    if task is not None and task.cancelling():
+        raise asyncio.CancelledError()
+
+
 class Worker:
     """
     The Worker is responsible for polling queues for new jobs, running any
@@ -366,6 +380,7 @@ class Worker:
 
                 consecutive_failures = 0
             except (OperationalError, InterfaceError):
+                _raise_if_cancelling()
                 consecutive_failures += 1
                 if (
                     self.backoff_max_retries is not None
@@ -514,6 +529,7 @@ class Worker:
                                     )
                                     await executor.push(job)
             except (OperationalError, InterfaceError):
+                _raise_if_cancelling()
                 consecutive_failures += 1
                 if (
                     self.backoff_max_retries is not None
@@ -544,6 +560,7 @@ class Worker:
                     await self.announce_worker(conn)
                 consecutive_failures = 0
             except (OperationalError, InterfaceError):
+                _raise_if_cancelling()
                 consecutive_failures += 1
                 if (
                     self.backoff_max_retries is not None
@@ -596,6 +613,7 @@ class Worker:
                     j = json.loads(notification.payload)
                     await self.hub.emit(j.pop("t"), j)
             except (OperationalError, InterfaceError):
+                _raise_if_cancelling()
                 if not ever_connected:
                     raise
                 consecutive_failures += 1
@@ -638,6 +656,7 @@ class Worker:
             try:
                 await self.flush()
             except (OperationalError, InterfaceError):
+                _raise_if_cancelling()
                 consecutive_failures += 1
                 if (
                     self.backoff_max_retries is not None
