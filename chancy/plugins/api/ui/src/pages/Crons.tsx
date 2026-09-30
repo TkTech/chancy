@@ -66,6 +66,7 @@ export function Crons() {
           <th>Key</th>
           <th className={"w-100"}>Function</th>
           <th>Expression</th>
+          <th>Timezone</th>
           <th className={"text-nowrap text-center"}>Next Run</th>
           <th className={"text-nowrap text-center"}>Last Run</th>
         </tr>
@@ -73,7 +74,7 @@ export function Crons() {
         <tbody>
         {crons?.length === 0 && (
           <tr>
-            <td colSpan={5} className={"text-center table-info"}>
+            <td colSpan={6} className={"text-center table-info"}>
               No scheduled jobs found.
             </td>
           </tr>
@@ -94,6 +95,7 @@ export function Crons() {
             </td>
             <td><code className={"text-break"}>{cron.job.func}</code></td>
             <td className={"text-nowrap"}><code>{cron.cron}</code></td>
+            <td className={"text-nowrap"}>{cron.timezone}</td>
             <td className={"text-nowrap text-center font-monospace"}>
               <CountdownTimer date={cron.next_run} />
             </td>

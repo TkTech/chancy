@@ -33,17 +33,19 @@ export function pixelToTime(pixel: number, config: TimelineConfig): Date {
 }
 
 /**
- * Calculate cron executions within a time range
+ * Calculate cron executions within a time range, evaluating the expression
+ * in the given IANA timezone like the server does.
  */
 export function calculateCronExecutions(
   cronExpression: string,
+  timezone: string,
   startTime: Date,
   endTime: Date,
   cronId: string,
   maxExecutions: number = 1000
 ): CronExecution[] {
   try {
-    const job = new Cron(cronExpression);
+    const job = new Cron(cronExpression, { timezone });
     const executions: CronExecution[] = [];
 
     let currentTime = new Date(startTime);

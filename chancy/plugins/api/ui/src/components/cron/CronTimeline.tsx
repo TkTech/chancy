@@ -9,6 +9,7 @@ import { CronDetailView } from './CronDetailView';
 interface CronJob {
   unique_key: string;
   cron: string;
+  timezone: string;
   next_run: string;
   last_run: string;
   job: {
@@ -61,6 +62,7 @@ export function CronTimeline({ crons }: CronTimelineProps) {
     return crons.map((cron, idx) => {
       const executions = calculateCronExecutions(
         cron.cron,
+        cron.timezone,
         config.startTime,
         endTime,
         cron.unique_key

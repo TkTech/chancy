@@ -7,6 +7,7 @@ SECRET_KEY = "test-secret-key-not-for-production"
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "chancy.contrib.django.apps.ChancyConfig",
+    "chancy.plugins.cron.django",
 ]
 
 DATABASES = {

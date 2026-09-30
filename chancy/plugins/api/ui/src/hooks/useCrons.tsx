@@ -4,6 +4,7 @@ import { request } from '../services/http';
 interface Cron {
   unique_key: string;
   cron: string,
+  timezone: string,
   last_run: string,
   next_run: string,
   job: {

@@ -34,6 +34,11 @@ Changelog
 - `Executor.get_function_and_kwargs()` is now a classmethod used by every
   built-in executor, so subclasses can override it to inject their own keyword
   arguments into jobs (@PaulM5406, #46).
+- The cron plugin can now evaluate each schedule in a timezone other than UTC
+  with `Cron.schedule(..., timezone=ZoneInfo("Europe/Paris"))`, including a
+  defined behaviour around daylight saving time transitions. UTC remains the
+  default. This adds a cron migration, so run migrations after upgrading
+  (@luca-montaigut).
 
 🐛 Fixes
 

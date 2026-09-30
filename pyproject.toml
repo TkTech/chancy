@@ -29,7 +29,7 @@ Repository = "https://github.com/tktech/chancy"
 Documentation = "https://tkte.ch/chancy/"
 
 [project.optional-dependencies]
-cron = ["croniter"]
+cron = ["croniter", "tzdata"]
 web = [
     "starlette",
     "uvicorn[standard]",

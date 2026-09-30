@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from croniter import croniter
 from psycopg import sql
@@ -9,6 +10,40 @@ from chancy.app import Chancy
 from chancy.job import IsAJob, Job
 from chancy.plugin import Plugin
 from chancy.worker import Worker
+
+DEFAULT_TIMEZONE = ZoneInfo("Etc/UTC")
+
+
+def _is_repeated_wall_time(dt: datetime) -> bool:
+    """
+    Whether `dt` is the second occurrence of a wall time that happens twice
+    because daylight saving time ended, e.g. 02:30+01:00 on the last Sunday of
+    October in Europe/Paris.
+    """
+    first_offset = dt.replace(fold=0).utcoffset()
+    return (
+        first_offset > dt.replace(fold=1).utcoffset()
+        and dt.utcoffset() != first_offset
+    )
+
+
+def _next_run(cron: str, now: datetime, tz: ZoneInfo) -> datetime:
+    """
+    Get the first time after `now` at which `cron`, evaluated in `tz`, fires.
+
+    See the "Daylight saving time" section of :class:`Cron` for the behaviour
+    around DST transitions.
+    """
+    it = croniter(cron, now.astimezone(tz))
+
+    minute, hour = it.expressions[:2]
+    fixed_time = not (minute.startswith("*") or hour.startswith("*"))
+
+    next_run = it.get_next(datetime)
+    # A fixed-time job runs only once when its time repeats.
+    while fixed_time and _is_repeated_wall_time(next_run):
+        next_run = it.get_next(datetime)
+    return next_run
 
 
 class Cron(Plugin):
@@ -23,12 +58,89 @@ class Cron(Plugin):
     running, the job will not be queued again and instead will wait until the
     next scheduled time.
 
-    .. note::
+    Timezones
+    ---------
 
-        While the underlying library used to parse the cron syntax supports
-        timezones, this plugin does not. All times are assumed to be in UTC.
-        This is due to frequent issues that occur with timezones and daylight
-        saving time changes that we simply don't want to support.
+    By default, cron expressions are evaluated in UTC. Each schedule can
+    instead be evaluated in its own IANA timezone by passing ``timezone`` to
+    :meth:`schedule`:
+
+    .. code-block:: python
+
+        from zoneinfo import ZoneInfo
+
+        # Every day at 09:00 Paris time, whether it is winter or summer.
+        await Cron.schedule(
+            chancy,
+            "0 9 * * *",
+            hello_world.job.with_unique_key("hello_world_paris"),
+            timezone=ZoneInfo("Europe/Paris"),
+        )
+
+    Daylight saving time
+    ~~~~~~~~~~~~~~~~~~~~
+
+    UTC, the default, and timezones without daylight saving time (DST), such
+    as ``Asia/Tokyo``, are never affected by this section.
+
+    In a timezone that observes DST, the local clock skips an hour once a
+    year and repeats one once a year. Which hour depends on the timezone: in
+    ``Europe/Paris``, 02:00-03:00 does not exist on the last Sunday of March,
+    and happens twice on the last Sunday of October (first at UTC+2, then at
+    UTC+1). Schedules outside the skipped and repeated hours are unaffected
+    and keep their local time all year round.
+
+    Inside those hours, the behaviour depends on whether the job runs at a
+    *fixed time* or uses a *wildcard*:
+
+    - A **fixed-time** job has neither its minute nor its hour field starting
+      with ``*``, e.g. ``30 2 * * *``, ``0 2 * * 1-5`` or ``@daily``.
+    - A **wildcard** job has its minute or its hour field starting with
+      ``*``, e.g. ``* * * * *``, ``*/15 2 * * *``, ``0 * * * *``,
+      ``0 */2 * * *`` or ``@hourly``.
+
+    .. list-table::
+        :header-rows: 1
+
+        * - Transition (in ``Europe/Paris``)
+          - Fixed-time job (``30 2 * * *``)
+          - Wildcard job (``*/30 * * * *``)
+        * - Spring: the skipped hour, 02:00-03:00
+          - Runs **once, at 03:00**, then at 02:30 again from the next day.
+          - Runs at the times that exist: 01:30, then 03:00. The skipped
+            02:00 and 02:30 do not run. Exception: a job restricted to the
+            skipped hour, like ``*/15 2 * * *``, runs once at 03:00.
+        * - Autumn: the repeated hour, 02:00-03:00
+          - Runs **once**, during the first pass (02:30 UTC+2). The second
+            02:30 (UTC+1) does not run.
+          - Follows real time and runs in **both passes**: 02:00 and 02:30
+            UTC+2, then 02:00 and 02:30 UTC+1.
+
+    In other words, a fixed-time job never runs twice in a day because of
+    DST, and a wildcard job keeps its interval in real time. These cases are
+    covered by ``tests/plugins/test_cron_dst.py``.
+
+    Limitations
+    ~~~~~~~~~~~
+
+    - ``next_run`` is computed when a schedule is saved through
+      :meth:`schedule` and each time it runs. Editing the expression or the
+      timezone directly in the database, including through the Django admin,
+      only takes effect after the next run.
+    - The timezone column must hold a valid IANA name. The Django admin only
+      offers valid ones, but an invalid value written directly in the
+      database makes the cron plugin stop on that worker when the schedule is
+      due.
+    - Versions of Chancy without timezone support ignore the column and
+      evaluate every schedule in UTC. While workers of both versions run side
+      by side, or after a downgrade, schedules in another timezone can fire
+      at the UTC reading of their expression.
+    - The dashboard's timeline computes upcoming runs in the browser. It uses
+      each schedule's timezone, but around a DST transition it can differ
+      from the actual runs: in autumn it only shows the second pass of the
+      repeated hour, and in spring it shows a fixed-time job in the skipped
+      hour one hour late (03:30 instead of 03:00). The Next Run value, which
+      comes from the server, is always accurate.
 
     Installation
     ------------
@@ -119,7 +231,8 @@ class Cron(Plugin):
                                 SELECT
                                     unique_key,
                                     cron,
-                                    job
+                                    job,
+                                    timezone
                                 FROM {table}
                                 WHERE next_run <= %(now)s
                                 FOR UPDATE SKIP LOCKED
@@ -151,8 +264,10 @@ class Cron(Plugin):
                                     """
                             ).format(table=table),
                             {
-                                "next_run": croniter(row["cron"], now).get_next(
-                                    datetime
+                                "next_run": _next_run(
+                                    row["cron"],
+                                    now,
+                                    ZoneInfo(row["timezone"]),
                                 ),
                                 "last_run": now,
                                 "unique_key": row["unique_key"],
@@ -195,7 +310,9 @@ class Cron(Plugin):
 
         :param chancy: The Chancy application.
         :param unique_keys: Optional list of unique keys to filter by.
-        :return: A list of dictionaries containing the job schedules.
+        :return: The schedules, keyed by unique key. Each one is a dictionary
+                 with ``unique_key``, ``job``, ``cron``, ``timezone`` (its
+                 IANA name), ``last_run`` and ``next_run``.
         """
         table = sql.Identifier(f"{chancy.prefix}cron")
 
@@ -210,6 +327,7 @@ class Cron(Plugin):
                             unique_key,
                             job,
                             cron,
+                            timezone,
                             last_run,
                             next_run
                         FROM {table}
@@ -226,6 +344,7 @@ class Cron(Plugin):
                     "unique_key": result["unique_key"],
                     "job": Job.unpack(result["job"]),
                     "cron": result["cron"],
+                    "timezone": result["timezone"],
                     "last_run": result["last_run"],
                     "next_run": result["next_run"],
                 }
@@ -260,7 +379,13 @@ class Cron(Plugin):
             )
 
     @classmethod
-    async def schedule(cls, chancy: Chancy, cron: str, *jobs: Job | IsAJob):
+    async def schedule(
+        cls,
+        chancy: Chancy,
+        cron: str,
+        *jobs: Job | IsAJob,
+        timezone: ZoneInfo = DEFAULT_TIMEZONE,
+    ):
         """
         Schedule one or more jobs to run periodically based on a cron schedule.
 
@@ -268,12 +393,14 @@ class Cron(Plugin):
         :attr:`~chancy.job.Job.unique_key` to ensure that only one
         copy of the job is scheduled at a time. Scheduling a job with the same
         unique key as an existing job will update the existing job with the new
-        schedule & job.
+        schedule, job & timezone.
 
         :param chancy: The Chancy application.
         :param cron: A cron-like syntax string that describes when to run the
                      job.
         :param jobs: The jobs to run.
+        :param timezone: The timezone in which to evaluate the cron
+                         expression. Defaults to UTC.
         """
         jobs = [job if isinstance(job, Job) else job.job for job in jobs]
         for job in jobs:
@@ -283,7 +410,7 @@ class Cron(Plugin):
                     " requires that each job has a unique_key set."
                 )
 
-        base = datetime.now(tz=UTC)
+        next_run = _next_run(cron, datetime.now(tz=UTC), timezone)
 
         async with (
             chancy.pool.connection() as conn,
@@ -297,17 +424,20 @@ class Cron(Plugin):
                                 unique_key,
                                 cron,
                                 job,
+                                timezone,
                                 next_run
                             )
                             VALUES (
                                 %(unique_key)s,
                                 %(cron)s,
                                 %(job)s,
+                                %(timezone)s,
                                 %(next_run)s
                             )
                             ON CONFLICT (unique_key) DO UPDATE SET
                                 cron = %(cron)s,
                                 job = %(job)s,
+                                timezone = %(timezone)s,
                                 next_run = %(next_run)s
                             """
                 ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
@@ -316,7 +446,8 @@ class Cron(Plugin):
                         "unique_key": job.unique_key,
                         "cron": cron,
                         "job": json.dumps(job.pack()),
-                        "next_run": croniter(cron, base).get_next(datetime),
+                        "timezone": timezone.key,
+                        "next_run": next_run,
                     }
                     for job in jobs
                 ],
