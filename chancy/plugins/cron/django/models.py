@@ -5,7 +5,11 @@ from django.db import models
 
 PREFIX = getattr(settings, "CHANCY_PREFIX", "chancy_")
 
-TIMEZONE_CHOICES = [(tz, tz) for tz in sorted(available_timezones())]
+# "localtime" is the host's own timezone on some systems, not an IANA name
+# that every worker can load.
+TIMEZONE_CHOICES = [
+    (tz, tz) for tz in sorted(available_timezones() - {"localtime"})
+]
 
 
 class Cron(models.Model):

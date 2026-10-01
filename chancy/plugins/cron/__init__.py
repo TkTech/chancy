@@ -83,14 +83,17 @@ class Cron(Plugin):
     UTC, the default, and timezones without daylight saving time (DST), such
     as ``Asia/Tokyo``, are never affected by this section.
 
-    In a timezone that observes DST, the local clock skips an hour once a
-    year and repeats one once a year. Which hour depends on the timezone: in
-    ``Europe/Paris``, 02:00-03:00 does not exist on the last Sunday of March,
-    and happens twice on the last Sunday of October (first at UTC+2, then at
-    UTC+1). Schedules outside the skipped and repeated hours are unaffected
-    and keep their local time all year round.
+    In a timezone that observes DST, the local clock skips a period once a
+    year and repeats one once a year. How long that period is, often one
+    hour, and when it happens depend on the timezone. In ``Europe/Paris``,
+    02:00-03:00 does not exist on the last Sunday of March and happens twice
+    on the last Sunday of October (first at UTC+2, then at UTC+1). In
+    ``Australia/Lord_Howe`` the period is 30 minutes, and in
+    ``America/Santiago`` the change happens at midnight. Schedules outside
+    the skipped and repeated periods are unaffected and keep their local time
+    all year round.
 
-    Inside those hours, the behaviour depends on whether the job runs at a
+    Inside those periods, the behaviour depends on whether the job runs at a
     *fixed time* or uses a *wildcard*:
 
     - A **fixed-time** job has neither its minute nor its hour field starting
@@ -102,23 +105,28 @@ class Cron(Plugin):
     .. list-table::
         :header-rows: 1
 
-        * - Transition (in ``Europe/Paris``)
+        * - Transition (example: ``Europe/Paris``)
           - Fixed-time job (``30 2 * * *``)
           - Wildcard job (``*/30 * * * *``)
-        * - Spring: the skipped hour, 02:00-03:00
-          - Runs **once, at 03:00**, then at 02:30 again from the next day.
+        * - Skipped period (02:00-03:00 in spring)
+          - Runs **once, at the end of the skipped period** (03:00), then at
+            02:30 again from the next day.
           - Runs at the times that exist: 01:30, then 03:00. The skipped
             02:00 and 02:30 do not run. Exception: a job restricted to the
-            skipped hour, like ``*/15 2 * * *``, runs once at 03:00.
-        * - Autumn: the repeated hour, 02:00-03:00
+            skipped period, like ``*/15 2 * * *``, runs once at the end of it
+            (03:00).
+        * - Repeated period (02:00-03:00 in autumn)
           - Runs **once**, during the first pass (02:30 UTC+2). The second
             02:30 (UTC+1) does not run.
           - Follows real time and runs in **both passes**: 02:00 and 02:30
             UTC+2, then 02:00 and 02:30 UTC+1.
 
     In other words, a fixed-time job never runs twice in a day because of
-    DST, and a wildcard job keeps its interval in real time. These cases are
-    covered by ``tests/plugins/test_cron_dst.py``.
+    DST, and a wildcard job keeps its interval in real time.
+    ``tests/plugins/test_cron_dst.py`` covers these rules for
+    ``Europe/Paris``, ``Australia/Lord_Howe`` (30-minute shift),
+    ``Antarctica/Troll`` (2-hour shift) and ``America/Santiago`` (change at
+    midnight).
 
     Limitations
     ~~~~~~~~~~~
@@ -137,10 +145,10 @@ class Cron(Plugin):
       at the UTC reading of their expression.
     - The dashboard's timeline computes upcoming runs in the browser. It uses
       each schedule's timezone, but around a DST transition it can differ
-      from the actual runs: in autumn it only shows the second pass of the
-      repeated hour, and in spring it shows a fixed-time job in the skipped
-      hour one hour late (03:30 instead of 03:00). The Next Run value, which
-      comes from the server, is always accurate.
+      from the actual runs: it only shows the second pass of a repeated
+      period, and can show a fixed-time job of a skipped period later than
+      it actually runs. The Next Run value, which comes from the server, is
+      always accurate.
 
     Installation
     ------------

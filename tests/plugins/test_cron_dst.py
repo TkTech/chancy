@@ -1,7 +1,7 @@
 """
 How cron schedules behave across daylight saving time (DST) transitions.
 
-Every test uses ``Europe/Paris`` in 2026:
+Most tests use ``Europe/Paris`` in 2026:
 
 - Spring, Sunday 29 March: at 02:00 (UTC+1) the clock jumps to 03:00 (UTC+2),
   so 02:00-03:00 does not exist.
@@ -11,13 +11,18 @@ Every test uses ``Europe/Paris`` in 2026:
 Runs are written as local wall time plus UTC offset, e.g. ``02:30+0200`` is
 the first 02:30 of the autumn night and ``02:30+0100`` the second one.
 
-The rules:
+The rules, whatever the length of the skipped or repeated period:
 
 - A fixed-time job (neither minute nor hour starts with ``*``) runs once:
-  at 03:00 when its time is skipped, in the first pass when it repeats.
+  at the end of the skipped period when its time is skipped, in the first
+  pass when it repeats.
 - A wildcard job (minute or hour starts with ``*``) follows real time: it
-  does not run at skipped times and runs in both passes of the repeated hour.
-  Exception: one restricted to the skipped hour runs once at 03:00.
+  does not run at skipped times and runs in both passes of the repeated
+  period. Exception: one restricted to the skipped period runs once at the
+  end of it.
+
+``test_other_transitions`` checks the same rules with a 30-minute shift, a
+2-hour shift and a change at midnight.
 
 The plugin's docstring documents the same rules for users.
 """
@@ -43,21 +48,23 @@ AUTUMN_NIGHT = (
 )
 
 
-def poll(cron: str, start: datetime, end: datetime) -> list[str]:
+def poll(
+    cron: str, start: datetime, end: datetime, tz: ZoneInfo = PARIS
+) -> list[str]:
     """
     Replay the cron plugin's polling loop, polling once a minute from `start`
-    (included) to `end` (excluded), and return the runs as Paris wall times
+    (included) to `end` (excluded), and return the runs as wall times in `tz`
     with their UTC offset.
     """
     now = start.astimezone(UTC)
     end = end.astimezone(UTC)
-    next_run = _next_run(cron, now - timedelta(seconds=1), PARIS)
+    next_run = _next_run(cron, now - timedelta(seconds=1), tz)
     runs = []
 
     while now < end:
         if next_run <= now:
-            runs.append(next_run.astimezone(PARIS).strftime("%H:%M%z"))
-            next_run = _next_run(cron, now, PARIS)
+            runs.append(next_run.astimezone(tz).strftime("%H:%M%z"))
+            next_run = _next_run(cron, now, tz)
         now += timedelta(minutes=1)
 
     return runs
@@ -204,3 +211,178 @@ def test_next_run_from_inside_the_repeated_hour(now_utc, cron, expected):
     if local.day != 25:
         formatted += f" on {local.day}"
     assert formatted == expected
+
+
+# The same rules hold whatever the length or the time of the change. Each
+# case polls from 3 hours before the transition to 3 hours after it.
+LORD_HOWE = ZoneInfo("Australia/Lord_Howe")  # 30-minute shift
+TROLL = ZoneInfo("Antarctica/Troll")  # 2-hour shift
+SANTIAGO = ZoneInfo("America/Santiago")  # Change at midnight
+
+
+@pytest.mark.parametrize(
+    "tz, transition, cron, expected",
+    [
+        # Lord Howe, 4 April 2026: 02:00 (UTC+11) goes back to 01:30 (UTC+10:30).
+        (
+            LORD_HOWE,
+            datetime(2026, 4, 4, 15, 0, tzinfo=UTC),
+            "30 1 * * *",
+            ["01:30+1100"],
+        ),
+        (
+            LORD_HOWE,
+            datetime(2026, 4, 4, 15, 0, tzinfo=UTC),
+            "*/30 * * * *",
+            [
+                "23:00+1100",
+                "23:30+1100",
+                "00:00+1100",
+                "00:30+1100",
+                "01:00+1100",
+                "01:30+1100",
+                "01:30+1030",
+                "02:00+1030",
+                "02:30+1030",
+                "03:00+1030",
+                "03:30+1030",
+                "04:00+1030",
+            ],
+        ),
+        # Lord Howe, 3 October 2026: 02:00 (UTC+10:30) jumps to 02:30 (UTC+11).
+        (
+            LORD_HOWE,
+            datetime(2026, 10, 3, 15, 30, tzinfo=UTC),
+            "0 2 * * *",
+            ["02:30+1100"],
+        ),
+        (
+            LORD_HOWE,
+            datetime(2026, 10, 3, 15, 30, tzinfo=UTC),
+            "*/30 * * * *",
+            [
+                "23:00+1030",
+                "23:30+1030",
+                "00:00+1030",
+                "00:30+1030",
+                "01:00+1030",
+                "01:30+1030",
+                "02:30+1100",
+                "03:00+1100",
+                "03:30+1100",
+                "04:00+1100",
+                "04:30+1100",
+                "05:00+1100",
+            ],
+        ),
+        # Troll, 29 March 2026: 01:00 (UTC+0) jumps to 03:00 (UTC+2).
+        (
+            TROLL,
+            datetime(2026, 3, 29, 1, 0, tzinfo=UTC),
+            "0 1 * * *",
+            ["03:00+0200"],
+        ),
+        (
+            TROLL,
+            datetime(2026, 3, 29, 1, 0, tzinfo=UTC),
+            "*/30 * * * *",
+            [
+                "22:00+0000",
+                "22:30+0000",
+                "23:00+0000",
+                "23:30+0000",
+                "00:00+0000",
+                "00:30+0000",
+                "03:00+0200",
+                "03:30+0200",
+                "04:00+0200",
+                "04:30+0200",
+                "05:00+0200",
+                "05:30+0200",
+            ],
+        ),
+        # Troll, 25 October 2026: 03:00 (UTC+2) goes back to 01:00 (UTC+0).
+        (
+            TROLL,
+            datetime(2026, 10, 25, 1, 0, tzinfo=UTC),
+            "0 1 * * *",
+            ["01:00+0200"],
+        ),
+        (
+            TROLL,
+            datetime(2026, 10, 25, 1, 0, tzinfo=UTC),
+            "*/30 * * * *",
+            [
+                "00:00+0200",
+                "00:30+0200",
+                "01:00+0200",
+                "01:30+0200",
+                "02:00+0200",
+                "02:30+0200",
+                "01:00+0000",
+                "01:30+0000",
+                "02:00+0000",
+                "02:30+0000",
+                "03:00+0000",
+                "03:30+0000",
+            ],
+        ),
+        # Santiago, 5 April 2026: midnight (UTC-3) goes back to 23:00 (UTC-4).
+        (
+            SANTIAGO,
+            datetime(2026, 4, 5, 3, 0, tzinfo=UTC),
+            "0 23 * * *",
+            ["23:00-0300"],
+        ),
+        (
+            SANTIAGO,
+            datetime(2026, 4, 5, 3, 0, tzinfo=UTC),
+            "*/30 * * * *",
+            [
+                "21:00-0300",
+                "21:30-0300",
+                "22:00-0300",
+                "22:30-0300",
+                "23:00-0300",
+                "23:30-0300",
+                "23:00-0400",
+                "23:30-0400",
+                "00:00-0400",
+                "00:30-0400",
+                "01:00-0400",
+                "01:30-0400",
+            ],
+        ),
+        # Santiago, 6 September 2026: midnight (UTC-4) jumps to 01:00 (UTC-3),
+        # so a daily job at midnight runs at 01:00 that day.
+        (
+            SANTIAGO,
+            datetime(2026, 9, 6, 4, 0, tzinfo=UTC),
+            "@daily",
+            ["01:00-0300"],
+        ),
+        (
+            SANTIAGO,
+            datetime(2026, 9, 6, 4, 0, tzinfo=UTC),
+            "*/30 * * * *",
+            [
+                "21:00-0400",
+                "21:30-0400",
+                "22:00-0400",
+                "22:30-0400",
+                "23:00-0400",
+                "23:30-0400",
+                "01:00-0300",
+                "01:30-0300",
+                "02:00-0300",
+                "02:30-0300",
+                "03:00-0300",
+                "03:30-0300",
+            ],
+        ),
+    ],
+)
+def test_other_transitions(tz, transition, cron, expected):
+    start = transition - timedelta(hours=3)
+    end = transition + timedelta(hours=3)
+    assert poll(cron, start, end, tz) == expected

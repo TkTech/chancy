@@ -73,7 +73,12 @@ async def test_chancy_queue_django_query(chancy, worker):
 
 @pytest.mark.parametrize(
     "timezone, valid",
-    [("Europe/Paris", True), ("Etc/UTC", True), ("Europe/Nowhere", False)],
+    [
+        ("Europe/Paris", True),
+        ("Etc/UTC", True),
+        ("Europe/Nowhere", False),
+        ("localtime", False),
+    ],
 )
 def test_cron_timezone_must_be_an_iana_name(timezone, valid):
     """
