@@ -293,6 +293,44 @@ async def test_updates_loop_honours_cancellation_hidden_by_psycopg(
 
 
 @pytest.mark.asyncio
+async def test_queue_declared_during_poll_is_not_missed(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """
+    A queue declared while the worker is polling for queue changes must be
+    picked up right away, not at the next ``queue_change_poll_interval``.
+    """
+    original = chancy.get_all_queues
+    polled = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_get_all_queues():
+        queues = await original()
+        if not polled.is_set():
+            polled.set()
+            await release.wait()
+        return queues
+
+    chancy.get_all_queues = slow_get_all_queues
+    seen = []
+    worker_no_start.hub.on("queue.declared", lambda e: seen.append(e.body["q"]))
+
+    async with worker_no_start as worker:
+        await polled.wait()
+        await chancy.declare(Queue("late"))
+        # The notification arrives while the worker still holds the result of
+        # a poll that predates the declaration.
+        async with asyncio.timeout(5):
+            while "late" not in seen:
+                await asyncio.sleep(0.01)
+        release.set()
+
+        async with asyncio.timeout(3):
+            while "late" not in worker._queues:
+                await asyncio.sleep(0.05)
+
+
+@pytest.mark.asyncio
 async def test_immediate_processing(chancy: Chancy, worker: Worker):
     """
     Test that the worker processes jobs immediately when receiving queue.pushed

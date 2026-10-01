@@ -224,6 +224,9 @@ class Worker:
 
         # Set once the notifications listener is ready.
         self._notifications_ready_event = asyncio.Event()
+        # Set when a queue may have changed. Unlike waiting on the hub, it
+        # remembers a change announced while the queues are being polled.
+        self._queues_changed = asyncio.Event()
         # The queues that the worker is currently processing.
         self._queues: dict[str, Queue] = {}
         # The executors that the worker is currently using.
@@ -259,6 +262,8 @@ class Worker:
 
         self.hub.on("job.cancelled", self._handle_cancellation)
         self.hub.on("queue.pushed", self._handle_queue_pushed)
+        for event in ("queue.declared", "queue.paused", "queue.resumed"):
+            self.hub.on(event, self._handle_queues_changed)
 
         for plugin in self.chancy.plugins.values():
             if plugin.get_scope() != PluginScope.WORKER:
@@ -343,6 +348,7 @@ class Worker:
         while True:
             try:
                 self.chancy.log.debug("Polling for queue changes.")
+                self._queues_changed.clear()
                 tags = self.worker_tags()
                 # Tags in the database is a list of regexes, while the
                 # tags in the worker are a set of strings. We need to
@@ -397,10 +403,8 @@ class Worker:
                 continue
 
             try:
-                await self.hub.wait_for(
-                    ["queue.declared", "queue.paused", "queue.resumed"],
-                    timeout=self.queue_change_poll_interval,
-                )
+                async with asyncio.timeout(self.queue_change_poll_interval):
+                    await self._queues_changed.wait()
             except TimeoutError:
                 pass
 
@@ -1127,6 +1131,9 @@ class Worker:
         )
         for executor in self._executors.values():
             await executor.cancel(Reference(event.body["j"]))
+
+    async def _handle_queues_changed(self, event: Event):
+        self._queues_changed.set()
 
     async def _handle_queue_pushed(self, event: Event):
         q = event.body["q"]
