@@ -30,8 +30,9 @@ class Pruner(Plugin):
         ]) as chancy:
             ...
 
-    The pruner will never prune jobs that haven't been run yet or are currently
-    running. When the pruner runs, it will also call the
+    The pruner only prunes jobs that have finished, either succeeding or
+    failing. Jobs that are pending, running, or waiting to be retried are
+    never pruned. When the pruner runs, it will also call the
     :py:meth:`chancy.plugin.Plugin.cleanup` method on any plugins that
     implement it, allowing them to clean up any data that is no longer
     needed such as completed workflows.
@@ -153,7 +154,7 @@ class Pruner(Plugin):
             WITH jobs_to_prune AS (
                 SELECT queue, id  
                 FROM {table}
-                WHERE state NOT IN ('pending', 'running')
+                WHERE state IN ('succeeded', 'failed')
                 AND ({rule})
                 LIMIT {maximum_to_prune}
             )

@@ -51,6 +51,9 @@ Changelog
 - Pushing jobs with unique keys and the worker's batched job updates now lock
   rows in the same order, fixing a deadlock between overlapping pushes and
   updates that could fail either side (@AudeCstg, #89).
+- The pruner could delete jobs that were waiting to be retried, since only
+  pending and running jobs were excluded. It now only prunes succeeded and
+  failed jobs.
 
 0.25.1
 ------
