@@ -2,7 +2,11 @@ import abc
 import asyncio
 import enum
 import typing
+from collections.abc import Sequence
 from typing import Any
+
+from psycopg import AsyncCursor
+from psycopg.rows import DictRow
 
 from chancy import utils
 from chancy.job import QueuedJob
@@ -170,6 +174,27 @@ class Plugin(abc.ABC):
         :return: The job to update in the database.
         """
         raise NotImplementedError()
+
+    async def on_jobs_updated_in_transaction(
+        self,
+        *,
+        worker: "Worker",
+        jobs: Sequence[QueuedJob],
+        cursor: AsyncCursor[DictRow],
+    ):
+        """
+        Called after a batch's SQL updates, before its transaction commits.
+
+        Use the supplied cursor for database work that must commit atomically
+        with the job updates. Raising an exception rolls back the batch. This
+        hook may run again on retry; avoid external or in-memory side effects.
+        Use :meth:`on_job_updated` for work that requires committed updates.
+
+        :param worker: The worker saving the updates.
+        :param jobs: The updates in their original order, including repeated
+                     updates to the same job.
+        :param cursor: The cursor for the current update transaction.
+        """
 
     async def on_job_updated(
         self,

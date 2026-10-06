@@ -29,6 +29,15 @@ Changelog
   than using Chancy directly.
 - Executors now declare their capabilities with `Executor.supports` and
   `Executor.get_capabilities()`, such as time out and memory limit support.
+- Plugins can add database work to job-update transactions through
+  `on_jobs_updated_in_transaction`. Existing per-job hooks still run after commit.
+- Workflow scheduling now coalesces creation and completion notifications
+  into bounded batches, keeping database work out of the notification listener.
+  Recovery polling continues on its own deadline under sustained event traffic.
+  A new partial index keeps polling efficient when terminal workflows are
+  retained; apply the workflow plugin migration before starting updated workers.
+  Building the index blocks writes to the workflows table until the migration
+  commits, without changing existing workflow data.
 - Threaded and sub-interpreter executors now support co-operative timeouts
   by periodically calling `QueuedJob.checkpoint()`.
 - `Executor.get_function_and_kwargs()` is now a classmethod used by every
@@ -37,6 +46,8 @@ Changelog
 
 🐛 Fixes
 
+- Empty workflow submissions are now rejected. Existing active empty workflows
+  are marked failed instead of crashing the workflow scheduler.
 - Respect CLI flags for API plugin configuration by @alfawal (#68).
 - Fixed an issue that allowed the reprioritize plugin to update the same job
   multiple times in different batches of the same run.
@@ -54,6 +65,16 @@ Changelog
 - The pruner could delete jobs that were waiting to be retried, since only
   pending and running jobs were excluded. It now only prunes succeeded and
   failed jobs.
+- The workflow plugin only processed 100 workflows per poll, regardless of
+  `max_workflows_per_run`, and could pick the same workflows every time.
+  Polls now honor the batch limit and advance through bounded sweeps using
+  ID-range queries, so new arrivals cannot indefinitely delay revisiting
+  older workflows and each batch avoids sorting all active workflows.
+- Terminal workflow step updates now notify the leader once per workflow in
+  each job-update batch, so steps completed on other workers can advance
+  without waiting for a poll. Notifications commit with the job updates.
+- The workflow scheduler now retries transient database failures using the
+  worker's backoff settings and resumes recovery polling after reconnection.
 
 0.25.1
 ------

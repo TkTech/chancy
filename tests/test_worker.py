@@ -3,10 +3,11 @@ import time
 from unittest.mock import Mock
 
 import pytest
-from psycopg import AsyncCursor, OperationalError
+from psycopg import AsyncCursor, OperationalError, sql
 
 from chancy import Chancy, Queue, QueuedJob, Worker, job
 from chancy.errors import MigrationsNeededError
+from chancy.plugin import Plugin
 
 
 @job()
@@ -38,6 +39,62 @@ async def test_flush_persists_pending_updates(
         assert await worker_no_start.queue_update(update)
         await worker_no_start.flush()
         assert (await chancy.get_job(ref)).meta == update.meta
+
+
+@pytest.mark.asyncio
+async def test_batch_hooks_preserve_post_commit_hook_semantics(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """Batch hooks share the transaction; legacy hooks retain timing and order."""
+    await chancy.declare(Queue("default"))
+    refs = [
+        await chancy.push(job_to_run.job.with_unique_key(key))
+        for key in ("b", "a")
+    ]
+    updates = [
+        (await chancy.get_job(ref)).with_meta({"saved": True}) for ref in refs
+    ]
+    calls = []
+
+    class LegacyRecorder(Plugin):
+        @staticmethod
+        def get_identifier():
+            return "test.recorder"
+
+        async def on_job_updated(self, *, worker, job):
+            # A different connection must already see the committed updates.
+            for ref in refs:
+                assert (await chancy.get_job(ref)).meta == {"saved": True}
+            calls.append((type(self).__name__, job.id))
+
+    class BatchRecorder(LegacyRecorder):
+        async def on_jobs_updated_in_transaction(self, *, worker, jobs, cursor):
+            assert tuple(jobs) == tuple(updates)
+            await cursor.execute(
+                sql.SQL("SELECT meta FROM {} ORDER BY id").format(
+                    sql.Identifier(f"{chancy.prefix}jobs")
+                )
+            )
+            assert all(
+                row["meta"] == {"saved": True}
+                for row in await cursor.fetchall()
+            )
+            for ref in refs:
+                assert (await chancy.get_job(ref)).meta == {}
+            calls.append(("batch",))
+
+    chancy.plugins["batch_recorder"] = BatchRecorder()
+    chancy.plugins["legacy_recorder"] = LegacyRecorder()
+    for update in updates:
+        await worker_no_start.queue_update(update)
+    await worker_no_start.flush()
+    assert calls == [
+        ("batch",),
+        ("BatchRecorder", updates[0].id),
+        ("LegacyRecorder", updates[0].id),
+        ("BatchRecorder", updates[1].id),
+        ("LegacyRecorder", updates[1].id),
+    ]
 
 
 @pytest.mark.asyncio

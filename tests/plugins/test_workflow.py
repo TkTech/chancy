@@ -1,8 +1,11 @@
 import asyncio
+from dataclasses import replace
 
 import pytest
+from psycopg import sql
+from psycopg.rows import dict_row
 
-from chancy import Chancy, Queue, job
+from chancy import Chancy, Queue, QueuedJob, Reference, Worker, job
 from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.workflow import (
     CircularDependencyError,
@@ -485,3 +488,275 @@ async def test_complex_valid_dag(chancy: Chancy, worker):
     )
 
     assert result.state == Workflow.State.COMPLETED
+
+
+async def _poll(plugin: WorkflowPlugin, chancy: Chancy, worker: Worker) -> int:
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        return await plugin.poll(worker, chancy, cursor)
+
+
+async def _count_running(chancy: Chancy, ids: list[str]) -> int:
+    workflows = await WorkflowPlugin.fetch_workflows(
+        chancy, ids=ids, limit=len(ids)
+    )
+    return sum(w.state == Workflow.State.RUNNING for w in workflows)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [
+                ImmediateLeadership(),
+                WorkflowPlugin(polling_interval=3600),
+            ],
+            "no_default_plugins": True,
+        },
+    ],
+    indirect=True,
+)
+async def test_step_completion_notifies_leader(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """A nonleader's committed update advances the workflow via NOTIFY."""
+    # Persist job completions manually so only the notification can advance
+    # the workflow. The leader's polling interval exceeds the test timeout.
+    await chancy.declare(Queue("default", state=Queue.State.PAUSED))
+    workflow_id = await WorkflowPlugin.push(
+        chancy,
+        Workflow("remote_completion")
+        .add("first", sync_success)
+        .add("second", sync_success, ["first"]),
+    )
+    plugin = chancy.plugins[WorkflowPlugin.get_identifier()]
+    await _poll(plugin, chancy, worker_no_start)
+    workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
+    first = await chancy.get_job(Reference(workflow.steps["first"].job_id))
+    assert workflow.steps["second"].job_id is None
+
+    # Start listening after creation so workflow.created cannot wake a poll.
+    async with Worker(chancy) as leader:
+        await asyncio.wait_for(leader.is_leader.wait(), timeout=5)
+        received = asyncio.Event()
+        advanced = asyncio.Event()
+        leader.hub.on("workflow.step_completed", lambda event: received.set())
+        leader.hub.on("workflow.updated", lambda event: advanced.set())
+
+        assert not worker_no_start.is_leader.is_set()
+        await worker_no_start.queue_update(
+            replace(first, state=QueuedJob.State.SUCCEEDED)
+        )
+        await worker_no_start.flush()
+        await asyncio.wait_for(received.wait(), timeout=5)
+        await asyncio.wait_for(advanced.wait(), timeout=5)
+
+        workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
+        assert workflow.steps["first"].state == QueuedJob.State.SUCCEEDED
+        assert workflow.steps["second"].job_id is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        },
+    ],
+    indirect=True,
+)
+async def test_poll_processes_full_batch(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """
+    A single poll processes up to max_workflows_per_run workflows, not just
+    the default fetch limit of 100.
+    """
+    await chancy.declare(Queue("default"))
+
+    ids = [
+        await WorkflowPlugin.push(
+            chancy, Workflow(f"batch_{i}").add("step", sync_success)
+        )
+        for i in range(150)
+    ]
+
+    plugin = WorkflowPlugin(max_workflows_per_run=1000)
+    assert await _poll(plugin, chancy, worker_no_start) == 150
+    assert await _count_running(chancy, ids) == 150
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        },
+    ],
+    indirect=True,
+)
+async def test_poll_continues_after_previous_batch(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """
+    When more workflows are active than fit in one poll, each poll picks up
+    after the previous batch. Otherwise, workflows waiting on long-running
+    steps, which don't change when polled, could fill every batch and starve
+    the rest.
+    """
+    await chancy.declare(Queue("default"))
+
+    async def push(name: str) -> str:
+        return await WorkflowPlugin.push(
+            chancy, Workflow(name).add("step", sync_success)
+        )
+
+    # Start two workflows. The worker isn't running, so their steps never
+    # finish and polling them again changes nothing.
+    waiting = [await push(f"waiting_{i}") for i in range(2)]
+    assert await _poll(WorkflowPlugin(), chancy, worker_no_start) == 2
+
+    new = [await push(f"new_{i}") for i in range(2)]
+
+    plugin = WorkflowPlugin(max_workflows_per_run=2)
+    await _poll(plugin, chancy, worker_no_start)
+    await _poll(plugin, chancy, worker_no_start)
+    assert await _count_running(chancy, waiting + new) == 4
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        },
+    ],
+    indirect=True,
+)
+async def test_poll_revisits_workflows_during_continuous_arrivals(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """New arrivals cannot postpone revisiting an older workflow forever."""
+    await chancy.declare(Queue("default"))
+    initial = [
+        await WorkflowPlugin.push(
+            chancy, Workflow(f"initial_{i}").add("step", sync_success)
+        )
+        for i in range(3)
+    ]
+    plugin = WorkflowPlugin(max_workflows_per_run=2)
+    assert await _poll(plugin, chancy, worker_no_start) == 2
+
+    workflow = await WorkflowPlugin.fetch_workflow(chancy, initial[0])
+    first = await chancy.get_job(Reference(workflow.steps["step"].job_id))
+    await worker_no_start.queue_update(
+        replace(first, state=QueuedJob.State.SUCCEEDED)
+    )
+    await worker_no_start.flush()
+
+    arrivals = []
+    for batch in range(3):
+        arrivals.extend(
+            [
+                await WorkflowPlugin.push(
+                    chancy,
+                    Workflow(f"arrival_{batch}_{i}").add("step", sync_success),
+                )
+                for i in range(2)
+            ]
+        )
+        assert 0 < await _poll(plugin, chancy, worker_no_start) <= 2
+
+    workflow = await WorkflowPlugin.fetch_workflow(chancy, initial[0])
+    assert workflow.state == Workflow.State.COMPLETED
+    # A new sweep must also include arrivals, even while older jobs remain
+    # running. Waiting for those jobs to finish would starve the new ones.
+    workflow = await WorkflowPlugin.fetch_workflow(chancy, arrivals[0])
+    assert workflow.state == Workflow.State.RUNNING
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        },
+    ],
+    indirect=True,
+)
+async def test_poll_restarts_when_sweep_tail_finishes(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """Finishing the remaining workflows does not leave a poll idle."""
+    await chancy.declare(Queue("default"))
+    ids = [
+        await WorkflowPlugin.push(
+            chancy, Workflow(f"tail_{i}").add("step", sync_success)
+        )
+        for i in range(3)
+    ]
+    plugin = WorkflowPlugin(max_workflows_per_run=2)
+    assert await _poll(plugin, chancy, worker_no_start) == 2
+
+    tail = await WorkflowPlugin.fetch_workflow(chancy, ids[-1])
+    tail.state = Workflow.State.COMPLETED
+    await WorkflowPlugin.push(chancy, tail)
+
+    assert await _poll(plugin, chancy, worker_no_start) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy",
+    [
+        {
+            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "no_default_plugins": True,
+        },
+    ],
+    indirect=True,
+)
+async def test_poll_revisits_skipped_locks(
+    chancy: Chancy, worker_no_start: Worker
+):
+    """Locked workflows are skipped and revisited after their release."""
+    plugin = WorkflowPlugin(max_workflows_per_run=2)
+    assert await _poll(plugin, chancy, worker_no_start) == 0
+    await chancy.declare(Queue("default"))
+    ids = [
+        await WorkflowPlugin.push(
+            chancy, Workflow(f"locked_{i}").add("step", sync_success)
+        )
+        for i in range(3)
+    ]
+
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            sql.SQL(
+                "SELECT id FROM {workflows} WHERE id = %s FOR UPDATE"
+            ).format(workflows=sql.Identifier(f"{chancy.prefix}workflows")),
+            [ids[0]],
+        )
+        assert await _poll(plugin, chancy, worker_no_start) == 2
+        assert await _count_running(chancy, ids) == 2
+
+        await cursor.execute(
+            sql.SQL("SELECT id FROM {workflows} FOR UPDATE").format(
+                workflows=sql.Identifier(f"{chancy.prefix}workflows")
+            )
+        )
+        assert await _poll(plugin, chancy, worker_no_start) == 0
+
+    assert await _poll(plugin, chancy, worker_no_start) == 2
+    assert await _count_running(chancy, ids) == 3

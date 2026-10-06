@@ -25,6 +25,7 @@ from chancy.hub import Event, Hub
 from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
+from chancy.retry import DatabaseRetry
 from chancy.utils import TaskManager, import_string, lock_order_key, sleep
 
 
@@ -311,11 +312,21 @@ class Worker:
                                      far (0-indexed).
         :returns: The delay in seconds before the next retry.
         """
-        ceiling = min(
-            self.backoff_initial * (2**consecutive_failures),
-            self.backoff_max,
+        ceiling = self.backoff_initial
+        for _ in range(consecutive_failures):
+            if ceiling == 0 or ceiling >= self.backoff_max:
+                break
+            ceiling *= 2
+        return random.uniform(0, min(ceiling, self.backoff_max))
+
+    def database_retry(self, name: str) -> DatabaseRetry:
+        """Create independent retry state using this worker's backoff settings."""
+        return DatabaseRetry(
+            name,
+            calculate_delay=self._calculate_backoff,
+            max_retries=self.backoff_max_retries,
+            log=self.chancy.log,
         )
-        return random.uniform(0, ceiling)
 
     async def _maintain_queues(self):
         """
@@ -325,7 +336,7 @@ class Worker:
         that the worker should be processing, and update the worker's queues
         accordingly.
         """
-        consecutive_failures = 0
+        retry = self.database_retry("queue maintenance")
         while True:
             try:
                 self.chancy.log.debug("Polling for queue changes.")
@@ -364,21 +375,9 @@ class Worker:
                                 f" queue {queue_name!r}."
                             )
 
-                consecutive_failures = 0
-            except (OperationalError, InterfaceError):
-                consecutive_failures += 1
-                if (
-                    self.backoff_max_retries is not None
-                    and consecutive_failures > self.backoff_max_retries
-                ):
-                    raise
-                delay = self._calculate_backoff(consecutive_failures - 1)
-                self.chancy.log.exception(
-                    f"Transient error in queue maintenance, retrying"
-                    f" in {delay:.1f}s (attempt"
-                    f" {consecutive_failures})."
-                )
-                await asyncio.sleep(delay)
+                retry.reset()
+            except retry.errors as exc:
+                await retry.wait(exc)
                 continue
 
             try:
@@ -398,7 +397,7 @@ class Worker:
 
         :param queue: The queue to maintain.
         """
-        consecutive_failures = 0
+        retry = self.database_retry(f"queue {queue.name!r}")
         while queue := self._queues.get(queue.name):
             try:
                 cls = import_string(queue.executor)
@@ -431,7 +430,6 @@ class Worker:
                             queue.polling_interval,
                             events=[self.queue_wake_events[queue.name].wait()],
                         ):
-                            consecutive_failures = 0
                             self.queue_wake_events[queue.name].clear()
                             new_queue = self._queues.get(queue.name)
 
@@ -505,6 +503,7 @@ class Worker:
                                         conn,
                                         up_to=maximum_jobs_to_poll,
                                     )
+                                retry.reset()
 
                                 for job in jobs:
                                     self.chancy.log.info(
@@ -513,27 +512,15 @@ class Worker:
                                         f" queue {job.queue!r}"
                                     )
                                     await executor.push(job)
-            except (OperationalError, InterfaceError):
-                consecutive_failures += 1
-                if (
-                    self.backoff_max_retries is not None
-                    and consecutive_failures > self.backoff_max_retries
-                ):
-                    raise
-                delay = self._calculate_backoff(consecutive_failures - 1)
-                self.chancy.log.exception(
-                    f"Transient error maintaining queue"
-                    f" {queue.name!r}, retrying in {delay:.1f}s"
-                    f" (attempt {consecutive_failures})."
-                )
-                await asyncio.sleep(delay)
+            except retry.errors as exc:
+                await retry.wait(exc)
 
     async def _maintain_heartbeat(self):
         """
         Announces the worker to the cluster, and maintains a periodic heartbeat
         to ensure that the worker is still alive.
         """
-        consecutive_failures = 0
+        retry = self.database_retry("heartbeat")
         while True:
             try:
                 async with (
@@ -542,21 +529,9 @@ class Worker:
                 ):
                     self.chancy.log.debug("Announcing worker to the cluster.")
                     await self.announce_worker(conn)
-                consecutive_failures = 0
-            except (OperationalError, InterfaceError):
-                consecutive_failures += 1
-                if (
-                    self.backoff_max_retries is not None
-                    and consecutive_failures > self.backoff_max_retries
-                ):
-                    raise
-                delay = self._calculate_backoff(consecutive_failures - 1)
-                self.chancy.log.exception(
-                    f"Transient error sending heartbeat, retrying"
-                    f" in {delay:.1f}s (attempt"
-                    f" {consecutive_failures})."
-                )
-                await asyncio.sleep(delay)
+                retry.reset()
+            except retry.errors as exc:
+                await retry.wait(exc)
                 continue
             await asyncio.sleep(self.heartbeat_poll_interval)
 
@@ -573,7 +548,7 @@ class Worker:
             separate from the shared connection pool and is not counted against
             the pool's connection limit.
         """
-        consecutive_failures = 0
+        retry = self.database_retry("notifications listener")
         ever_connected = False
         while True:
             connection = None
@@ -591,26 +566,14 @@ class Worker:
                 )
                 self._notifications_ready_event.set()
                 ever_connected = True
-                consecutive_failures = 0
+                retry.reset()
                 async for notification in connection.notifies():
                     j = json.loads(notification.payload)
                     await self.hub.emit(j.pop("t"), j)
-            except (OperationalError, InterfaceError):
+            except retry.errors as exc:
                 if not ever_connected:
                     raise
-                consecutive_failures += 1
-                if (
-                    self.backoff_max_retries is not None
-                    and consecutive_failures > self.backoff_max_retries
-                ):
-                    raise
-                delay = self._calculate_backoff(consecutive_failures - 1)
-                self.chancy.log.exception(
-                    f"Transient error in notifications listener,"
-                    f" reconnecting in {delay:.1f}s (attempt"
-                    f" {consecutive_failures})."
-                )
-                await asyncio.sleep(delay)
+                await retry.wait(exc)
             finally:
                 if connection is not None:
                     try:
@@ -629,7 +592,7 @@ class Worker:
         controlled by setting the `send_outgoing_interval` attribute on the
         worker.
         """
-        consecutive_failures = 0
+        retry = self.database_retry("outgoing job updates")
         while True:
             if not self._pending_updates and self.outgoing.empty():
                 await asyncio.sleep(self.send_outgoing_interval)
@@ -637,20 +600,8 @@ class Worker:
 
             try:
                 await self.flush()
-            except (OperationalError, InterfaceError):
-                consecutive_failures += 1
-                if (
-                    self.backoff_max_retries is not None
-                    and consecutive_failures > self.backoff_max_retries
-                ):
-                    raise
-                delay = self._calculate_backoff(consecutive_failures - 1)
-                self.chancy.log.exception(
-                    f"Transient error applying outgoing job updates,"
-                    f" retrying in {delay:.1f}s"
-                    f" (attempt {consecutive_failures})."
-                )
-                await asyncio.sleep(delay)
+            except retry.errors as exc:
+                await retry.wait(exc)
                 continue
             except Exception:
                 self.chancy.log.exception(
@@ -658,7 +609,7 @@ class Worker:
                 )
                 raise
 
-            consecutive_failures = 0
+            retry.reset()
             await asyncio.sleep(self.send_outgoing_interval)
 
     async def flush(self) -> None:
@@ -678,6 +629,10 @@ class Worker:
         Within each batch, database writes follow unique-key order to avoid
         deadlocks with concurrent pushes. Updates to the same job retain their
         original order, as do the plugin callbacks.
+
+        ``on_jobs_updated_in_transaction`` hooks run before commit using the
+        update transaction; failures roll back the batch. ``on_job_updated``
+        hooks run only after the transaction has committed.
 
         .. code-block:: python
 
@@ -748,6 +703,12 @@ class Worker:
                             for update in ordered_updates
                         ],
                     )
+
+                    updates = tuple(pending_updates)
+                    for plugin in self.chancy.plugins.values():
+                        await plugin.on_jobs_updated_in_transaction(
+                            worker=self, jobs=updates, cursor=cursor
+                        )
 
                 # Only discard the batch once its transaction has committed.
                 self._pending_updates = []

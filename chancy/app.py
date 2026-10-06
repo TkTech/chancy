@@ -3,7 +3,7 @@ import datetime
 import enum
 import functools
 import logging
-from collections.abc import AsyncGenerator, Iterator
+from collections.abc import AsyncGenerator, Iterable, Iterator
 from functools import cache, cached_property
 from typing import Any
 
@@ -1127,15 +1127,35 @@ class Chancy:
 
             :meth:`sync_notify` for a synchronous version of this method.
         """
+        await self.notify_many(cursor, [(event, payload)])
+
+    async def notify_many(
+        self,
+        cursor: AsyncCursor[DictRow],
+        events: Iterable[tuple[str, dict[str, Any]]],
+    ):
+        """
+        Send multiple notifications with one SQL statement.
+
+        Each event retains its own payload and is delivered after the caller's
+        transaction commits. Empty batches and disabled notifications do no
+        database work.
+
+        :param cursor: The cursor for the transaction sending notifications.
+        :param events: Pairs of event names and payloads, in delivery order.
+        """
         if not self.notifications:
             return
-
+        payloads = [json_dumps({"t": event, **body}) for event, body in events]
+        if not payloads:
+            return
         await cursor.execute(
-            "SELECT pg_notify(%s, %s)",
-            [
-                f"{self.prefix}events",
-                json_dumps({"t": event, **payload}),
-            ],
+            """
+            SELECT pg_notify(%s, payload)
+            FROM unnest(%s::text[]) WITH ORDINALITY AS events(payload, position)
+            ORDER BY position
+            """,
+            [f"{self.prefix}events", payloads],
         )
 
     def sync_notify(self, cursor: Cursor, event: str, payload: dict[str, Any]):
