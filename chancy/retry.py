@@ -5,6 +5,20 @@ from collections.abc import Callable
 from psycopg import InterfaceError, OperationalError
 
 
+def _raise_if_cancelling() -> None:
+    """
+    Re-raise a cancellation that was converted into a database error.
+
+    Psycopg can replace a ``CancelledError`` with an ``OperationalError``, for
+    example when a cancellation interrupts a pipelined ``executemany()``. Our
+    maintenance loops would treat it as a transient error and keep running,
+    leaving shutdown waiting forever on the cancelled task.
+    """
+    task = asyncio.current_task()
+    if task is not None and task.cancelling():
+        raise asyncio.CancelledError()
+
+
 class DatabaseRetry:
     """Backoff state for one database maintenance loop."""
 
@@ -30,6 +44,7 @@ class DatabaseRetry:
 
     async def wait(self, error: BaseException):
         """Back off after a transient failure, or propagate an exhausted retry."""
+        _raise_if_cancelling()
         if not isinstance(error, self.errors):
             raise error
         self.failures += 1

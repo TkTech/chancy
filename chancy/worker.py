@@ -25,7 +25,7 @@ from chancy.hub import Event, Hub
 from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
-from chancy.retry import DatabaseRetry
+from chancy.retry import DatabaseRetry, _raise_if_cancelling
 from chancy.utils import TaskManager, import_string, lock_order_key, sleep
 
 
@@ -571,6 +571,7 @@ class Worker:
                     j = json.loads(notification.payload)
                     await self.hub.emit(j.pop("t"), j)
             except retry.errors as exc:
+                _raise_if_cancelling()
                 if not ever_connected:
                     raise
                 await retry.wait(exc)
