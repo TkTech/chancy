@@ -23,8 +23,8 @@ Postgres.
   RabbitMQ or redis. Every feature is built on top of Postgres. No need
   for separate monitoring services like Flower or schedulers like Celery
   Beat - everything is built-in to the worker.
-- **Plugins** - Several plugins including a dashboard, workflows, cron jobs,
-  and more.
+- **Plugins** - Several plugins including a dashboard, workflows, cron jobs
+  (with timezone support), and more.
 - **Flexible** - A single worker can handle many queues and mix threads,
   processes, sub-interpreters, and asyncio jobs, allowing powerful workflows
   that use the optimal concurrency model for each job. Queues can be created,

@@ -5,6 +5,7 @@ interface CronDetailViewProps {
   cron: {
     unique_key: string;
     cron: string;
+    timezone: string;
     next_run: string;
     last_run: string;
     job: {
@@ -34,6 +35,10 @@ export function CronDetailView({ cron }: CronDetailViewProps) {
           <tr>
             <th>Expression</th>
             <td><code>{cron.cron}</code></td>
+          </tr>
+          <tr>
+            <th>Timezone</th>
+            <td>{cron.timezone}</td>
           </tr>
           <tr>
             <th>Next Run</th>
