@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import replace
+from uuid import UUID
 
 import pytest
 from psycopg import sql
@@ -700,16 +701,20 @@ async def test_poll_restarts_when_sweep_tail_finishes(
 ):
     """Finishing the remaining workflows does not leave a poll idle."""
     await chancy.declare(Queue("default"))
+    # Polling follows UUID order, which need not match creation order.
     ids = [
         await WorkflowPlugin.push(
-            chancy, Workflow(f"tail_{i}").add("step", sync_success)
+            chancy,
+            Workflow(f"tail_{i}", id=str(UUID(int=i))).add(
+                "step", sync_success
+            ),
         )
-        for i in range(3)
+        for i in (3, 1, 2)
     ]
     plugin = WorkflowPlugin(max_workflows_per_run=2)
     assert await _poll(plugin, chancy, worker_no_start) == 2
 
-    tail = await WorkflowPlugin.fetch_workflow(chancy, ids[-1])
+    tail = await WorkflowPlugin.fetch_workflow(chancy, max(ids))
     tail.state = Workflow.State.COMPLETED
     await WorkflowPlugin.push(chancy, tail)
 
