@@ -32,7 +32,7 @@ export const QueueFormSchema = z.object({
       if (val.trim() === '') return {};
       return JSON.parse(val);
     }),
-    z.record(z.any())
+    z.record(z.string(), z.any())
   ]).default({}),
 });
 
