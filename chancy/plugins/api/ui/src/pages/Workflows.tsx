@@ -1,20 +1,16 @@
+import { WorkflowSteps } from '../features/workflows/WorkflowSteps';
 import { DetailCard } from '../components/common/DetailCard';
 import React from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {useWorkflow, useWorkflows, FilterTriple, Step} from '../hooks/useWorkflows.tsx';
+import {useWorkflow, useWorkflows, FilterTriple} from '../hooks/useWorkflows.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams, useSearchParams} from 'react-router';
-import { useDrawer } from '../components/common/DrawerContext';
-import { JobDetailsView } from '../features/jobs/JobDetailsView';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
-import {extractFunctionName, formatExecutionTime} from '../utils.tsx';
-import WorkflowChart from './WorkflowChart.tsx';
-import {ReactFlowProvider} from '@xyflow/react';
+import {formatExecutionTime} from '../utils.tsx';
 import { PageHeader } from '../components/common/PageHeader';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { DataTable } from '../components/common/DataTable';
 import { SearchFilter, FieldConfig } from '../components/common/SearchFilter';
-import { PackedJobDetails } from '../components/PackedJobDetails';
 import { MetricStatCard } from '../components/dashboard/MetricStatCard';
 import { MetricSuccessRateCard } from '../components/dashboard/MetricSuccessRateCard';
 import { MetricHistogramCard } from '../components/dashboard/MetricHistogramCard';
@@ -25,27 +21,6 @@ export function Workflow() {
   const { workflow_id } = useParams<{workflow_id: string}>();
   const resolution = '5min';
   const { data: workflow, isLoading } = useWorkflow({ url, workflow_id, options: {refetchInterval: 5000 } });
-  const drawer = useDrawer();
-
-  const handleStepClick = (step: Step, step_id: string) => {
-    if (step.job_id) {
-      // Job has started, show the running job details
-      drawer.open(<JobDetailsView job_id={step.job_id} />, { title: `Job Details - ${step_id}` });
-    } else if (step.job) {
-      // Step is pending, show the packed job definition
-      drawer.open(
-        <>
-          <div className="alert alert-info">
-            This workflow step has not yet been reached. Once its dependencies are satisfied and it's ready for execution, this job will be pushed onto the queue.
-          </div>
-          <DetailCard title="Job Definition" flush>
-            <PackedJobDetails job={step.job} />
-          </DetailCard>
-        </>,
-        { title: `Step Details - ${step_id}` }
-      );
-    }
-  };
 
   if (isLoading) return <Loading />;
 
@@ -144,70 +119,7 @@ export function Workflow() {
           </tbody>
         </table>
       </DetailCard>
-      {workflow.steps && (
-        <>
-          <DetailCard title="Workflow Visualization">
-            <ReactFlowProvider>
-                <WorkflowChart workflow={workflow}/>
-              </ReactFlowProvider>
-          </DetailCard>
-          <h3 className="mt-4">Steps</h3>
-          <table className={'table table-hover border mb-0'}>
-            <thead>
-            <tr>
-              <th>Step ID</th>
-              <th>Function</th>
-              <th>Queue</th>
-              <th>Dependencies</th>
-              <th>State</th>
-              <th>Job ID</th>
-            </tr>
-            </thead>
-            <tbody>
-            {Object.entries(workflow.steps).map(([step_id, step]) => (
-              <tr
-                key={step_id}
-                onClick={() => handleStepClick(step, step_id)}
-                style={{ cursor: 'pointer' }}
-              >
-                <td className="fw-medium">{step_id}</td>
-                <td>
-                  <code className="text-primary" title={step.job?.func}>
-                    {extractFunctionName(step.job?.func || '')}
-                  </code>
-                </td>
-                <td>
-                  <span className="badge bg-secondary">{step.job?.queue || 'default'}</span>
-                </td>
-                <td>
-                  {step.dependencies && step.dependencies.length > 0 ? (
-                    <div className="d-flex flex-wrap gap-1">
-                      {step.dependencies.map(dep => (
-                        <span key={dep} className="badge bg-light text-dark border">
-                          {dep}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-muted">None</span>
-                  )}
-                </td>
-                <td>
-                  <StatusBadge status={step.state ?? 'waiting'} />
-                </td>
-                <td className="text-break">
-                  {step.job_id ? (
-                    <span className="text-break">{step.job_id}</span>
-                  ) : (
-                    <span className="text-muted">Pending</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-            </tbody>
-          </table>
-        </>
-      )}
+      <WorkflowSteps key={workflow.id} workflow={workflow} />
     </div>
   );
 }

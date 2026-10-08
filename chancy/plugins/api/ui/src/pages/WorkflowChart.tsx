@@ -1,43 +1,45 @@
-import {useRef} from 'react';
 import type {NodeProps} from '@xyflow/react';
-import {Edge, Handle, MarkerType, Node, NodeTypes, Position, ReactFlow, Background} from '@xyflow/react';
+import {Edge, Handle, MarkerType, Node, NodeTypes, Position, ReactFlow, Background, Controls, useReactFlow} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import type { Workflow, Step } from '../services/schemas';
 import { StatusBadge } from '../components/common/StatusBadge';
 import {statusToColor, extractFunctionName} from '../utils.tsx';
+import { stepStatus } from '../features/workflows/diagnostics';
 
 interface WorkflowChartProps {
   workflow: Workflow;
+  onStepClick: (stepId: string) => void;
+  matchingStepIds?: string[];
 }
 
-type CustomNode = Node<Pick<Step, 'state' | 'job'> & {
+type CustomNode = Node<Pick<Step, 'job'> & {
+  state: string;
   label: string;
-  jobId: Step['job_id'];
+  inspect: () => void;
 }, 'customNode'>;
 
 const CustomNode = ({ data }: NodeProps<CustomNode>) => {
-  const nodeRef = useRef<HTMLDivElement>(null);
   const functionName = extractFunctionName(data.job?.func || '');
 
   return (
-    <div ref={nodeRef} style={{
+    <div style={{
       minWidth: "250px",
     }}>
       <Handle type="target" position={Position.Left} style={{
         opacity: 0,
       }} />
-      <div className={`p-3 border border-2 border-${statusToColor(data.state ?? 'waiting')} bg-body`}>
+      <button type="button" onClick={data.inspect} aria-label={`Inspect step ${data.label}, ${data.state}`} className={`nodrag nopan w-100 text-start text-body p-3 border border-2 border-${statusToColor(data.state)} bg-body`}>
         <div className="d-flex align-items-center justify-content-between gap-2">
           <div className="fw-bold text-truncate" title={data.label}>{data.label}</div>
-          <StatusBadge status={data.state ?? 'waiting'} />
+          <StatusBadge status={data.state} />
         </div>
         {functionName && (
           <div className={"text-muted small text-truncate"} title={data.job?.func}>
             {functionName}
           </div>
         )}
-      </div>
+      </button>
       <Handle type="source" position={Position.Right} style={{
         opacity: 0,
       }}/>
@@ -83,7 +85,9 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   return { nodes: layoutNodes, edges };
 };
 
-const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
+const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow, onStepClick, matchingStepIds }) => {
+    const { fitView } = useReactFlow();
+    const matches = matchingStepIds ? new Set(matchingStepIds) : undefined;
     const nodes: Node[] = [];
     const edges: Edge[] = [];
 
@@ -93,10 +97,11 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
             type: 'customNode',
             data: {
               label: stepId,
-              jobId: step.job_id,
-              state: step.state,
+              state: stepStatus(step),
               job: step.job,
+              inspect: () => onStepClick(stepId),
             },
+            style: { opacity: matches && !matches.has(stepId) ? 0.35 : 1 },
             position: { x: 0, y: 0 },
         });
 
@@ -119,21 +124,28 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
     const { nodes: layoutNodes, edges: layoutEdges } = getLayoutedElements(nodes, edges);
 
     return (
-        <div style={{ width: '100%', height: '500px' }}>
+        <>
+          {matchingStepIds && (
+            <button className="btn btn-sm btn-outline-secondary mb-2" disabled={matchingStepIds.length === 0} onClick={() => void fitView({ nodes: matchingStepIds.map(id => ({ id })), padding: 0.2, maxZoom: 1 })}>Focus matching steps</button>
+          )}
+          <div style={{ width: '100%', height: '500px' }}>
             <ReactFlow
                 nodes={layoutNodes}
                 edges={layoutEdges}
                 nodeTypes={nodeTypes}
                 nodesDraggable={false}
                 nodesConnectable={false}
+                nodesFocusable={false}
                 proOptions={{
                     hideAttribution: true,
                 }}
                 fitView
             >
                 <Background gap={20} size={1} />
+                <Controls showInteractive={false} />
             </ReactFlow>
-        </div>
+          </div>
+        </>
     );
 };
 
