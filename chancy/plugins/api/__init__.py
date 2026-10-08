@@ -154,7 +154,6 @@ class Api(Plugin):
         self.port = port
         self.host = host
         self.debug = debug
-        self.root = Path(__file__).parent
         self.allow_origins = allow_origins or []
         self.plugins: set[type[ApiPlugin]] = {CoreApiPlugin}
         self.authentication_backend = authentication_backend
@@ -204,13 +203,11 @@ class Api(Plugin):
             ],
         )
 
-        web_plugins = []
         # Look through all the enabled plugins for any that implement the
         # ApiPlugin interface. If they do, we merge them into our Starlette
         # app.
         for api_plugin in plugins:
             wp = api_plugin(self)
-            web_plugins.append(wp)
             chancy.log.info(f"Loading API sub-plugin {wp.name()}")
 
             for route in wp.routes():
