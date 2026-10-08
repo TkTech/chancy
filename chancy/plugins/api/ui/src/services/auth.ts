@@ -1,20 +1,19 @@
-export function getToken(): string | null {
+export function getToken(serverUrl: string): string | null {
   try {
-    return localStorage.getItem('auth.token');
+    return localStorage.getItem(`auth.token:${serverUrl}`);
   } catch {
     return null;
   }
 }
 
-export function setToken(token: string) {
+export function setToken(serverUrl: string, token: string) {
   try {
-    localStorage.setItem('auth.token', token);
-  } catch {}
+    localStorage.setItem(`auth.token:${serverUrl}`, token);
+  } catch { /* Storage may be disabled by the browser. */ }
 }
 
-export function clearToken() {
+export function clearToken(serverUrl: string) {
   try {
-    localStorage.removeItem('auth.token');
-  } catch {}
+    localStorage.removeItem(`auth.token:${serverUrl}`);
+  } catch { /* Storage may be disabled by the browser. */ }
 }
-

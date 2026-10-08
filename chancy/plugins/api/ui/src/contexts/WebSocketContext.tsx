@@ -10,14 +10,14 @@ interface WebSocketContextValue {
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { url } = useServerConfiguration();
+  const { url, configuration } = useServerConfiguration();
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    if (!url) return;
+    if (!url || !configuration) return;
 
-    const t = getToken();
+    const t = getToken(url);
     const tokenQs = t ? `?token=${encodeURIComponent(t)}` : '';
     const wsProto = url.startsWith('https') ? 'wss' : 'ws';
     const wsUrl = `${wsProto}://${url.replace(/^https?:\/\//, '')}/api/v1/ws${tokenQs}`;
@@ -34,7 +34,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       setWs(null);
       setConnected(false);
     };
-  }, [url]);
+  }, [url, configuration]);
 
   const value = {
     ws,

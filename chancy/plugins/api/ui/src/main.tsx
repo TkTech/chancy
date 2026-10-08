@@ -25,6 +25,7 @@ import { ToastProvider } from './components/common/ToastProvider.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
 import { WebSocketProvider } from './contexts/WebSocketContext.tsx';
+import { dashboardBasePath } from './config.ts';
 
 const queryClient = new QueryClient();
 
@@ -50,7 +51,7 @@ const router = createBrowserRouter([
       { path: "/system", element: <System />},
     ]
   }
-]);
+], { basename: dashboardBasePath || '/' });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

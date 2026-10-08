@@ -21,8 +21,11 @@ Changelog
 - HTTP API now includes an unauthenticated endpoint for health checks, meant
   for docker/containers (#54).
 - Added dozens of new metrics, including metrics on workflows.
-- The starlette app can now be created without being started for advanced use
-  cases, and the mounting prefix for the SPA can be changed (@jklaise, #64).
+- The API and dashboard can now be mounted in existing Starlette or FastAPI
+  applications. Asset URLs, navigation, API requests, and WebSockets follow
+  the mount automatically, including nested mounts and ASGI proxy prefixes
+  (@jklaise, #64, #76). Saved authentication tokens are now scoped to each API
+  URL; existing dashboard sessions will need to sign in again.
 - Workflow performance has been significantly improved and can now handle
   many, individual workflows with thousands of jobs without issue.
 - Can now be used as a django-tasks backend, albeit with less functionality

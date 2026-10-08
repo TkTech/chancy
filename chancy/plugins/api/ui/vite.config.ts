@@ -6,6 +6,8 @@ import svgr from 'vite-plugin-svgr';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), svgr(), visualizer()],
+  // The server supplies the effective mount path via the HTML base element.
+  base: './',
   build: {
     outDir: '../dist',
     // Since our dist directory is outside the vite root,

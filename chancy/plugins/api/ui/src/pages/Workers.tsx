@@ -37,9 +37,9 @@ function WorkerInfoTable({ worker } : { worker: Worker }) {
             <div>
               {worker.queues.map((queue) => (
                 <span key={queue} className={'badge bg-primary me-1'}>
-                  <a href={`/queues/${queue}`} className={'text-white'}>
+                  <Link to={`/queues/${encodeURIComponent(queue)}`} className={'text-white'}>
                     {queue}
-                  </a>
+                  </Link>
                 </span>
               ))}
             </div>

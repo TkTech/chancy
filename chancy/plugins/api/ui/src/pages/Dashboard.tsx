@@ -101,7 +101,7 @@ export function Dashboard() {
           />
         </div>
         <div className="col-xl-3 d-none d-xl-flex align-items-center justify-content-center">
-          <img src="/logo_small.png" alt="Chancy" width={"128px"} height={"128px"}/>
+          <img src="logo_small.png" alt="Chancy" width={"128px"} height={"128px"}/>
         </div>
       </div>
 

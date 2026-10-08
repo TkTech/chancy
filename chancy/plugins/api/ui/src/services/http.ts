@@ -41,7 +41,7 @@ export async function request<T>(baseUrl: string, path: string, options: Request
   };
 
   // Attach bearer token if available
-  const token = getToken();
+  const token = getToken(baseUrl);
   if (token) {
     (init.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   }
@@ -70,7 +70,6 @@ function safeJsonParse(text: string) {
 export function parseWith<T>(schema: z.ZodType<T>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {
-    // eslint-disable-next-line no-console
     console.error('Response validation failed:', result.error.format());
     throw new Error('Invalid server response shape');
   }

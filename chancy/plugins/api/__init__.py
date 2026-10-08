@@ -3,13 +3,16 @@ import os
 import secrets
 from functools import partial
 from pathlib import Path
+from urllib.parse import quote
 
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import HTMLResponse, Response
 from starlette.staticfiles import StaticFiles
+from starlette.types import Scope
 
 from chancy import Chancy, Worker
 from chancy.plugin import Plugin
@@ -29,11 +32,44 @@ class _SPAStaticFiles(StaticFiles):
     doesn't match an existing file.
     """
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._index_path, _ = super().lookup_path("index.html")
+        self._index_html = Path(self._index_path).read_text(encoding="utf-8")
+
     def lookup_path(self, path: str) -> tuple[str, os.stat_result | None]:
         full_path, stat_result = super().lookup_path(path)
         if stat_result is None:
             return super().lookup_path("./index.html")
         return full_path, stat_result
+
+    def file_response(
+        self,
+        full_path: str | os.PathLike,
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        if full_path != self._index_path:
+            return super().file_response(
+                full_path, stat_result, scope, status_code
+            )
+
+        # The outer ASGI mounts (and any configured proxy root_path) determine
+        # the public URL. Set the base before the browser loads any assets.
+        root_path = "/" + scope.get("root_path", "").strip("/")
+        base_href = quote(root_path.rstrip("/") + "/", safe="/")
+        response = HTMLResponse(
+            self._index_html.replace(
+                '<base href="/">', f'<base href="{base_href}">', 1
+            ),
+            status_code=status_code,
+            # The HTML varies by mount and must not reuse static-file ETags.
+            headers={"Cache-Control": "no-store"},
+        )
+        if scope["method"] == "HEAD":
+            response.body = b""
+        return response
 
 
 class Api(Plugin):
@@ -128,10 +164,11 @@ class Api(Plugin):
     def get_identifier() -> str:
         return "chancy.api"
 
-    async def run(self, worker: Worker, chancy: Chancy):
+    def build_starlette_app(self, worker: Worker, chancy: Chancy) -> Starlette:
         """
-        Start the web server.
+        Build an ASGI app containing the API and dashboard.
         """
+        plugins = self.plugins.copy()
         for plug in chancy.plugins.values():
             api_plugin = plug.api_plugin()
             if api_plugin is None:
@@ -141,7 +178,7 @@ class Api(Plugin):
             if not issubclass(api_plugin, ApiPlugin):
                 continue
 
-            self.plugins.add(api_plugin)
+            plugins.add(api_plugin)
 
         def _r(f):
             return partial(f, chancy=chancy, worker=worker)
@@ -171,7 +208,7 @@ class Api(Plugin):
         # Look through all the enabled plugins for any that implement the
         # ApiPlugin interface. If they do, we merge them into our Starlette
         # app.
-        for api_plugin in self.plugins:
+        for api_plugin in plugins:
             wp = api_plugin(self)
             web_plugins.append(wp)
             chancy.log.info(f"Loading API sub-plugin {wp.name()}")
@@ -202,6 +239,14 @@ class Api(Plugin):
             ),
             name="ui",
         )
+
+        return app
+
+    async def run(self, worker: Worker, chancy: Chancy):
+        """
+        Start the standalone web server.
+        """
+        app = self.build_starlette_app(worker, chancy)
 
         server = uvicorn.Server(
             config=uvicorn.Config(

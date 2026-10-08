@@ -16,16 +16,18 @@ import MetricsIcon from './assets/icons/metrics.svg?react';
 import QueuesIcon from './assets/icons/queues.svg?react';
 import WorkersIcon from './assets/icons/workers.svg?react';
 import SystemIcon from './assets/icons/system.svg?react';
+import { normalizeServerUrl } from './config.ts';
 
 function Layout() {
-  const {configuration, isLoading, setHost, setPort, host, port, url, refetch} = useServerConfiguration();
+  const {configuration, isLoading, serverUrl, setServerUrl, url} = useServerConfiguration();
   const { connected } = useWebSocket();
   const { theme, toggleTheme } = useTheme();
   // Drawer sync is handled by a nested component within DrawerProvider
   const [formUsername, setFormUsername] = useState("");
   const [formPassword, setFormPassword] = useState("");
+  const [formServerUrl, setFormServerUrl] = useState(serverUrl);
+  const connectionUrl = normalizeServerUrl(formServerUrl);
   const queryClient = useQueryClient();
-  const [checkingSession, setCheckingSession] = useState(true);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('sidebarCollapsed');
@@ -40,7 +42,8 @@ function Layout() {
     mutationFn: async (
       {username, password}: { username: string, password: string }
     ) => {
-      const response = await fetch(`${url}/api/v1/login`, {
+      if (!connectionUrl) throw new Error('Enter a valid server URL');
+      const response = await fetch(`${connectionUrl}/api/v1/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -54,9 +57,9 @@ function Layout() {
       }
 
       const data = await response.json();
-      if (data?.token) setToken(data.token);
+      if (data?.token) setToken(connectionUrl, data.token);
+      setServerUrl(connectionUrl);
       await queryClient.invalidateQueries();
-      await refetch();
       return data;
     },
     onSuccess: () => {
@@ -66,21 +69,7 @@ function Layout() {
     }
   });
 
-  // Attempt to restore session on load.
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setCheckingSession(true);
-      try {
-        await refetch();
-      } finally {
-        if (!cancelled) setCheckingSession(false);
-      }
-    })();
-    return () => { cancelled = true };
-  }, [refetch]);
-
-  if (isLoading || checkingSession) {
+  if (isLoading) {
     return (
       <div className={"p-4"}>
         <Loading />
@@ -96,7 +85,7 @@ function Layout() {
           <div className="card shadow-lg">
             <div className="card-body p-4">
               <div className="text-center mb-4">
-                <img src="/logo_small.png" alt="Chancy Logo" width={"128px"} className="mb-3" />
+                <img src="logo_small.png" alt="Chancy Logo" width={"128px"} className="mb-3" />
               </div>
 
               {loginMutation.isError && (
@@ -138,33 +127,23 @@ function Layout() {
                 </div>
 
                 <h6 className="text-uppercase text-muted small fw-semibold mb-3">Server Connection</h6>
-                <div className={"form-floating mb-2"}>
-                  <input
-                    className={"form-control"}
-                    type={"text"}
-                    id={"host"}
-                    placeholder={"http://localhost"}
-                    value={host}
-                    onChange={(e) => setHost(e.target.value)}
-                  />
-                  <label htmlFor={"host"}>Host</label>
-                </div>
                 <div className={"form-floating mb-4"}>
                   <input
                     className={"form-control"}
-                    type={"number"}
-                    id={"port"}
-                    placeholder={"8000"}
-                    value={port}
-                    onChange={(e) => setPort(parseInt(e.target.value))}
+                    type={"url"}
+                    id={"server-url"}
+                    placeholder={"https://example.com/chancy"}
+                    value={formServerUrl}
+                    onChange={(e) => setFormServerUrl(e.target.value)}
+                    required
                   />
-                  <label htmlFor={"port"}>Port</label>
+                  <label htmlFor={"server-url"}>Server URL</label>
                 </div>
 
                 <button
                   type="submit"
                   className={"btn btn-primary w-100"}
-                  disabled={loginMutation.isPending}
+                  disabled={loginMutation.isPending || !connectionUrl}
                 >
                   {loginMutation.isPending ? <Spinner size={16} /> : "Connect"}
                 </button>
@@ -269,7 +248,7 @@ function Layout() {
         <div className="d-flex align-items-center justify-content-center px-3 py-3 border-bottom">
           {!sidebarCollapsed && (
             <>
-              <img src="/logo_small.png" alt="Chancy Logo" width="48" height="48" />
+              <img src="logo_small.png" alt="Chancy Logo" width="48" height="48" />
               <h5 className="ms-3 mb-0 fw-semibold flex-grow-1">Chancy</h5>
               <span title={connected ? 'Live updates connected' : 'Live updates disconnected'}>
                 <span className={`badge rounded-pill bg-${connected ? 'success' : 'secondary'} connection-badge`}></span>
@@ -277,7 +256,7 @@ function Layout() {
             </>
           )}
           {sidebarCollapsed && (
-            <img src="/logo_small.png" alt="Chancy Logo" width="48" height="48" />
+            <img src="logo_small.png" alt="Chancy Logo" width="48" height="48" />
           )}
         </div>
         <ul className="nav nav-pills flex-column flex-grow-1 px-3 py-3 sidebar-scrollable">
@@ -304,9 +283,8 @@ function Layout() {
             onClick={async () => {
               try {
                 await fetch(`${url}/api/v1/logout`, { method: 'POST' });
-                clearToken();
+                if (url) clearToken(url);
                 await queryClient.invalidateQueries();
-                await refetch();
                 // Clear any sensitive data from inputs on logout
                 setFormUsername('');
                 setFormPassword('');
