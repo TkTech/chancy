@@ -11,6 +11,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse, Response
+from starlette.routing import BaseRoute, Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
@@ -182,11 +183,50 @@ class Api(Plugin):
         def _r(f):
             return partial(f, chancy=chancy, worker=worker)
 
-        # Use pure token-based authentication for API requests.
-        backend = TokenAuthBackend(self.secret_key)
+        # Look through all the enabled plugins for any that implement the
+        # ApiPlugin interface. If they do, we merge them into our Starlette
+        # app.
+        routes: list[BaseRoute] = []
+        for api_plugin in plugins:
+            wp = api_plugin(self)
+            chancy.log.info(f"Loading API sub-plugin {wp.name()}")
 
-        app = Starlette(
+            for route in wp.routes():
+                if route.get("is_websocket"):
+                    routes.append(
+                        WebSocketRoute(
+                            route["path"],
+                            _r(route["endpoint"]),
+                            name=route["name"],
+                        )
+                    )
+                else:
+                    routes.append(
+                        Route(
+                            route["path"],
+                            _r(route["endpoint"]),
+                            methods=route["methods"],
+                            name=route["name"],
+                        )
+                    )
+
+        # Add the wildcard route to the end of the list so that it doesn't
+        # override any other routes and serves anything that should be handled
+        # by the UI SPA.
+        routes.append(
+            Mount(
+                "/",
+                app=_SPAStaticFiles(
+                    packages=[("chancy.plugins.api", "dist")],
+                    html=True,
+                ),
+                name="ui",
+            ),
+        )
+
+        return Starlette(
             debug=self.debug,
+            routes=routes,
             middleware=[
                 Middleware(
                     CORSMiddleware,
@@ -195,49 +235,12 @@ class Api(Plugin):
                     allow_headers=["*"],
                     allow_methods=["*"],
                 ),
-                # Session middleware removed in token-only mode.
                 Middleware(
                     AuthenticationMiddleware,
-                    backend=backend,
+                    backend=TokenAuthBackend(self.secret_key),
                 ),
             ],
         )
-
-        # Look through all the enabled plugins for any that implement the
-        # ApiPlugin interface. If they do, we merge them into our Starlette
-        # app.
-        for api_plugin in plugins:
-            wp = api_plugin(self)
-            chancy.log.info(f"Loading API sub-plugin {wp.name()}")
-
-            for route in wp.routes():
-                if route.get("is_websocket"):
-                    app.add_websocket_route(
-                        route["path"],
-                        _r(route["endpoint"]),
-                        name=route["name"],
-                    )
-                else:
-                    app.add_route(
-                        route["path"],
-                        _r(route["endpoint"]),
-                        methods=route["methods"],
-                        name=route["name"],
-                    )
-
-        # Add the wildcard route to the end of the list so that it doesn't
-        # override any other routes and serves anything that should be handled
-        # by the UI SPA.
-        app.mount(
-            "/",
-            _SPAStaticFiles(
-                packages=[("chancy.plugins.api", "dist")],
-                html=True,
-            ),
-            name="ui",
-        )
-
-        return app
 
     async def run(self, worker: Worker, chancy: Chancy):
         """

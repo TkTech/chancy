@@ -9,7 +9,7 @@ class RouteT(typing.TypedDict):
 
     path: str
     endpoint: typing.Callable
-    methods: str | None
+    methods: list[str] | None
     name: str | None
     is_websocket: bool | None
 
