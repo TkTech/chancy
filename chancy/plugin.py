@@ -188,7 +188,8 @@ class Plugin(abc.ABC):
         Use the supplied cursor for database work that must commit atomically
         with the job updates. Raising an exception rolls back the batch. This
         hook may run again on retry; avoid external or in-memory side effects.
-        Use :meth:`on_job_updated` for work that requires committed updates.
+        Use :meth:`~chancy.plugin.Plugin.on_job_updated` for work that requires
+        committed updates.
 
         :param worker: The worker saving the updates.
         :param jobs: Only updates whose claims matched and whose database rows

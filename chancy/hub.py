@@ -3,12 +3,13 @@ import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from itertools import chain
+from typing import Any
 
 
 @dataclass
 class Event:
     name: str
-    body: dict[str, any]
+    body: dict[str, Any]
 
 
 EventCallbackT = Callable[[Event], Awaitable[None]] | Callable[[Event], None]

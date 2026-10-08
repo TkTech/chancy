@@ -61,6 +61,7 @@ dev = [
     "pre-commit>=4.3.0",
     "ruff==0.16.2",
     "pytest-xdist>=3.8.0",
+    "sphinx-copybutton>=0.5.2",
 ]
 
 [project.scripts]

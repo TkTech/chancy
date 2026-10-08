@@ -108,7 +108,7 @@ class ProcessExecutor(ConcurrentExecutor):
         NLTK datasets or calling ``django.setup()``.
 
         This isn't called once per job but once per worker process until
-        :attr:`~ProcessExecutor.maximum_jobs_per_worker` is reached (if
+        ``maximum_jobs_per_worker`` is reached (if
         set). After that, the worker process is replaced with a new one.
 
         .. note::

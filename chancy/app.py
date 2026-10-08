@@ -524,7 +524,7 @@ class Chancy:
         Push a job onto the queue.
 
         This method will push a job onto the queue, making it available for
-        processing by workers. A :class:`Reference` object is returned that
+        processing by workers. A :class:`~chancy.job.Reference` is returned that
         can be used to track the progress of the job and retrieve the result
         when it is complete.
 

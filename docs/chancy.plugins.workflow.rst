@@ -1,6 +1,8 @@
 Workflows
 =========
 
+.. currentmodule:: chancy.plugins.workflow
+
 .. autoclass:: chancy.plugins.workflow.WorkflowPlugin
    :members:
    :undoc-members:
@@ -25,3 +27,9 @@ Workflows
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. autoexception:: chancy.plugins.workflow.EmptyWorkflowError
+
+.. autoexception:: chancy.plugins.workflow.CircularDependencyError
+
+.. autoexception:: chancy.plugins.workflow.InvalidDependencyError

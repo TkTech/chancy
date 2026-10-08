@@ -212,7 +212,7 @@ jobs:
 
       - name: Testing and building docs
         run: |
-          cd docs && uv run make clean doctest html
+          cd docs && uv run make clean doctest html SPHINXOPTS="-W --keep-going"
 
       - name: Publishing documentation
         if: github.event_name == 'release'
