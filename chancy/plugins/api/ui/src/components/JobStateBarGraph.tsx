@@ -1,6 +1,6 @@
 import React from 'react';
 import { useServerConfiguration } from '../hooks/useServerConfiguration';
-import { useMetricDetail, MetricPoint } from '../hooks/useMetrics';
+import { useMetricDetail, MetricData } from '../hooks/useMetrics';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const STATE_COLORS = {
@@ -79,20 +79,18 @@ export function JobStateBarGraph() {
     }
 
     // Create a map of data points by timestamp
-    const dataMap = new Map<number, any>();
+    const dataMap = new Map<number, Partial<Record<keyof typeof STATE_COLORS, number>>>();
 
-    const addDataPoints = (data: any, state: string) => {
+    const addDataPoints = (data: Record<string, MetricData> | undefined, state: keyof typeof STATE_COLORS) => {
       if (!data) return;
       const key = `global:status:${state}`;
       const metricData = data[key];
       if (!metricData?.data) return;
 
-      metricData.data.forEach((point: MetricPoint) => {
+      metricData.data.forEach((point) => {
         const timestamp = new Date(point.timestamp).getTime();
-        if (!dataMap.has(timestamp)) {
-          dataMap.set(timestamp, {});
-        }
-        const entry = dataMap.get(timestamp);
+        const entry = dataMap.get(timestamp) ?? {};
+        dataMap.set(timestamp, entry);
         entry[state] = typeof point.value === 'number' ? point.value : 0;
       });
     };

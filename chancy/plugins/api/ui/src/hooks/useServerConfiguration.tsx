@@ -8,9 +8,9 @@ interface ServerConfiguration {
   plugins: string[],
 }
 
-const ServerContext = React.createContext<ReturnType<typeof useServerSettings> | null>(null);
+export const ServerContext = React.createContext<ReturnType<typeof useServerSettings> | null>(null);
 
-function useServerSettings() {
+export function useServerSettings() {
   // Keep overrides separate for dashboards mounted on the same origin.
   const [serverUrl, setServerUrl] = useLocalStorage<string>(
     `settings.serverUrl:${dashboardBasePath}`,
@@ -43,16 +43,6 @@ function useServerSettings() {
     url,
     refetch,
   }
-}
-
-export function ServerConfigurationProvider({children}: {children: React.ReactNode}) {
-  const value = useServerSettings();
-
-  return (
-    <ServerContext.Provider value={value}>
-      {children}
-    </ServerContext.Provider>
-  )
 }
 
 export function useServerConfiguration() {

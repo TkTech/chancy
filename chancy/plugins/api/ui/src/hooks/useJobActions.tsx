@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChancyApi } from '../services/chancy';
 import { useServerConfiguration } from './useServerConfiguration';
-import { useToast } from '../components/common/ToastProvider';
+import { useToast } from '../components/common/ToastContext';
 
 export function useJobActions() {
   const { url } = useServerConfiguration();
@@ -26,7 +26,7 @@ export function useJobActions() {
       toast.show('Job retry scheduled', 'success');
       await invalidate();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to retry job', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to retry job', 'error'),
   });
 
   const cancel = useMutation({
@@ -38,7 +38,7 @@ export function useJobActions() {
       toast.show('Job cancelled', 'success');
       await invalidate();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to cancel job', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to cancel job', 'error'),
   });
 
   const purge = useMutation({
@@ -51,7 +51,7 @@ export function useJobActions() {
       toast.show('Job(s) purged', 'success');
       await invalidate();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to purge job(s)', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to purge job(s)', 'error'),
   });
 
   return { retry, cancel, purge } as const;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Queue } from '../services/chancy';
 
 /**
  * Form input schema for Queue editing/creation.
@@ -56,15 +57,15 @@ export const defaultQueueValues: QueueFormInput = {
 /**
  * Converts a Queue API response to form input values
  */
-export function queueToFormValues(queue: any): QueueFormInput {
+export function queueToFormValues(queue: Partial<Queue>): QueueFormInput {
   return {
-    name: queue.name,
+    name: queue.name ?? '',
     concurrency: queue.concurrency != null ? String(queue.concurrency) : '',
     polling_interval: String(queue.polling_interval),
     eager_polling: queue.eager_polling ?? false,
     rate_limit: queue.rate_limit != null ? String(queue.rate_limit) : '',
     rate_limit_window: queue.rate_limit_window != null ? String(queue.rate_limit_window) : '',
-    tags: [...queue.tags],
+    tags: [...(queue.tags ?? ['.*'])],
     executor_options: JSON.stringify(queue.executor_options || {}, null, 2),
   };
 }

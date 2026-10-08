@@ -11,7 +11,7 @@ import Layout from './Layout.tsx'
 import './index.scss'
 // @ts-expect-error We need to import this for the side effects
 import * as bootstrap from 'bootstrap'; // eslint-disable-line
-import {ServerConfigurationProvider} from './hooks/useServerConfiguration.tsx';
+import {ServerConfigurationProvider} from './contexts/ServerConfigurationProvider.tsx';
 import {Queue, Queues} from './pages/Queues.tsx';
 import {WorkerDetails, Workers} from './pages/Workers.tsx';
 import {Job, Jobs} from './pages/Jobs.tsx';
@@ -23,8 +23,8 @@ import {Dashboard} from './pages/Dashboard.tsx';
 import {System} from './pages/System.tsx';
 import { ToastProvider } from './components/common/ToastProvider.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
-import { ThemeProvider } from './contexts/ThemeContext.tsx';
-import { WebSocketProvider } from './contexts/WebSocketContext.tsx';
+import { ThemeProvider } from './contexts/ThemeProvider.tsx';
+import { WebSocketProvider } from './contexts/WebSocketProvider.tsx';
 import { dashboardBasePath } from './config.ts';
 
 const queryClient = new QueryClient();

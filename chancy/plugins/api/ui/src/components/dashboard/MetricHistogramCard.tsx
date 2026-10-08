@@ -1,4 +1,4 @@
-import { useMetricDetail } from '../../hooks/useMetrics';
+import { useMetricDetail, MetricData } from '../../hooks/useMetrics';
 import { MetricCard } from './MetricCard';
 import { MiniSparkline } from './MiniSparkline';
 
@@ -22,7 +22,7 @@ const getLimit = (resolution: string) => {
   }[resolution] || 60;
 };
 
-const getLatestValue = (data: any, stat: 'avg' | 'min' | 'max' = 'avg') => {
+const getLatestValue = (data: Record<string, MetricData> | undefined, stat: 'avg' | 'min' | 'max' = 'avg') => {
   if (!data) return 0;
   const key = Object.keys(data)[0];
   if (!key || !data[key]?.data || data[key].data.length === 0) return 0;
@@ -30,14 +30,14 @@ const getLatestValue = (data: any, stat: 'avg' | 'min' | 'max' = 'avg') => {
   const latestPoint = data[key].data[data[key].data.length - 1];
 
   // For histogram metrics, use the specified stat
-  if (data[key].type === 'histogram' && latestPoint?.value?.[stat] !== undefined) {
+  if (data[key].type === 'histogram' && typeof latestPoint?.value === 'object' && latestPoint.value[stat] !== undefined) {
     return latestPoint.value[stat];
   }
 
   return 0;
 };
 
-const getSparklineData = (data: any, stat: 'avg' | 'min' | 'max' = 'avg') => {
+const getSparklineData = (data: Record<string, MetricData> | undefined, stat: 'avg' | 'min' | 'max' = 'avg') => {
   if (!data) {
     return Array(10).fill({ value: 0 });
   }
@@ -50,8 +50,8 @@ const getSparklineData = (data: any, stat: 'avg' | 'min' | 'max' = 'avg') => {
   // For histogram metrics, extract the specified stat
   const isHistogram = data[key].type === 'histogram';
 
-  return data[key].data.map((point: any) => ({
-    value: isHistogram && point.value?.[stat] !== undefined ? point.value[stat] : 0
+  return data[key].data.map((point) => ({
+    value: isHistogram && typeof point.value === 'object' && point.value[stat] !== undefined ? point.value[stat] : 0
   }));
 };
 

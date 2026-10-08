@@ -3,7 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { TimelineConfig, calculateCronExecutions, getTimelineWidth } from '../../utils/timeline';
 import { TimelineAxis } from './TimelineAxis';
 import { CronTimelineRow } from './CronTimelineRow';
-import { useDrawer } from '../common/DrawerProvider';
+import { useDrawer } from '../common/DrawerContext';
 import { CronDetailView } from './CronDetailView';
 
 interface CronJob {
@@ -38,6 +38,8 @@ const COLORS = [
 ];
 
 export function CronTimeline({ crons }: CronTimelineProps) {
+  // TanStack Virtual is not compiler-safe yet: https://github.com/TanStack/virtual/issues/1119
+  'use no memo';
   const parentRef = useRef<HTMLDivElement>(null);
   const drawer = useDrawer();
   const [currentTime] = useState(new Date());
@@ -77,6 +79,7 @@ export function CronTimeline({ crons }: CronTimelineProps) {
   }, [crons, config]);
 
   // Virtual scrolling for rows
+  // eslint-disable-next-line react-hooks/incompatible-library -- This component explicitly opts out of React Compiler memoization.
   const rowVirtualizer = useVirtualizer({
     count: cronExecutions.length,
     getScrollElement: () => parentRef.current,

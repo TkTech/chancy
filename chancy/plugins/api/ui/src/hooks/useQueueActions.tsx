@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChancyApi, Queue } from '../services/chancy';
 import { useServerConfiguration } from './useServerConfiguration';
-import { useToast } from '../components/common/ToastProvider';
+import { useToast } from '../components/common/ToastContext';
 
 export function useQueueActions() {
   const { url } = useServerConfiguration();
@@ -25,7 +25,7 @@ export function useQueueActions() {
       toast.show('Queue created', 'success');
       await invalidateQueues();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to create queue', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to create queue', 'error'),
   });
 
   const update = useMutation({
@@ -37,7 +37,7 @@ export function useQueueActions() {
       toast.show('Queue updated', 'success');
       await invalidateQueues();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to update queue', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to update queue', 'error'),
   });
 
   const pause = useMutation({
@@ -49,7 +49,7 @@ export function useQueueActions() {
       toast.show('Queue paused', 'success');
       await invalidateQueues();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to pause queue', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to pause queue', 'error'),
   });
 
   const resume = useMutation({
@@ -61,7 +61,7 @@ export function useQueueActions() {
       toast.show('Queue resumed', 'success');
       await invalidateQueues();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to resume queue', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to resume queue', 'error'),
   });
 
   const remove = useMutation({
@@ -73,7 +73,7 @@ export function useQueueActions() {
       toast.show('Queue deleted', 'success');
       await invalidateQueues();
     },
-    onError: (e: any) => toast.show(e?.message || 'Failed to delete queue', 'error'),
+    onError: (e) => toast.show(e?.message || 'Failed to delete queue', 'error'),
   });
 
   return { create, update, pause, resume, remove } as const;

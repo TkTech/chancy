@@ -48,7 +48,7 @@ function Stage({ label, value, icon, tooltip }: { label: string, value: string, 
 }
 
 export function JobTimers({ job }: { job: Job }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(Date.now);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   const createdAt = useMemo(() => parse(job.created_at), [job.created_at]);
@@ -82,7 +82,7 @@ export function JobTimers({ job }: { job: Job }) {
     }
     const value = completedAt ? `${formatDuration(now - completedAt)} ago` : '-';
     return { label, icon, variant, value } as const;
-  }, [job.state, completedAt, runningMs, now]);
+  }, [job.state, completedAt, now]);
 
   const isPending = job.state === 'pending';
 

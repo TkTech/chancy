@@ -1,52 +1,11 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useServerConfiguration } from '../hooks/useServerConfiguration';
-import { getToken } from '../services/auth';
+import { createContext, useContext } from 'react';
 
-interface WebSocketContextValue {
+export interface WebSocketContextValue {
   ws: WebSocket | null;
   connected: boolean;
 }
 
-const WebSocketContext = createContext<WebSocketContextValue | null>(null);
-
-export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { url, configuration } = useServerConfiguration();
-  const [ws, setWs] = useState<WebSocket | null>(null);
-  const [connected, setConnected] = useState(false);
-
-  useEffect(() => {
-    if (!url || !configuration) return;
-
-    const t = getToken(url);
-    const tokenQs = t ? `?token=${encodeURIComponent(t)}` : '';
-    const wsProto = url.startsWith('https') ? 'wss' : 'ws';
-    const wsUrl = `${wsProto}://${url.replace(/^https?:\/\//, '')}/api/v1/ws${tokenQs}`;
-
-    const websocket = new WebSocket(wsUrl);
-    setWs(websocket);
-
-    websocket.onopen = () => setConnected(true);
-    websocket.onerror = () => setConnected(false);
-    websocket.onclose = () => setConnected(false);
-
-    return () => {
-      websocket.close();
-      setWs(null);
-      setConnected(false);
-    };
-  }, [url, configuration]);
-
-  const value = {
-    ws,
-    connected,
-  };
-
-  return (
-    <WebSocketContext.Provider value={value}>
-      {children}
-    </WebSocketContext.Provider>
-  );
-}
+export const WebSocketContext = createContext<WebSocketContextValue | null>(null);
 
 export function useWebSocket() {
   const context = useContext(WebSocketContext);

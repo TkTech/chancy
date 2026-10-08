@@ -1,7 +1,7 @@
 import {useQuery} from '@tanstack/react-query';
 import { request } from '../services/http';
 
-interface Cron {
+export interface Cron {
   unique_key: string;
   cron: string,
   timezone: string,

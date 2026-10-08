@@ -1,4 +1,4 @@
-import { useMetricDetail } from '../../hooks/useMetrics';
+import { useMetricDetail, MetricData } from '../../hooks/useMetrics';
 import { MetricCard } from './MetricCard';
 import { MiniSparkline } from './MiniSparkline';
 
@@ -20,7 +20,7 @@ const getLimit = (resolution: string) => {
   }[resolution] || 60;
 };
 
-const getSparklineData = (data: any) => {
+const getSparklineData = (data: Record<string, MetricData> | undefined) => {
   if (!data) {
     return Array(10).fill({ value: 0 });
   }
@@ -33,12 +33,12 @@ const getSparklineData = (data: any) => {
   // For histogram metrics, extract the avg value
   const isHistogram = data[key].type === 'histogram';
 
-  return data[key].data.map((point: any) => ({
-    value: isHistogram && point.value?.avg ? point.value.avg : 0
+  return data[key].data.map((point) => ({
+    value: isHistogram && typeof point.value === 'object' && point.value.avg ? point.value.avg : 0
   }));
 };
 
-const getLatestSize = (data: any) => {
+const getLatestSize = (data: Record<string, MetricData> | undefined) => {
   if (!data) return 0;
   const key = Object.keys(data)[0];
   if (!key || !data[key]?.data || data[key].data.length === 0) return 0;
@@ -46,7 +46,7 @@ const getLatestSize = (data: any) => {
   const latestPoint = data[key].data[data[key].data.length - 1];
 
   // For histogram metrics, use the avg value
-  if (data[key].type === 'histogram' && latestPoint?.value?.avg) {
+  if (data[key].type === 'histogram' && typeof latestPoint?.value === 'object' && latestPoint.value.avg) {
     return latestPoint.value.avg;
   }
 

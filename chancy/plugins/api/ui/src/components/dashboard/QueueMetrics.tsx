@@ -1,4 +1,4 @@
-import { useMetricDetail } from '../../hooks/useMetrics';
+import { useMetricDetail, MetricData } from '../../hooks/useMetrics';
 import { MiniSparkline } from './MiniSparkline';
 import { Link } from 'react-router';
 
@@ -53,14 +53,14 @@ export function QueueMetrics({ queueName, url, resolution = '5min' }: QueueMetri
   });
 
   // Calculate metrics
-  const calculateTotal = (data: any) => {
+  const calculateTotal = (data: Record<string, MetricData> | undefined) => {
     if (!data) return 0;
     const key = Object.keys(data)[0];
     if (!key || !data[key]?.data) return 0;
-    return data[key].data.reduce((sum: number, point: any) => sum + (point.value || 0), 0);
+    return data[key].data.reduce((sum: number, point) => sum + (typeof point.value === 'number' ? point.value : 0), 0);
   };
 
-  const calculateAverage = (data: any) => {
+  const calculateAverage = (data: Record<string, MetricData> | undefined) => {
     if (!data) return 0;
     const key = Object.keys(data)[0];
     if (!key || !data[key]?.data) return 0;
@@ -71,17 +71,17 @@ export function QueueMetrics({ queueName, url, resolution = '5min' }: QueueMetri
     if (isHistogram) {
       // Get the latest avg value from histogram
       const latestPoint = data[key].data[data[key].data.length - 1];
-      return latestPoint?.value?.avg || 0;
+      return typeof latestPoint?.value === 'object' ? latestPoint.value.avg ?? 0 : 0;
     }
 
     // For regular metrics, calculate average
-    const values = data[key].data.filter((point: any) => point.value > 0);
+    const values = data[key].data.map(point => point.value).filter((value): value is number => typeof value === 'number' && value > 0);
     if (values.length === 0) return 0;
-    const sum = values.reduce((acc: number, point: any) => acc + point.value, 0);
+    const sum = values.reduce((acc, value) => acc + value, 0);
     return sum / values.length;
   };
 
-  const getSparklineData = (data: any, useAvg = false) => {
+  const getSparklineData = (data: Record<string, MetricData> | undefined, useAvg = false) => {
     if (!data) {
       // Return array of zeros to show flat line
       return Array(10).fill({ value: 0 });
@@ -96,10 +96,10 @@ export function QueueMetrics({ queueName, url, resolution = '5min' }: QueueMetri
     const isHistogram = data[key].type === 'histogram';
 
     // Extract values from the data points
-    return data[key].data.map((point: any) => {
+    return data[key].data.map((point) => {
       let value = 0;
       if (useAvg && isHistogram) {
-        value = point.value?.avg || 0;
+        value = typeof point.value === 'object' ? point.value.avg ?? 0 : 0;
       } else if (typeof point.value === 'number') {
         value = point.value;
       } else if (point.value) {

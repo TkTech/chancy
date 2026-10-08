@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
 export type FilterTriple = [string, string, string]; // [key, operator, value]
 
@@ -27,46 +27,21 @@ type DropdownState = {
 
 export function SearchFilter({ fields, value, onChange, placeholder = 'Add filter...' }: SearchFilterProps) {
   const [inputValue, setInputValue] = useState('');
-  const [dropdown, setDropdown] = useState<DropdownState | null>(null);
+  const [dropdownState, setDropdown] = useState<DropdownState | null>(null);
   const [loading, setLoading] = useState(false);
   const [partialFilter, setPartialFilter] = useState<{ fieldKey?: string; operator?: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Show field suggestions when input is focused or typing
-  useEffect(() => {
-    // Only auto-update dropdown when not in a partial filter (or only at field selection stage)
-    if (partialFilter?.fieldKey) {
-      // Already selected a field, don't interfere with operator/value stages
-      return;
-    }
-
-    if (inputValue === '' && document.activeElement === inputRef.current) {
-      // Show available fields
-      setDropdown({
-        type: 'field',
-        suggestions: Object.keys(fields),
-        selectedIndex: 0,
-      });
-    } else if (inputValue.trim()) {
-      // Filter fields by input
-      const matchingFields = Object.keys(fields).filter(key =>
-        key.toLowerCase().includes(inputValue.toLowerCase()) ||
-        fields[key].label.toLowerCase().includes(inputValue.toLowerCase())
-      );
-      if (matchingFields.length > 0) {
-        setDropdown({
-          type: 'field',
-          suggestions: matchingFields,
-          selectedIndex: 0,
-        });
-      } else {
-        setDropdown(null);
-      }
-    } else {
-      setDropdown(null);
-    }
-  }, [inputValue, fields, partialFilter]);
+  const matchingFields = Object.keys(fields).filter(key =>
+    key.toLowerCase().includes(inputValue.toLowerCase()) ||
+    fields[key].label.toLowerCase().includes(inputValue.toLowerCase())
+  );
+  const dropdown = dropdownState?.type === 'field' ? {
+    ...dropdownState,
+    suggestions: matchingFields,
+    selectedIndex: Math.max(0, Math.min(dropdownState.selectedIndex, matchingFields.length - 1)),
+  } : dropdownState;
 
   const selectField = (fieldKey: string) => {
     const field = fields[fieldKey];
@@ -132,7 +107,7 @@ export function SearchFilter({ fields, value, onChange, placeholder = 'Add filte
     onChange([...value, [fieldKey, operator, selectedValue]]);
     // Reset input and partial filter
     setInputValue('');
-    setDropdown(null);
+    setDropdown({ type: 'field', suggestions: [], selectedIndex: 0 });
     setPartialFilter(null);
     inputRef.current?.focus();
   };
@@ -236,6 +211,9 @@ export function SearchFilter({ fields, value, onChange, placeholder = 'Add filte
   const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
     setInputValue(newValue);
+    if (!partialFilter?.fieldKey) {
+      setDropdown({ type: 'field', suggestions: [], selectedIndex: 0 });
+    }
 
     // If we're in value input mode with autocomplete, filter suggestions
     if (dropdown?.type === 'value' && dropdown.fieldKey && fields[dropdown.fieldKey].getSuggestions) {
@@ -255,7 +233,7 @@ export function SearchFilter({ fields, value, onChange, placeholder = 'Add filte
     }
   };
 
-  const handleInputBlur = (_e: React.FocusEvent<HTMLInputElement>) => {
+  const handleInputBlur = () => {
     // Delay to allow clicking on dropdown items
     setTimeout(() => {
       if (!dropdownRef.current?.contains(document.activeElement)) {

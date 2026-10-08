@@ -1,11 +1,11 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {useCrons} from '../hooks/useCrons.tsx';
+import {useCrons, Cron as CronSchedule} from '../hooks/useCrons.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router';
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
 import { PageHeader } from '../components/common/PageHeader';
 import { CronTimeline } from '../components/cron/CronTimeline';
-import { useDrawer } from '../components/common/DrawerProvider';
+import { useDrawer } from '../components/common/DrawerContext';
 import { CronDetailView } from '../components/cron/CronDetailView';
 
 export function Cron() {
@@ -40,7 +40,7 @@ export function Crons() {
 
   if (isLoading) return <Loading />;
 
-  const handleCronClick = (cron: any) => {
+  const handleCronClick = (cron: CronSchedule) => {
     drawer.open(
       <CronDetailView cron={cron} />,
       { title: `Scheduled Job` }

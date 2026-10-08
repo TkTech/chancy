@@ -9,7 +9,7 @@ interface GossipEvent {
   timestamp: Date;
   firstSeen: Date;
   event: string;
-  data: any;
+  data: unknown;
   count: number;
   isAggregated: boolean;
 }
@@ -28,14 +28,16 @@ export function Gossip() {
   useEffect(() => {
     if (!ws) return;
 
+    const buffer = bufferRef.current;
+
     const flushBuffer = () => {
       const now = Date.now();
       const toFlush: GossipEvent[] = [];
 
-      for (const [key, {event, lastSeen}] of bufferRef.current.entries()) {
+      for (const [key, {event, lastSeen}] of buffer.entries()) {
         if (now - lastSeen.getTime() >= AGGREGATION_WINDOW_MS) {
           toFlush.push(event);
-          bufferRef.current.delete(key);
+          buffer.delete(key);
         }
       }
 
@@ -46,7 +48,7 @@ export function Gossip() {
         });
       }
 
-      if (bufferRef.current.size > 0) {
+      if (buffer.size > 0) {
         flushTimerRef.current = setTimeout(flushBuffer, FLUSH_INTERVAL_MS);
       } else {
         flushTimerRef.current = null;
@@ -64,14 +66,14 @@ export function Gossip() {
         const aggKey = `${evt}::${JSON.stringify(data)}`;
         const now = new Date();
 
-        const existing = bufferRef.current.get(aggKey);
+        const existing = buffer.get(aggKey);
         if (existing) {
           existing.event.count++;
           existing.event.timestamp = now;
           existing.event.isAggregated = existing.event.count > 5;
           existing.lastSeen = now;
         } else {
-          bufferRef.current.set(aggKey, {
+          buffer.set(aggKey, {
             event: {
               timestamp: now,
               firstSeen: now,
@@ -100,7 +102,7 @@ export function Gossip() {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
-      bufferRef.current.clear();
+      buffer.clear();
       setEvents([]);
     };
   }, [ws]);
@@ -169,7 +171,7 @@ export function Gossip() {
                     )}
                   </td>
                   <td>
-                    {event.data && Object.keys(event.data).length > 0 ? (
+                    {event.data != null && (typeof event.data !== 'object' || Object.keys(event.data).length > 0) ? (
                       <div className="json-viewer-container">
                         <JsonViewer value={event.data} theme={theme} />
                       </div>

@@ -7,7 +7,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { useJobActions } from '../hooks/useJobActions.tsx';
 import { useConfirm } from '../components/common/ConfirmDialog.tsx';
 import { JobDetailsView } from '../features/jobs/JobDetailsView';
-import { useDrawer } from '../components/common/DrawerProvider';
+import { useDrawer } from '../components/common/DrawerContext';
 import { PageHeader } from '../components/common/PageHeader';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { DataTable } from '../components/common/DataTable';

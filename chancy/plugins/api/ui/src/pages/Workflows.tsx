@@ -1,9 +1,9 @@
 import React from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
-import {useWorkflow, useWorkflows, FilterTriple} from '../hooks/useWorkflows.tsx';
+import {useWorkflow, useWorkflows, FilterTriple, Step} from '../hooks/useWorkflows.tsx';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams, useSearchParams} from 'react-router';
-import { useDrawer } from '../components/common/DrawerProvider';
+import { useDrawer } from '../components/common/DrawerContext';
 import { JobDetailsView } from '../features/jobs/JobDetailsView';
 // Drawer and JobDetailsView are not directly used here; navigation state opens drawer in Layout
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
@@ -28,7 +28,7 @@ export function Workflow() {
   const { data: workflow, isLoading } = useWorkflow({ url, workflow_id, options: {refetchInterval: 5000 } });
   const drawer = useDrawer();
 
-  const handleStepClick = (step: any, step_id: string) => {
+  const handleStepClick = (step: Step, step_id: string) => {
     if (step.job_id) {
       // Job has started, show the running job details
       drawer.open(<JobDetailsView job_id={step.job_id} />, { title: `Job Details - ${step_id}` });
@@ -232,7 +232,7 @@ export function Workflows() {
   const resolution = '5min';
 
   // Parse filters from URL or use default
-  const filtersFromUrl = React.useMemo(() => {
+  const filters = React.useMemo(() => {
     const filtersParam = searchParams.get('filters');
     if (!filtersParam) return [];
     try {
@@ -243,18 +243,17 @@ export function Workflows() {
     }
   }, [searchParams]);
 
-  const [filters, setFilters] = React.useState<FilterTriple[]>(filtersFromUrl);
-
-  // Sync filters to URL
-  React.useEffect(() => {
-    const newParams = new URLSearchParams(searchParams);
-    if (filters.length > 0) {
-      newParams.set('filters', JSON.stringify(filters));
-    } else {
-      newParams.delete('filters');
-    }
-    setSearchParams(newParams, { replace: true });
-  }, [filters]);
+  const setFilters = (nextFilters: FilterTriple[]) => {
+    setSearchParams(previous => {
+      const params = new URLSearchParams(previous);
+      if (nextFilters.length > 0) {
+        params.set('filters', JSON.stringify(nextFilters));
+      } else {
+        params.delete('filters');
+      }
+      return params;
+    }, { replace: true });
+  };
 
   // Define filter field configuration
   const workflowFilterFields: Record<string, FieldConfig> = React.useMemo(() => ({

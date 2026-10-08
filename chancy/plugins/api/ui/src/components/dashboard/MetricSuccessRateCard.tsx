@@ -1,4 +1,4 @@
-import { useMetricDetail } from '../../hooks/useMetrics';
+import { useMetricDetail, MetricData } from '../../hooks/useMetrics';
 import { MetricCard } from './MetricCard';
 
 interface MetricSuccessRateCardProps {
@@ -19,11 +19,11 @@ const getLimit = (resolution: string) => {
   }[resolution] || 60;
 };
 
-const calculateTotal = (data: any) => {
+const calculateTotal = (data: Record<string, MetricData> | undefined) => {
   if (!data) return 0;
   const key = Object.keys(data)[0];
   if (!key || !data[key]?.data) return 0;
-  return data[key].data.reduce((sum: number, point: any) =>
+  return data[key].data.reduce((sum: number, point) =>
     sum + (typeof point.value === 'number' ? point.value : 0), 0
   );
 };
