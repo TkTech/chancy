@@ -648,16 +648,21 @@ async def test_poll_revisits_workflows_during_continuous_arrivals(
 ):
     """New arrivals cannot postpone revisiting an older workflow forever."""
     await chancy.declare(Queue("default"))
+    # Give each batch a fixed UUID range, independent of clock precision,
+    # and create its workflows out of UUID order.
     initial = [
         await WorkflowPlugin.push(
-            chancy, Workflow(f"initial_{i}").add("step", sync_success)
+            chancy,
+            Workflow(f"initial_{i}", id=str(UUID(int=i))).add(
+                "step", sync_success
+            ),
         )
-        for i in range(3)
+        for i in (3, 1, 2)
     ]
     plugin = WorkflowPlugin(max_workflows_per_run=2)
     assert await _poll(plugin, chancy, worker_no_start) == 2
 
-    workflow = await WorkflowPlugin.fetch_workflow(chancy, initial[0])
+    workflow = await WorkflowPlugin.fetch_workflow(chancy, min(initial))
     first = await chancy.get_job(Reference(workflow.steps["step"].job_id))
     await worker_no_start.queue_update(
         replace(first, state=QueuedJob.State.SUCCEEDED)
@@ -670,18 +675,21 @@ async def test_poll_revisits_workflows_during_continuous_arrivals(
             [
                 await WorkflowPlugin.push(
                     chancy,
-                    Workflow(f"arrival_{batch}_{i}").add("step", sync_success),
+                    Workflow(
+                        f"arrival_{batch}_{i}",
+                        id=str(UUID(int=4 + batch * 2 + i)),
+                    ).add("step", sync_success),
                 )
-                for i in range(2)
+                for i in (1, 0)
             ]
         )
         assert 0 < await _poll(plugin, chancy, worker_no_start) <= 2
 
-    workflow = await WorkflowPlugin.fetch_workflow(chancy, initial[0])
+    workflow = await WorkflowPlugin.fetch_workflow(chancy, min(initial))
     assert workflow.state == Workflow.State.COMPLETED
     # A new sweep must also include arrivals, even while older jobs remain
     # running. Waiting for those jobs to finish would starve the new ones.
-    workflow = await WorkflowPlugin.fetch_workflow(chancy, arrivals[0])
+    workflow = await WorkflowPlugin.fetch_workflow(chancy, min(arrivals))
     assert workflow.state == Workflow.State.RUNNING
 
 
@@ -732,8 +740,9 @@ async def test_poll_restarts_when_sweep_tail_finishes(
     ],
     indirect=True,
 )
+@pytest.mark.parametrize("locked_id", [1, 2, 3])
 async def test_poll_revisits_skipped_locks(
-    chancy: Chancy, worker_no_start: Worker
+    chancy: Chancy, worker_no_start: Worker, locked_id: int
 ):
     """Locked workflows are skipped and revisited after their release."""
     plugin = WorkflowPlugin(max_workflows_per_run=2)
@@ -741,9 +750,12 @@ async def test_poll_revisits_skipped_locks(
     await chancy.declare(Queue("default"))
     ids = [
         await WorkflowPlugin.push(
-            chancy, Workflow(f"locked_{i}").add("step", sync_success)
+            chancy,
+            Workflow(f"locked_{i}", id=str(UUID(int=i))).add(
+                "step", sync_success
+            ),
         )
-        for i in range(3)
+        for i in (3, 1, 2)
     ]
 
     async with chancy.pool.connection() as conn, conn.cursor() as cursor:
@@ -751,7 +763,7 @@ async def test_poll_revisits_skipped_locks(
             sql.SQL(
                 "SELECT id FROM {workflows} WHERE id = %s FOR UPDATE"
             ).format(workflows=sql.Identifier(f"{chancy.prefix}workflows")),
-            [ids[0]],
+            [UUID(int=locked_id)],
         )
         assert await _poll(plugin, chancy, worker_no_start) == 2
         assert await _count_running(chancy, ids) == 2
@@ -763,5 +775,8 @@ async def test_poll_revisits_skipped_locks(
         )
         assert await _poll(plugin, chancy, worker_no_start) == 0
 
+    # A fresh sweep needs two batches to reach all three workflows. A lock
+    # at the highest UUID is recovered in the second batch, not the first.
     assert await _poll(plugin, chancy, worker_no_start) == 2
+    assert await _poll(plugin, chancy, worker_no_start) == 1
     assert await _count_running(chancy, ids) == 3
