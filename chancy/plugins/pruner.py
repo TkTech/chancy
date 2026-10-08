@@ -17,18 +17,18 @@ class Pruner(Plugin):
         list of plugins to customize its arguments or if ``no_default_plugins``
         is set to ``True``.
 
-    .. code-block:: python
+    .. testcode:: pruner
 
+        from chancy import Chancy
         from chancy.plugins.leadership import Leadership
         from chancy.plugins.pruner import Pruner
 
-        async with Chancy(..., plugins=[
+        app = Chancy("postgresql://localhost/postgres", plugins=[
             Leadership(),
             Pruner(
-                Pruner.Rules.Queue() == "default" & (Pruner.Rules.Age() > 60)
+                (Pruner.Rules.Queue() == "default") & (Pruner.Rules.Age() > 60)
             )
-        ]) as chancy:
-            ...
+        ])
 
     The pruner only prunes jobs that have finished, either succeeding or
     failing. Jobs that are pending, running, or waiting to be retried are
@@ -41,34 +41,57 @@ class Pruner(Plugin):
     -----
 
     You can use simple rules, or combine them using the ``|`` and ``&``
-    operators to create complex rules.
+    operators to create complex rules. Parenthesize each comparison when
+    combining rules. Age is measured from the job's creation time, not its
+    completion time.
 
     For example, to prune jobs that are older than 60 seconds:
 
-    .. code-block:: python
+    .. testcode:: pruner
 
-        Pruner(Pruner.Rules.Age() > 60)
+        age_pruner = Pruner(Pruner.Rules.Age() > 60)
 
     Or to prune jobs that are older than 60 seconds and are in the "default"
     queue:
 
-    .. code-block:: python
+    .. testcode:: pruner
 
-        Pruner(Pruner.Rules.Queue() == "default" & (Pruner.Rules.Age() > 60))
+        queue_pruner = Pruner(
+            (Pruner.Rules.Queue() == "default") & (Pruner.Rules.Age() > 60)
+        )
 
     Or to prune jobs that are older than 60 seconds and are in the "default"
-    queue, or instantly deleted if the job is `update_cache`:
+    queue, or any finished ``myapp.tasks.update_cache`` job regardless of age:
 
-    .. code-block:: python
+    .. testcode:: pruner
 
-        Pruner(
-            (Pruner.Rules.Queue() == "default" & (Pruner.Rules.Age() > 60)) |
-            Pruner.Rules.Job() == "update_cache"
+        job_pruner = Pruner(
+            ((Pruner.Rules.Queue() == "default") & (Pruner.Rules.Age() > 60)) |
+            (Pruner.Rules.Job() == "myapp.tasks.update_cache")
         )
 
     By default, the pruner will run every 60 seconds and will remove up to
-    10,000 jobs in a single run that have been completed for more than 60
-    seconds.
+    10,000 finished jobs in a single run whose creation time is more than
+    24 hours (86,400 seconds) ago. A job that takes longer than 24 hours to
+    finish is eligible on the next pruning pass after completion; there is
+    no additional retention period measured from completion.
+
+    .. testcode:: pruner
+        :hide:
+
+        # Rule construction is lazy; also check SQL generation without a DB.
+        for configured in (
+            app.plugins[Pruner.get_identifier()],
+            age_pruner, queue_pruner, job_pruner,
+        ):
+            configured.rule.to_sql().as_string()
+
+        defaults = Pruner()
+        assert defaults.poll_interval == 60
+        assert defaults.maximum_to_prune == 10_000
+        assert defaults.rule.to_sql().as_string() == (
+            "EXTRACT(EPOCH FROM (NOW() - created_at)) > 86400"
+        )
 
     .. tip::
 

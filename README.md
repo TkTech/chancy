@@ -44,6 +44,28 @@ Postgres.
 Check out the getting-started guide and the API documentation at
 https://tkte.ch/chancy/.
 
+### Testing documentation examples
+
+Install the development dependencies with `uv sync --all-extras`, then run:
+
+```bash
+uv run sphinx-build -W --keep-going -b doctest docs docs/_build/doctest
+```
+
+Use `-b html` to build the site with the same checks. Unresolved references
+produce warnings, and `-W` makes warnings fail the build, as they do in CI.
+
+Mark runnable examples in RST files or docstrings with `.. testcode::` or
+`.. doctest::`. Use a named group when examples share setup or variables;
+`.. testsetup::` and `.. testcleanup::` provide hidden setup and cleanup.
+Hidden `testcode` blocks can assert documented defaults and results without
+adding test scaffolding to the rendered page. The pruner docstring is an example.
+
+Keep these checks deterministic and independent of a running database. Examples
+requiring PostgreSQL belong in integration tests. Plain `code-block` blocks and
+unmarked `>>>` examples remain illustrative. CI runs doctests before building
+the HTML documentation, and a failing example fails the docs job.
+
 ## Screenshots
 
 Chancy comes with an optional dashboard that provides a basic

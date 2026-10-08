@@ -210,9 +210,9 @@ jobs:
       - name: Installing dependencies (Python)
         run: uv sync --all-extras
 
-      - name: Building docs
+      - name: Testing and building docs
         run: |
-          cd docs && uv run make clean html
+          cd docs && uv run make clean doctest html
 
       - name: Publishing documentation
         if: github.event_name == 'release'

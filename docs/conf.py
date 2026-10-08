@@ -15,11 +15,16 @@ author = "Tyler Kennedy"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx.ext.todo",
     "sphinx.ext.graphviz",
     "sphinx.ext.linkcode",
     "sphinx_inline_tabs",
 ]
+
+# Execute explicitly marked examples; existing bare >>> snippets may contain
+# placeholders or require a running database.
+doctest_test_doctest_blocks = ""
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
