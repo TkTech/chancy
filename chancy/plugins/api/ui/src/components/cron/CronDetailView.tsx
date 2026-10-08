@@ -1,31 +1,14 @@
+import { DetailCard } from '../common/DetailCard';
+import type { Cron } from '../../services/schemas';
 import { CountdownTimer } from '../UpdatingTime';
 import { PackedJobDetails } from '../PackedJobDetails';
 
-interface CronDetailViewProps {
-  cron: {
-    unique_key: string;
-    cron: string;
-    timezone: string;
-    next_run: string;
-    last_run: string;
-    job: {
-      func: string;
-      queue: string;
-      kwargs: unknown;
-      priority: number;
-      max_attempts: number;
-      limits: Array<{ key: string; value: number }>;
-    };
-  };
-}
+interface CronDetailViewProps { cron: Cron; }
 
 export function CronDetailView({ cron }: CronDetailViewProps) {
   return (
     <div>
-      <div className={'card'}>
-        <div className={'card-header'}>
-          Scheduled Job - {cron.unique_key}
-        </div>
+      <DetailCard title={`Scheduled Job - ${cron.unique_key}`} flush>
         <table className={"table mb-0"}>
           <tbody>
           <tr>
@@ -50,16 +33,13 @@ export function CronDetailView({ cron }: CronDetailViewProps) {
           </tr>
           </tbody>
         </table>
-      </div>
+      </DetailCard>
       <div className="alert alert-info mt-4">
         Each time this cron schedule triggers, a job matching this definition will be pushed onto the queue.
       </div>
-      <div className="card">
-        <div className="card-header">
-          Job Definition
-        </div>
+      <DetailCard title="Job Definition" flush>
         <PackedJobDetails job={cron.job} />
-      </div>
+      </DetailCard>
     </div>
   );
 }

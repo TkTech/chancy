@@ -1,14 +1,15 @@
 import { useState } from 'react';
 
-interface FormTagInputProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  field: any;
+import type { FieldControlProps, FormFieldState } from './FormField';
+
+interface FormTagInputProps extends FieldControlProps {
+  field: FormFieldState<string[] | undefined, string[]>;
 }
 
 /**
  * Tag input component integrated with TanStack Form
  */
-export function FormTagInput({ field }: FormTagInputProps) {
+export function FormTagInput({ field, ...control }: FormTagInputProps) {
   const [inputValue, setInputValue] = useState('');
   const tags = field.state.value || [];
 
@@ -53,6 +54,8 @@ export function FormTagInput({ field }: FormTagInputProps) {
       </div>
       <div className="input-group input-group-sm">
         <input
+          {...control}
+          onBlur={() => { addTag(); field.handleBlur(); }}
           type="text"
           className="form-control"
           placeholder="Add tag..."

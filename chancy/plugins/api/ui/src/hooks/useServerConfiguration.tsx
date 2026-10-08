@@ -1,12 +1,10 @@
+import { ChancyApi } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 import {useLocalStorage} from './useLocalStorage.tsx';
 import {useQuery} from '@tanstack/react-query';
-import { request, ApiError } from '../services/http';
+import { ApiError } from '../services/http';
 import React, {useMemo} from 'react';
 import {dashboardBasePath, dashboardUrl, normalizeServerUrl} from '../config.ts';
-
-interface ServerConfiguration {
-  plugins: string[],
-}
 
 export const ServerContext = React.createContext<ReturnType<typeof useServerSettings> | null>(null);
 
@@ -18,12 +16,12 @@ export function useServerSettings() {
   );
   const url = useMemo(() => normalizeServerUrl(serverUrl), [serverUrl]);
 
-  const { data, isLoading, refetch } = useQuery<ServerConfiguration | null>({
-    queryKey: ['configuration', url],
-    queryFn: async () => {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: queryKeys.configuration(url),
+    queryFn: async ({ signal }) => {
       if (!url) return null;
       try {
-        return await request<ServerConfiguration>(url, `/api/v1/configuration`);
+        return await ChancyApi(url).getConfiguration(signal);
       } catch (e: unknown) {
         if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
           return null; // not authenticated

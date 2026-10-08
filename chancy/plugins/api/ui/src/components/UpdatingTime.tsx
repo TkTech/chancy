@@ -22,7 +22,7 @@ export function UpdatingTime ({ date }: { date: string }) {
   return time;
 }
 
-export function CountdownTimer({ date, className }: { date: string | undefined, className?: string }) {
+export function CountdownTimer({ date, className }: { date: string | null | undefined, className?: string }) {
   const [now, setNow] = useState(Date.now);
 
   useEffect(() => {

@@ -1,21 +1,13 @@
 import {useQuery} from '@tanstack/react-query';
-import { request } from '../services/http';
+import { ChancyApi } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 
-export interface Worker {
-  worker_id: string;
-  tags: string[];
-  queues: string[];
-  last_seen: string;
-  expires_at: string;
-  is_leader: boolean;
-}
+export type { Worker } from '../services/schemas';
 
 export function useWorkers(url: string | null) {
-  return useQuery<Worker[]>({
-    queryKey: ['workers', url],
-    queryFn: async () => {
-      return await request<Worker[]>(url as string, `/api/v1/workers`);
-    },
+  return useQuery({
+    queryKey: queryKeys.workers(url),
+    queryFn: ({ signal }) => ChancyApi(url!).listWorkers(signal),
     refetchInterval: 10000,
     enabled: url !== null
   });

@@ -1,13 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { request } from '../services/http';
+import { ChancyApi } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 
 export function useFunctions(url: string | null) {
-  return useQuery<string[]>({
-    queryKey: ['functions', url],
-    queryFn: async () => {
-      if (!url) throw new Error('URL is required');
-      return await request<string[]>(url, `/api/v1/jobs/functions`);
-    },
+  return useQuery({
+    queryKey: queryKeys.functions(url),
+    queryFn: ({ signal }) => ChancyApi(url!).listFunctions(signal),
     enabled: url !== null,
     staleTime: 60_000, // 60 seconds, matching backend cache
     refetchOnWindowFocus: false,

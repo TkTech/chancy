@@ -1,3 +1,4 @@
+import { queryKeys } from '../services/queryKeys';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { BatchJobAction, ChancyApi } from '../services/chancy';
 import { useServerConfiguration } from './useServerConfiguration';
@@ -11,8 +12,8 @@ export function useJobActions() {
 
   const invalidate = async () => {
     await Promise.all([
-      qc.invalidateQueries({ queryKey: ['jobs'] }),
-      qc.invalidateQueries({ queryKey: ['job'] }),
+      qc.invalidateQueries({ queryKey: queryKeys.jobs(url) }),
+      qc.invalidateQueries({ queryKey: queryKeys.jobDetails(url) }),
     ]);
   };
 

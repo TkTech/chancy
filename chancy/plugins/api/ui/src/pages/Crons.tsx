@@ -20,7 +20,7 @@ export function Cron() {
   if (!cron) {
     return (
       <div className={"container-fluid"}>
-        <h2 className={"mb-4"}>Scheduled Job - {cron_id}</h2>
+        <PageHeader title={`Scheduled Job - ${cron_id}`} />
         <div className={"alert alert-danger"}>Scheduled job not found.</div>
       </div>
     );

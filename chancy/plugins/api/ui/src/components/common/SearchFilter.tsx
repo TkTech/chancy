@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 
-export type FilterTriple = [string, string, string]; // [key, operator, value]
+import type { FilterTriple } from '../../services/chancy';
+export type { FilterTriple } from '../../services/chancy';
 
 export interface FieldConfig {
   label: string;

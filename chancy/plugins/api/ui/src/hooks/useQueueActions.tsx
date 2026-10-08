@@ -1,3 +1,4 @@
+import { queryKeys } from '../services/queryKeys';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChancyApi, Queue } from '../services/chancy';
 import { useServerConfiguration } from './useServerConfiguration';
@@ -10,10 +11,7 @@ export function useQueueActions() {
   const qc = useQueryClient();
 
   const invalidateQueues = async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ['queues'] }),
-      qc.invalidateQueries({ queryKey: ['queue'] }),
-    ]);
+    await qc.invalidateQueries({ queryKey: queryKeys.queues(url) });
   };
 
   const create = useMutation({

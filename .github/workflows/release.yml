@@ -37,6 +37,10 @@ jobs:
       working-directory: chancy/plugins/api/ui
       run: npm ci
 
+    - name: Testing UI API client
+      working-directory: chancy/plugins/api/ui
+      run: npm test
+
     - name: Building UI
       working-directory: chancy/plugins/api/ui
       run: npm run build

@@ -9,6 +9,7 @@
     "npm": ">=11.10.0"
   },
   "scripts": {
+    "test": "node --test tests/*.test.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

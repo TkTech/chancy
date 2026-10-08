@@ -1,22 +1,18 @@
-import { ReactNode } from 'react';
+import { ReactNode, useId } from 'react';
 
 interface DetailCardProps {
   title: string;
   children: ReactNode;
+  flush?: boolean;
+  className?: string;
 }
 
-/**
- * Generic detail section card with title and content
- */
-export function DetailCard({ title, children }: DetailCardProps) {
+export function DetailCard({ title, children, flush = false, className = '' }: DetailCardProps) {
+  const titleId = useId();
   return (
-    <div className="card mb-3">
-      <div className="card-header">
-        <h6 className="mb-0">{title}</h6>
-      </div>
-      <div className="card-body">
-        {children}
-      </div>
-    </div>
+    <section className={`card mb-3 ${className}`.trim()} aria-labelledby={titleId}>
+      <div className="card-header"><h3 id={titleId} className="h6 mb-0">{title}</h3></div>
+      <div className={flush ? 'card-body p-0' : 'card-body'}>{children}</div>
+    </section>
   );
 }

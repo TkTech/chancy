@@ -1,7 +1,8 @@
+import { DetailCard } from '../../components/common/DetailCard';
 import {useJob} from '../../hooks/useJobs';
 import {useServerConfiguration} from '../../hooks/useServerConfiguration';
 import {Loading} from '../../components/Loading';
-import {statusToColor} from '../../utils';
+import { StatusBadge } from '../../components/common/StatusBadge';
 import { Link } from 'react-router';
 import { useJobActions } from '../../hooks/useJobActions';
 import { useConfirm } from '../../components/common/ConfirmDialog';
@@ -24,10 +25,10 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
       <JobTimers job={job} />
       <div className="mb-3 d-flex gap-2 justify-content-end">
         {['failed','retrying','succeeded'].includes(job.state) && (
-          <button className="btn btn-sm btn-primary" onClick={() => retry.mutate(job.id)}>Retry Job</button>
+          <button className="btn btn-sm btn-primary" disabled={retry.isPending} onClick={() => retry.mutate(job.id)}>Retry Job</button>
         )}
         {['pending','running'].includes(job.state) && (
-          <button className="btn btn-sm btn-warning" onClick={() => cancel.mutate(job.id)}>Cancel Job</button>
+          <button className="btn btn-sm btn-warning" disabled={cancel.isPending} onClick={() => cancel.mutate(job.id)}>Cancel Job</button>
         )}
         {['succeeded','failed'].includes(job.state) && (
           <button className="btn btn-sm btn-danger" onClick={async () => {
@@ -36,8 +37,7 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
           }}>Purge Job</button>
         )}
       </div>
-      <div className="card mb-3">
-        <div className="card-header">Details</div>
+      <DetailCard title="Details" flush>
         <table className="table border mb-0">
           <tbody>
           <tr>
@@ -54,7 +54,7 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
           </tr>
           <tr>
             <th className="text-nowrap">State</th>
-            <td className="w-100"><span className={`badge bg-${statusToColor(job.state)}`}>{job.state}</span></td>
+            <td className="w-100"><StatusBadge status={job.state} /></td>
           </tr>
           <tr>
             <th className="text-nowrap">Attempts</th>
@@ -72,23 +72,13 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
           </tr>
           </tbody>
         </table>
-      </div>
-      <div className="card mb-3">
-        <div className="card-header">
-          <h6 className="mb-0">Arguments</h6>
-        </div>
-        <div className="card-body p-0">
-          <JsonViewer value={job.kwargs} theme={theme} />
-        </div>
-      </div>
-      <div className="card mb-3">
-        <div className="card-header">
-          <h6 className="mb-0">Metadata</h6>
-        </div>
-        <div className="card-body p-0">
-          <JsonViewer value={job.meta} theme={theme} />
-        </div>
-      </div>
+      </DetailCard>
+      <DetailCard title="Arguments" flush>
+        <JsonViewer value={job.kwargs} theme={theme} />
+      </DetailCard>
+      <DetailCard title="Metadata" flush>
+        <JsonViewer value={job.meta} theme={theme} />
+      </DetailCard>
       {job.errors.length > 0 && (
         <>
           <h6 className="mt-3 text-danger">Errors</h6>

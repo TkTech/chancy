@@ -1,32 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { request } from '../services/http';
+import { ChancyApi } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 
-export type MetricType = 'counter' | 'gauge' | 'histogram';
-
-export interface MetricPoint {
-  timestamp: string;
-  value: number | { [key: string]: number };
-}
-
-export interface MetricData {
-  data: MetricPoint[];
-  type: MetricType;
-}
-
-export interface MetricsOverview {
-  categories: {
-    [category: string]: string[];
-  };
-  count: number;
-}
-
+export type { MetricType, MetricPoint, MetricData, MetricsOverview } from '../services/schemas';
 
 export function useMetricsOverview({ url }: { url: string | null }) {
-  return useQuery<MetricsOverview>({
-    queryKey: ['metrics-overview', url],
-    queryFn: async () => {
-      return await request<MetricsOverview>(url as string, `/api/v1/metrics`);
-    },
+  return useQuery({
+    queryKey: queryKeys.metricsOverview(url),
+    queryFn: ({ signal }) => ChancyApi(url!).getMetricsOverview(signal),
     enabled: url !== null,
     refetchInterval: 10000,
   });
@@ -47,21 +28,11 @@ export function useMetricDetail({
   enabled?: boolean;
   worker_id?: string;
 }) {
-  return useQuery<Record<string, MetricData>>({
-    queryKey: ['metric-detail', url, key, resolution, limit, worker_id],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        resolution,
-        limit: limit.toString()
-      });
-      
-      if (worker_id) {
-        params.append('worker_id', worker_id);
-      }
-      
-      return await request<Record<string, MetricData>>(url as string, `/api/v1/metrics/${key}?${params.toString()}`);
-    },
-    enabled: enabled,
+  const params = { resolution, limit, worker_id };
+  return useQuery({
+    queryKey: queryKeys.metricDetail(url, key, params),
+    queryFn: ({ signal }) => ChancyApi(url!).getMetricDetail(key, params, signal),
+    enabled: url !== null && enabled,
     refetchInterval: 10000,
   });
 }

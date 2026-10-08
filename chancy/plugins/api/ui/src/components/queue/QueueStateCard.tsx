@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 interface QueueStateCardProps {
   state: string;
@@ -9,6 +9,7 @@ interface QueueStateCardProps {
 }
 
 export function QueueStateCard({ state, onPause, onResume, isPending }: QueueStateCardProps) {
+  const id = useId();
   const [showPauseOptions, setShowPauseOptions] = useState(false);
   const [resumeType, setResumeType] = useState<'manual' | 'absolute' | 'relative'>('manual');
   const [absoluteTime, setAbsoluteTime] = useState('');
@@ -70,12 +71,12 @@ export function QueueStateCard({ state, onPause, onResume, isPending }: QueueSta
                 <input
                   className="form-check-input"
                   type="radio"
-                  name="resumeType"
-                  id="resumeManual"
+                  name={`${id}-resumeType`}
+                  id={`${id}-resumeManual`}
                   checked={resumeType === 'manual'}
                   onChange={() => setResumeType('manual')}
                 />
-                <label className="form-check-label" htmlFor="resumeManual">
+                <label className="form-check-label" htmlFor={`${id}-resumeManual`}>
                   Manual resume (pause indefinitely)
                 </label>
               </div>
@@ -83,12 +84,12 @@ export function QueueStateCard({ state, onPause, onResume, isPending }: QueueSta
                 <input
                   className="form-check-input"
                   type="radio"
-                  name="resumeType"
-                  id="resumeRelative"
+                  name={`${id}-resumeType`}
+                  id={`${id}-resumeRelative`}
                   checked={resumeType === 'relative'}
                   onChange={() => setResumeType('relative')}
                 />
-                <label className="form-check-label" htmlFor="resumeRelative">
+                <label className="form-check-label" htmlFor={`${id}-resumeRelative`}>
                   Resume after
                 </label>
               </div>
@@ -97,6 +98,7 @@ export function QueueStateCard({ state, onPause, onResume, isPending }: QueueSta
                   <div className="input-group input-group-sm pause-input-sm">
                     <input
                       type="number"
+                      aria-label="Resume after (minutes)"
                       className="form-control"
                       value={relativeMinutes}
                       onChange={e => setRelativeMinutes(e.target.value)}
@@ -111,12 +113,12 @@ export function QueueStateCard({ state, onPause, onResume, isPending }: QueueSta
                 <input
                   className="form-check-input"
                   type="radio"
-                  name="resumeType"
-                  id="resumeAbsolute"
+                  name={`${id}-resumeType`}
+                  id={`${id}-resumeAbsolute`}
                   checked={resumeType === 'absolute'}
                   onChange={() => setResumeType('absolute')}
                 />
-                <label className="form-check-label" htmlFor="resumeAbsolute">
+                <label className="form-check-label" htmlFor={`${id}-resumeAbsolute`}>
                   Resume at specific time
                 </label>
               </div>
@@ -124,6 +126,7 @@ export function QueueStateCard({ state, onPause, onResume, isPending }: QueueSta
                 <div className="ms-4 mt-2">
                   <input
                     type="datetime-local"
+                    aria-label="Resume at specific time"
                     className="form-control form-control-sm pause-input-datetime"
                     value={absoluteTime}
                     onChange={e => setAbsoluteTime(e.target.value)}

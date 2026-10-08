@@ -1,3 +1,4 @@
+import { DetailCard } from '../components/common/DetailCard';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import { formatExecutionTime } from '../utils';
 import {Loading} from '../components/Loading.tsx';
@@ -11,8 +12,7 @@ import { MetricHistogramCard } from '../components/dashboard/MetricHistogramCard
 
 function WorkerInfoTable({ worker } : { worker: Worker }) {
   return (
-    <div className="card">
-      <div className="card-header">Details</div>
+    <DetailCard title="Details" flush>
       <table className={"table table-hover mb-0"}>
         <tbody>
         <tr>
@@ -56,7 +56,7 @@ function WorkerInfoTable({ worker } : { worker: Worker }) {
         </tr>
         </tbody>
       </table>
-    </div>
+    </DetailCard>
   );
 }
 
@@ -73,7 +73,7 @@ export function WorkerDetails () {
   if (!worker) {
     return (
       <div className={"container-fuid"}>
-        <h2 className={"mb-4"}>Worker - {worker_id}</h2>
+        <PageHeader title={`Worker - ${worker_id}`} />
         <div className={"alert alert-danger"}>Worker not found.</div>
       </div>
     );

@@ -1,40 +1,9 @@
 import {keepPreviousData, useQuery} from '@tanstack/react-query';
-import {useMemo} from 'react';
-import { request } from '../services/http';
+import { ChancyApi, type FilterTriple } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 
-export interface Job {
-  id: string,
-  queue: string,
-  func: string,
-  kwargs: Record<string, unknown>,
-  limits: {
-    key: string,
-    value: number
-  }[],
-  meta: Record<string, unknown>,
-  state: string,
-  priority: number,
-  attempts: number,
-  max_attempts: number,
-  taken_by: string,
-  created_at: string,
-  started_at: string,
-  completed_at: string,
-  scheduled_at: string,
-  unique_key: string,
-  errors: {
-    traceback: string,
-    attempt: number
-  }[]
-}
-
-export type FilterTriple = [string, string, string];
-
-export interface JobPage {
-  items: Job[];
-  next_cursor: string | null;
-  has_more: boolean;
-}
+export type { Job, JobPage } from '../services/schemas';
+export type { FilterTriple } from '../services/chancy';
 
 export function useJobs ({
   url,
@@ -53,31 +22,11 @@ export function useJobs ({
   pausePolling?: boolean,
   before?: string,
 }) {
-  const fullUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set('pagination', 'true');
-    if (before) params.set('before', before);
-    if (state) {
-      params.append('state', state);
-    }
-    if (func) {
-      params.append('func', func);
-    }
-    if (filters && filters.length > 0) {
-      params.append('filters', JSON.stringify(filters));
-    }
-    return `${url}/api/v1/jobs?${params.toString()}`;
-  }, [url, state, func, filters, before]);
-
-  return useQuery<JobPage>({
-    queryKey: ['jobs', fullUrl],
-    queryFn: async ({ signal }) => {
-      // Use our request helper to attach token automatically
-      const urlBase = url as string;
-      const path = `/api/v1/jobs?${new URL(fullUrl).searchParams.toString()}`;
-      return await request<JobPage>(urlBase, path, { signal });
-    },
-    enabled: enabled ?? (url !== null),
+  const params = { state, func, filters, before };
+  return useQuery({
+    queryKey: queryKeys.jobPage(url, params),
+    queryFn: ({ signal }) => ChancyApi(url!).listJobs(params, signal),
+    enabled: url !== null && (enabled ?? true),
     // Reduce flicker by avoiding focus refetches and keeping data "warm"
     refetchOnWindowFocus: false,
     refetchOnReconnect: !before && !pausePolling,
@@ -94,11 +43,9 @@ export function useJob ({
   url: string | null,
   job_id: string | undefined
 }) {
-  const query = useQuery<Job>({
-    queryKey: ['job', url, job_id],
-    queryFn: async () => {
-      return await request<Job>(url as string, `/api/v1/jobs/${job_id}`);
-    },
+  const query = useQuery({
+    queryKey: queryKeys.job(url, job_id),
+    queryFn: ({ signal }) => ChancyApi(url!).getJob(job_id!, signal),
     enabled: url !== null && job_id !== undefined,
     refetchInterval: (query) => {
       // Only refetch if the job is not in a terminal state

@@ -1,29 +1,13 @@
+import { DetailCard } from '../components/common/DetailCard';
 import { useQuery } from '@tanstack/react-query';
 import { useServerConfiguration } from '../hooks/useServerConfiguration';
-import { request } from '../services/http';
+import { ChancyApi } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 import { Loading } from '../components/Loading';
 import { PageHeader } from '../components/common/PageHeader';
 import { MetricTableSizeCard } from '../components/dashboard/MetricTableSizeCard';
 
 const CORE_TABLES = ['jobs', 'queue_rate_limits', 'queues', 'workers'];
-
-interface SystemInfo {
-  chancy_version: string;
-  database: {
-    version: string;
-    prefix: string;
-  };
-}
-
-interface Plugin {
-  identifier: string;
-  tables: string[];
-  migrate_key: string | null;
-  migrate_package: string | null;
-  api_plugin: string | null;
-  dependencies: string[];
-  scope: string;
-}
 
 const SPARKLINE_COLORS = [
   '#8b5cf6', '#f97316', '#06b6d4', '#ec4899', '#10b981', '#f59e0b', '#3b82f6', '#ef4444'
@@ -33,19 +17,15 @@ export function System() {
   const { url } = useServerConfiguration();
   const resolution = '5min';
 
-  const { data: systemInfo, isLoading: systemLoading } = useQuery<SystemInfo>({
-    queryKey: ['system', url],
-    queryFn: async () => {
-      return await request<SystemInfo>(url as string, '/api/v1/system');
-    },
+  const { data: systemInfo, isLoading: systemLoading } = useQuery({
+    queryKey: queryKeys.system(url),
+    queryFn: ({ signal }) => ChancyApi(url!).getSystem(signal),
     enabled: !!url,
   });
 
-  const { data: plugins, isLoading: pluginsLoading } = useQuery<Plugin[]>({
-    queryKey: ['plugins', url],
-    queryFn: async () => {
-      return await request<Plugin[]>(url as string, '/api/v1/plugins');
-    },
+  const { data: plugins, isLoading: pluginsLoading } = useQuery({
+    queryKey: queryKeys.plugins(url),
+    queryFn: ({ signal }) => ChancyApi(url!).listPlugins(signal),
     enabled: !!url,
   });
 
@@ -62,8 +42,7 @@ export function System() {
 
       <div className="row">
         <div className="col-md-6">
-          <div className="card mb-4">
-            <div className="card-header">Version Information</div>
+          <DetailCard title="Version Information" flush>
             <table className="table table-hover mb-0">
               <tbody>
                 <tr>
@@ -72,12 +51,11 @@ export function System() {
                 </tr>
               </tbody>
             </table>
-          </div>
+          </DetailCard>
         </div>
 
         <div className="col-md-6">
-          <div className="card mb-4">
-            <div className="card-header">Database</div>
+          <DetailCard title="Database" flush>
             <table className="table table-hover mb-0">
               <tbody>
                 <tr>
@@ -90,7 +68,7 @@ export function System() {
                 </tr>
               </tbody>
             </table>
-          </div>
+          </DetailCard>
         </div>
 
       </div>
@@ -134,8 +112,7 @@ export function System() {
 
           <div className="row">
             <div className="col-md-6">
-              <div className="card mb-3">
-                <div className="card-header">Plugin Information</div>
+              <DetailCard title="Plugin Information" flush>
                 <table className="table table-hover mb-0">
                   <tbody>
                     <tr>
@@ -174,7 +151,7 @@ export function System() {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </DetailCard>
             </div>
 
             <div className="col-md-6">

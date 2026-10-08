@@ -1,3 +1,4 @@
+import { DetailCard } from '../components/common/DetailCard';
 import React from 'react';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {useWorkflow, useWorkflows, FilterTriple, Step} from '../hooks/useWorkflows.tsx';
@@ -5,9 +6,8 @@ import {Loading} from '../components/Loading.tsx';
 import {Link, useParams, useSearchParams} from 'react-router';
 import { useDrawer } from '../components/common/DrawerContext';
 import { JobDetailsView } from '../features/jobs/JobDetailsView';
-// Drawer and JobDetailsView are not directly used here; navigation state opens drawer in Layout
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
-import {statusToColor, extractFunctionName, formatExecutionTime} from '../utils.tsx';
+import {extractFunctionName, formatExecutionTime} from '../utils.tsx';
 import WorkflowChart from './WorkflowChart.tsx';
 import {ReactFlowProvider} from '@xyflow/react';
 import { PageHeader } from '../components/common/PageHeader';
@@ -24,7 +24,6 @@ export function Workflow() {
   const { url } = useServerConfiguration();
   const { workflow_id } = useParams<{workflow_id: string}>();
   const resolution = '5min';
-  // const location = useLocation();
   const { data: workflow, isLoading } = useWorkflow({ url, workflow_id, options: {refetchInterval: 5000 } });
   const drawer = useDrawer();
 
@@ -39,10 +38,9 @@ export function Workflow() {
           <div className="alert alert-info">
             This workflow step has not yet been reached. Once its dependencies are satisfied and it's ready for execution, this job will be pushed onto the queue.
           </div>
-          <div className="card">
-            <div className="card-header">Job Definition</div>
+          <DetailCard title="Job Definition" flush>
             <PackedJobDetails job={step.job} />
-          </div>
+          </DetailCard>
         </>,
         { title: `Step Details - ${step_id}` }
       );
@@ -54,7 +52,7 @@ export function Workflow() {
   if (!workflow) {
     return (
       <div className={"container-fluid"}>
-        <h2 className={"mb-4"}>Workflow - {workflow_id}</h2>
+        <PageHeader title={`Workflow - ${workflow_id}`} />
         <div className={"alert alert-danger"}>Workflow not found.</div>
       </div>
     );
@@ -62,7 +60,7 @@ export function Workflow() {
 
   return (
     <div className={"container-fluid"}>
-      <h2 className={"mb-4"}>Workflow - {workflow_id}</h2>
+      <PageHeader title={`Workflow - ${workflow_id}`} />
 
       {/* Per-Workflow Type Metrics */}
       <div className="alert alert-info mb-3">
@@ -118,8 +116,7 @@ export function Workflow() {
         </div>
       </div>
 
-      <div className="card mb-3">
-        <div className="card-header">Details</div>
+      <DetailCard title="Details" flush>
         <table className={"table border mb-0"}>
           <tbody>
           <tr>
@@ -129,7 +126,7 @@ export function Workflow() {
           <tr>
             <th className="text-nowrap">State</th>
             <td className="w-100">
-              <span className={`badge bg-${statusToColor(workflow.state)}`}>{workflow.state}</span>
+              <StatusBadge status={workflow.state} />
             </td>
           </tr>
           <tr>
@@ -146,19 +143,14 @@ export function Workflow() {
           </tr>
           </tbody>
         </table>
-      </div>
+      </DetailCard>
       {workflow.steps && (
         <>
-          <div className="card mt-4">
-            <div className="card-header">
-              Workflow Visualization
-            </div>
-            <div className="card-body">
-              <ReactFlowProvider>
+          <DetailCard title="Workflow Visualization">
+            <ReactFlowProvider>
                 <WorkflowChart workflow={workflow}/>
               </ReactFlowProvider>
-            </div>
-          </div>
+          </DetailCard>
           <h3 className="mt-4">Steps</h3>
           <table className={'table table-hover border mb-0'}>
             <thead>
@@ -201,13 +193,7 @@ export function Workflow() {
                   )}
                 </td>
                 <td>
-                  {step.state ? (
-                    <span className={`badge bg-${statusToColor(step.state)}`}>
-                      {step.state}
-                    </span>
-                  ) : (
-                    <span className="badge bg-secondary">Waiting</span>
-                  )}
+                  <StatusBadge status={step.state ?? 'waiting'} />
                 </td>
                 <td className="text-break">
                   {step.job_id ? (

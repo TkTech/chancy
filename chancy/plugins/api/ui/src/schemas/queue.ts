@@ -6,34 +6,38 @@ import type { Queue } from '../services/chancy';
  * Handles string inputs from forms and coerces to proper types.
  */
 export const QueueFormSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().trim().min(1, 'Name is required'),
   concurrency: z.union([
-    z.string().transform(val => val.trim() === '' ? null : parseInt(val, 10)),
+    z.string().transform(val => val.trim() === '' ? null : Number(val)),
     z.number(),
     z.null()
-  ]).optional(),
+  ]).pipe(z.number().int().positive('Must be positive').nullable()).optional(),
   polling_interval: z.union([
-    z.string().transform(val => parseInt(val, 10)),
+    z.string().transform(val => Number(val)),
     z.number()
-  ]).pipe(z.number().positive('Must be positive')),
+  ]).pipe(z.number().int().positive('Must be positive')),
   eager_polling: z.boolean().default(false),
   rate_limit: z.union([
-    z.string().transform(val => val.trim() === '' ? null : parseInt(val, 10)),
+    z.string().transform(val => val.trim() === '' ? null : Number(val)),
     z.number(),
     z.null()
-  ]).optional(),
+  ]).pipe(z.number().int().positive('Must be positive').nullable()).optional(),
   rate_limit_window: z.union([
-    z.string().transform(val => val.trim() === '' ? null : parseInt(val, 10)),
+    z.string().transform(val => val.trim() === '' ? null : Number(val)),
     z.number(),
     z.null()
-  ]).optional(),
+  ]).pipe(z.number().int().positive('Must be positive').nullable()).optional(),
   tags: z.array(z.string()).default(['.*']),
   executor_options: z.union([
-    z.string().transform(val => {
+    z.string().transform((val, ctx) => {
       if (val.trim() === '') return {};
-      return JSON.parse(val);
-    }),
-    z.record(z.string(), z.any())
+      try { return JSON.parse(val) as unknown; }
+      catch {
+        ctx.addIssue({ code: 'custom', message: 'Enter valid JSON' });
+        return z.NEVER;
+      }
+    }).pipe(z.record(z.string(), z.unknown())),
+    z.record(z.string(), z.unknown())
   ]).default({}),
 });
 
@@ -57,7 +61,7 @@ export const defaultQueueValues: QueueFormInput = {
 /**
  * Converts a Queue API response to form input values
  */
-export function queueToFormValues(queue: Partial<Queue>): QueueFormInput {
+export function queueToFormValues(queue: Queue): QueueFormInput {
   return {
     name: queue.name ?? '',
     concurrency: queue.concurrency != null ? String(queue.concurrency) : '',

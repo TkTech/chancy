@@ -13,9 +13,9 @@ interface PageHeaderProps {
  */
 export function PageHeader({ title, description, statusBadge, actions }: PageHeaderProps) {
   return (
-    <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-4">
       <div>
-        <h2 className="mb-1">
+        <h2 className="mb-1 text-break">
           {statusBadge && <>{statusBadge}{' '}</>}
           {title}
         </h2>

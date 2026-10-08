@@ -21,7 +21,7 @@ export function Job() {
   const { job_id } = useParams<{job_id: string}>();
   return (
     <div className={"container-fluid"}>
-      <h2 className={"mb-4"}>Job - {job_id}</h2>
+      <PageHeader title={`Job - ${job_id}`} />
       {job_id && <JobDetailsView job_id={job_id} />}
     </div>
   );

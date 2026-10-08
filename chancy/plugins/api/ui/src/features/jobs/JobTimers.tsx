@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Job } from '../../hooks/useJobs';
 import { Spinner } from '../../components/Loading';
 
-function parse(date: string | undefined): number | undefined {
+function parse(date: string | null | undefined): number | undefined {
   if (!date) return undefined;
   const d = new Date(date);
   return isNaN(d.getTime()) ? undefined : d.getTime();
@@ -109,7 +109,7 @@ export function JobTimers({ job }: { job: Job }) {
         label="Waiting"
         value={formatDuration(waitingMs)}
         icon={startedAt ? <IconCircle variant="success" kind="check" /> : (isPending ? <IconCircle variant="primary" kind="spinner" /> : <IconCircle variant={'secondary'} kind={'none'} />)}
-        tooltip={createdAt && startedAt ? `${new Date(job.created_at).toLocaleString()} → ${new Date(job.started_at).toLocaleString()}` : undefined}
+        tooltip={createdAt && startedAt ? `${new Date(job.created_at).toLocaleString()} → ${new Date(startedAt).toLocaleString()}` : undefined}
       />
 
       {/* Running */}
@@ -117,7 +117,7 @@ export function JobTimers({ job }: { job: Job }) {
         label="Running"
         value={startedAt ? formatDuration(runningMs) : '-'}
         icon={job.state === 'running' ? <IconCircle variant="primary" kind="spinner" /> : (startedAt ? <IconCircle variant="success" kind="check" /> : <IconCircle variant={'secondary'} kind={'none'} />)}
-        tooltip={startedAt ? (completedAt ? `${new Date(job.started_at).toLocaleString()} → ${new Date(job.completed_at).toLocaleString()}` : `Started: ${new Date(job.started_at).toLocaleString()}`) : undefined}
+        tooltip={startedAt ? (completedAt ? `${new Date(startedAt).toLocaleString()} → ${new Date(completedAt).toLocaleString()}` : `Started: ${new Date(startedAt).toLocaleString()}`) : undefined}
       />
 
       {/* Final */}
@@ -125,7 +125,7 @@ export function JobTimers({ job }: { job: Job }) {
         label={final.label}
         value={final.value}
         icon={<IconCircle variant={final.variant} kind={final.icon} />}
-        tooltip={job.completed_at ? new Date(job.completed_at).toLocaleString() : undefined}
+        tooltip={completedAt ? new Date(completedAt).toLocaleString() : undefined}
       />
     </div>
   );

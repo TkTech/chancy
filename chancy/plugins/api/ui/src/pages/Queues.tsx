@@ -1,3 +1,6 @@
+import { DetailCard } from '../components/common/DetailCard';
+import { StatusBadge } from '../components/common/StatusBadge';
+import type { Queue as QueueData } from '../services/chancy';
 import { useState } from 'react';
 import { formatExecutionTime } from '../utils';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
@@ -12,14 +15,6 @@ import { useConfirm } from '../components/common/ConfirmDialog.tsx';
 import { QueueForm } from '../features/queues/QueueForm.tsx';
 import { JsonViewer } from '../components/JsonViewer';
 import { useTheme } from '../contexts/ThemeContext';
-import { useEntityForm } from '../hooks/useEntityForm';
-import { QueueFormSchema, defaultQueueValues, queueToFormValues } from '../schemas/queue';
-import { FormInput } from '../components/forms/FormInput';
-import { FormCheckbox } from '../components/forms/FormCheckbox';
-import { FormTagInput } from '../components/forms/FormTagInput';
-import { FormJsonEditor } from '../components/forms/FormJsonEditor';
-import { UseMutationResult } from '@tanstack/react-query';
-import { z } from 'zod';
 import { QueueStateCard } from '../components/queue/QueueStateCard';
 import { PageHeader } from '../components/common/PageHeader';
 import { DataTable } from '../components/common/DataTable';
@@ -54,35 +49,19 @@ export function Queue() {
   const { pause, resume, remove, update } = useQueueActions();
   const { confirm, dialog } = useConfirm();
   const { theme } = useTheme();
-  const [isEditing, setIsEditing] = useState(false);
+  const [editing, setEditing] = useState<{ url: string | null; queue: QueueData } | null>(null);
+  if (editing && (editing.url !== url || editing.queue.name !== name)) setEditing(null);
 
   const hasMetricsPlugin = useServerConfiguration().configuration?.plugins?.includes('Metrics');
 
   const queue = queues?.find(q => q.name === name);
-
-  // Create a custom mutation for the form that wraps the update mutation
-  const formMutation: Pick<UseMutationResult<unknown, Error, z.output<typeof QueueFormSchema>>, 'mutateAsync' | 'isPending' | 'error'> = {
-    mutateAsync: async (payload: z.output<typeof QueueFormSchema>) => {
-      if (!queue) throw new Error('Queue not found');
-      return update.mutateAsync({ name: queue.name, payload });
-    },
-    isPending: update.isPending,
-    error: update.error,
-  };
-
-  const { form, isSubmitting } = useEntityForm({
-    schema: QueueFormSchema,
-    defaultValues: queue ? queueToFormValues(queue) : defaultQueueValues,
-    mutation: formMutation as UseMutationResult<unknown, Error, z.output<typeof QueueFormSchema>>,
-    onSuccess: () => setIsEditing(false),
-  });
 
   if (isLoading || workersLoading) return <Loading />;
 
   if (!queue) {
     return (
       <div className={"container-fluid"}>
-        <h2 className={"mb-4"}>Queue - {name}</h2>
+        <PageHeader title={`Queue - ${name}`} />
         <div className={"alert alert-danger"}>Queue not found.</div>
       </div>
     );
@@ -90,44 +69,15 @@ export function Queue() {
 
   return (
     <div className={"container-fluid"}>
-      <div className="d-flex align-items-center justify-content-between mb-3">
-        <div>
-          <h2 className={"mb-1"}>Queue - {queue.name}</h2>
-        </div>
-        <div className="d-flex gap-2">
-          {!isEditing ? (
-            <>
-              <button className="btn btn-sm btn-primary" onClick={() => setIsEditing(true)}>Edit</button>
-              <button className="btn btn-sm btn-outline-danger" onClick={async () => {
-                const ok = await confirm({ title: 'Delete Queue', message: 'Delete queue? You can choose to also purge all jobs in this queue in the next step.' });
-                if (!ok) return;
-                const purge = await confirm({ title: 'Purge Jobs', message: 'Also purge jobs in this queue?' });
-                remove.mutate({ name: queue.name, purge_jobs: !!purge });
-              }}>Delete</button>
-            </>
-          ) : (
-            <>
-              <button
-                className="btn btn-sm btn-success"
-                onClick={() => form.handleSubmit()}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
-                className="btn btn-sm btn-secondary"
-                onClick={() => {
-                  form.reset();
-                  setIsEditing(false);
-                }}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      <PageHeader title={`Queue - ${queue.name}`} actions={!editing && <div className="d-flex gap-2">
+        <button className="btn btn-sm btn-primary" onClick={() => { update.reset(); setEditing({ url, queue }); }}>Edit</button>
+        <button className="btn btn-sm btn-outline-danger" disabled={remove.isPending} onClick={async () => {
+          const ok = await confirm({ title: 'Delete Queue', message: 'Delete queue? You can choose to also purge all jobs in this queue in the next step.' });
+          if (!ok) return;
+          const purge = await confirm({ title: 'Purge Jobs', message: 'Also purge jobs in this queue?' });
+          remove.mutate({ name: queue.name, purge_jobs: !!purge });
+        }}>Delete</button>
+      </div>} />
 
       {hasMetricsPlugin && (
         <div className="row g-3 mb-3">
@@ -176,17 +126,20 @@ export function Queue() {
         </div>
       )}
 
-      <div className="card mb-3">
-        <div className="card-header">General Details</div>
+      {editing ? <QueueForm key={`${url}:${queue.name}`} mode="edit" layout="inline" initial={editing.queue}
+        onClose={() => setEditing(null)} mutation={{
+          mutateAsync: payload => update.mutateAsync({ name: queue.name, payload }),
+          isPending: update.isPending,
+          error: update.error,
+        }} /> : <>
+      <DetailCard title="General Details" flush>
         <table className={"table border mb-0"}>
           <tbody>
             <tr>
               <th className="text-nowrap">State</th>
               <td className="w-100">
                 <div className="d-flex align-items-center gap-2">
-                  <span className={queue.state === 'active' ? 'text-success fw-semibold' : 'text-danger fw-semibold'}>
-                    {queue.state === 'active' ? 'Active' : 'Paused'}
-                  </span>
+                  <StatusBadge status={queue.state} />
                   {queue.resume_at && (
                     <small className="text-muted">
                       (Resuming at {new Date(queue.resume_at).toLocaleString()})
@@ -205,72 +158,25 @@ export function Queue() {
             <tr>
               <th className="text-nowrap">Concurrency</th>
               <td className="w-100">
-                {isEditing ? (
-                  <form.Field name="concurrency">
-                    {(field) => (
-                      <div>
-                        <FormInput field={field} type="number" placeholder="Executor default" />
-                        {field.state.meta.errors.length > 0 && (
-                          <div className="text-danger small mt-1">{field.state.meta.errors.join(', ')}</div>
-                        )}
-                      </div>
-                    )}
-                  </form.Field>
-                ) : (
-                  <span>{queue.concurrency || <em className="text-muted">Executor default</em>}</span>
-                )}
+                <span>{queue.concurrency || <em className="text-muted">Executor default</em>}</span>
               </td>
             </tr>
             <tr>
               <th className="text-nowrap">Polling Interval</th>
               <td className="w-100">
-                {isEditing ? (
-                  <form.Field name="polling_interval">
-                    {(field) => (
-                      <div>
-                        <FormInput field={field} type="number" unit="s" />
-                        {field.state.meta.errors.length > 0 && (
-                          <div className="text-danger small mt-1">{field.state.meta.errors.join(', ')}</div>
-                        )}
-                      </div>
-                    )}
-                  </form.Field>
-                ) : (
-                  <span>{queue.polling_interval}s</span>
-                )}
+                <span>{queue.polling_interval}s</span>
               </td>
             </tr>
             <tr>
               <th className="text-nowrap">Eager Polling</th>
               <td className="w-100">
-                {isEditing ? (
-                  <form.Field name="eager_polling">
-                    {(field) => (
-                      <FormCheckbox field={field} label="Enabled" id="eagerPollingEdit" />
-                    )}
-                  </form.Field>
-                ) : (
-                  <div className="form-check form-switch">
-                    <input className="form-check-input" type="checkbox" checked={queue.eager_polling} disabled />
-                    <label className="form-check-label">{queue.eager_polling ? 'Enabled' : 'Disabled'}</label>
-                  </div>
-                )}
+                <span>{queue.eager_polling ? 'Enabled' : 'Disabled'}</span>
               </td>
             </tr>
             <tr>
               <th className="text-nowrap">Tags</th>
               <td className="w-100">
-                {isEditing ? (
-                  <form.Field name="tags">
-                    {(field) => (
-                      <>
-                        <FormTagInput field={field} />
-                        <div className="form-text">Use .* to match all workers. No tags leaves the queue unassigned.</div>
-                      </>
-                    )}
-                  </form.Field>
-                ) : (
-                  <div>
+                <div>
                     {queue.tags.length === 0 ? (
                       <span className="text-muted">Unassigned (no tags)</span>
                     ) : (
@@ -279,61 +185,32 @@ export function Queue() {
                       ))
                     )}
                   </div>
-                )}
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+      </DetailCard>
 
-      <div className="card mb-3">
-        <div className="card-header">Rate Limiting</div>
+      <DetailCard title="Rate Limiting" flush>
         <table className={"table border mb-0"}>
           <tbody>
             <tr>
               <th className="text-nowrap">Rate Limit</th>
               <td className="w-100">
-                {isEditing ? (
-                  <form.Field name="rate_limit">
-                    {(field) => (
-                      <div>
-                        <FormInput field={field} type="number" unit="req" placeholder="No limit" />
-                        {field.state.meta.errors.length > 0 && (
-                          <div className="text-danger small mt-1">{field.state.meta.errors.join(', ')}</div>
-                        )}
-                      </div>
-                    )}
-                  </form.Field>
-                ) : (
-                  <span>{queue.rate_limit || <em className="text-muted">No limit</em>}</span>
-                )}
+                <span>{queue.rate_limit || <em className="text-muted">No limit</em>}</span>
               </td>
             </tr>
             <tr>
               <th className="text-nowrap">Rate Limit Window</th>
               <td className="w-100">
-                {isEditing ? (
-                  <form.Field name="rate_limit_window">
-                    {(field) => (
-                      <div>
-                        <FormInput field={field} type="number" unit="s" />
-                        {field.state.meta.errors.length > 0 && (
-                          <div className="text-danger small mt-1">{field.state.meta.errors.join(', ')}</div>
-                        )}
-                      </div>
-                    )}
-                  </form.Field>
-                ) : (
-                  <span>{queue.rate_limit_window ? `${queue.rate_limit_window}s` : <em className="text-muted">-</em>}</span>
-                )}
+                <span>{queue.rate_limit_window ? `${queue.rate_limit_window}s` : <em className="text-muted">-</em>}</span>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+      </DetailCard>
 
-      <div className="card mb-4">
-        <div className="card-header">Executor Configuration</div>
+      <DetailCard title="Executor Configuration" flush>
         <table className={"table border mb-0"}>
           <tbody>
             <tr>
@@ -343,27 +220,16 @@ export function Queue() {
             <tr>
               <th className="text-nowrap">Executor Options</th>
               <td className="w-100">
-                {isEditing ? (
-                  <form.Field name="executor_options">
-                    {(field) => (
-                      <div>
-                        <FormJsonEditor field={field} rows={10} />
-                        {field.state.meta.errors.length > 0 && (
-                          <div className="text-danger small mt-1">{field.state.meta.errors.join(', ')}</div>
-                        )}
-                      </div>
-                    )}
-                  </form.Field>
-                ) : (
-                  <div className="json-viewer-container">
+                <div className="json-viewer-container">
                     <JsonViewer value={queue.executor_options} theme={theme} />
                   </div>
-                )}
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+      </DetailCard>
+
+      </>}
 
       <h3 className={"mt-4"}>Active Workers</h3>
       <p>
@@ -412,7 +278,7 @@ export function Queues() {
         title="Queues"
         description="Manage job queues and worker assignments"
         actions={
-          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+          <button className="btn btn-primary btn-sm" onClick={() => { create.reset(); setShowCreate(true); }}>
             + New Queue
           </button>
         }
@@ -443,17 +309,14 @@ export function Queues() {
               </td>
             )}
             <td className={"text-center"}>
-              <span className={`badge bg-${queue.state === 'active' ? 'success' : 'danger'}`}>{queue.state}</span>
+              <StatusBadge status={queue.state} />
             </td>
           </tr>
         ))}
         </tbody>
       </DataTable>
       {showCreate && (
-        <QueueForm mode={'create'} onCancel={() => setShowCreate(false)} onSubmit={async (payload) => {
-          await create.mutateAsync(payload);
-          setShowCreate(false);
-        }} />
+        <QueueForm mode="create" onClose={() => setShowCreate(false)} mutation={create} />
       )}
     </div>
   )

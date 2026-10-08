@@ -1,102 +1,50 @@
 import { z } from 'zod';
-import { request, parseWith } from './http';
+import { request, type RequestOptions } from './http.ts';
+import * as schemas from './schemas.ts';
+import type { Queue } from './schemas.ts';
+export type { Job, Queue, BatchJobResult, BatchJobResponse } from './schemas.ts';
 
-// Shared schemas
-const JobSchema = z.object({
-  id: z.string(),
-  queue: z.string(),
-  func: z.string(),
-  kwargs: z.record(z.string(), z.any()),
-  limits: z.array(z.object({ key: z.string().optional(), value: z.number().optional() }).passthrough()).optional().default([]),
-  meta: z.record(z.string(), z.any()).optional().default({}),
-  state: z.string(),
-  priority: z.number(),
-  attempts: z.number(),
-  max_attempts: z.number(),
-  taken_by: z.string().nullable().optional(),
-  created_at: z.string().optional(),
-  started_at: z.string().nullable().optional(),
-  completed_at: z.string().nullable().optional(),
-  scheduled_at: z.string().nullable().optional(),
-  unique_key: z.string().nullable().optional(),
-  errors: z.array(z.object({
-    traceback: z.string(),
-    attempt: z.number(),
-  })).optional().default([]),
-}).passthrough();
-
-export type Job = z.infer<typeof JobSchema>;
-
-const QueueSchema = z.object({
-  name: z.string(),
-  concurrency: z.number().nullable().optional(),
-  tags: z.array(z.string()),
-  state: z.string(),
-  executor: z.string(),
-  executor_options: z.record(z.string(), z.any()).optional().default({}),
-  polling_interval: z.number(),
-  rate_limit: z.number().nullable().optional(),
-  rate_limit_window: z.number().nullable().optional(),
-  resume_at: z.string().nullable().optional(),
-  eager_polling: z.boolean().optional().default(false),
-}).passthrough();
-
-export type Queue = z.infer<typeof QueueSchema>;
-
-type FilterTriple = [string, string, string];
-
+export type FilterTriple = [string, string, string];
 export type BatchJobAction = 'retry' | 'purge' | 'cancel';
-export interface BatchJobResult {
-  id: string;
-  status: 'completed' | 'skipped' | 'failed';
-  message?: string;
+export interface PageParams { filters?: FilterTriple[]; limit?: number; before?: string; }
+export interface JobParams extends PageParams { state?: string; queue?: string; func?: string; }
+export interface MetricParams { resolution: string; limit: number; worker_id?: string; }
+
+function queryString(params: object): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) qs.set(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
+  }
+  return qs.toString();
 }
-export interface BatchJobResponse {
-  ok: boolean;
-  results: BatchJobResult[];
-}
 
-export const ChancyApi = (baseUrl: string) => ({
-  // Jobs
-  listJobs: async (params: { state?: string; queue?: string; func?: string; filters?: FilterTriple[]; limit?: number; before?: string } = {}) => {
-    const qs = new URLSearchParams();
-    if (params.state) qs.set('state', params.state);
-    if (params.queue) qs.set('queue', params.queue);
-    if (params.func) qs.set('func', params.func);
-    if (params.filters) qs.set('filters', JSON.stringify(params.filters));
-    if (params.limit) qs.set('limit', String(params.limit));
-    if (params.before) qs.set('before', params.before);
-    const data = await request<unknown[]>(baseUrl, `/api/v1/jobs?${qs.toString()}`);
-    return data.map(d => parseWith(JobSchema, d));
-  },
-  listFunctions: async () => {
-    return await request<string[]>(baseUrl, `/api/v1/jobs/functions`);
-  },
-  getJob: async (id: string) => {
-    const data = await request<unknown>(baseUrl, `/api/v1/jobs/${id}`);
-    return parseWith(JobSchema, data);
-  },
-  retryJob: async (id: string) => request(baseUrl, `/api/v1/jobs/${id}/retry`, { method: 'POST' }),
-  cancelJob: async (id: string) => request(baseUrl, `/api/v1/jobs/${id}/cancel`, { method: 'POST' }),
-  purgeJob: async (id: string) => request(baseUrl, `/api/v1/jobs/${id}`, { method: 'DELETE' }),
-  batchJobs: async (ids: string[], action: BatchJobAction) => request<BatchJobResponse>(baseUrl, `/api/v1/jobs`, { method: 'POST', body: { action, ids } }),
-
-  // Queues
-  listQueues: async () => {
-    const data = await request<unknown[]>(baseUrl, `/api/v1/queues`);
-    return data.map(d => parseWith(QueueSchema, d));
-  },
-  createQueue: async (payload: Partial<Queue> & { name: string }) => {
-    const data = await request<unknown>(baseUrl, `/api/v1/queues`, { method: 'POST', body: payload });
-    return parseWith(QueueSchema, data);
-  },
-  updateQueue: async (name: string, payload: Partial<Queue>) => {
-    const data = await request<unknown>(baseUrl, `/api/v1/queues/${encodeURIComponent(name)}`, { method: 'PATCH', body: payload });
-    return parseWith(QueueSchema, data);
-  },
-  pauseQueue: async (name: string, resume_at?: string) => request(baseUrl, `/api/v1/queues/${encodeURIComponent(name)}/pause`, { method: 'POST', body: resume_at ? { resume_at } : {} }),
-  resumeQueue: async (name: string) => request(baseUrl, `/api/v1/queues/${encodeURIComponent(name)}/resume`, { method: 'POST' }),
-  deleteQueue: async (name: string, purge_jobs: boolean) => request(baseUrl, `/api/v1/queues/${encodeURIComponent(name)}?purge_jobs=${purge_jobs ? 'true' : 'false'}`, { method: 'DELETE' }),
-});
-
-export type ChancyApiType = ReturnType<typeof ChancyApi>;
+export const ChancyApi = (baseUrl: string) => {
+  const read = async <T extends z.ZodType>(path: string, schema: T, options: RequestOptions = {}): Promise<z.output<T>> =>
+    schema.parse(await request(baseUrl, `/api/v1${path}`, options));
+  const action = (path: string, options: RequestOptions) => read(path, schemas.ActionResponseSchema, options);
+  return {
+    listJobs: (params: JobParams = {}, signal?: AbortSignal) =>
+      read(`/jobs?${queryString({ ...params, pagination: true })}`, schemas.JobPageSchema, { signal }),
+    getJob: (id: string, signal?: AbortSignal) => read(`/jobs/${encodeURIComponent(id)}`, schemas.JobSchema, { signal }),
+    listFunctions: (signal?: AbortSignal) => read('/jobs/functions', z.array(z.string()), { signal }),
+    retryJob: (id: string) => action(`/jobs/${encodeURIComponent(id)}/retry`, { method: 'POST' }),
+    cancelJob: (id: string) => action(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
+    purgeJob: (id: string) => action(`/jobs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    batchJobs: (ids: string[], action: BatchJobAction) => read('/jobs', schemas.BatchJobResponseSchema, { method: 'POST', body: { action, ids } }),
+    listQueues: (signal?: AbortSignal) => read('/queues', z.array(schemas.QueueSchema), { signal }),
+    createQueue: (payload: Partial<Queue> & { name: string }) => read('/queues', schemas.QueueSchema, { method: 'POST', body: payload }),
+    updateQueue: (name: string, payload: Partial<Queue>) => read(`/queues/${encodeURIComponent(name)}`, schemas.QueueSchema, { method: 'PATCH', body: payload }),
+    pauseQueue: (name: string, resume_at?: string) => action(`/queues/${encodeURIComponent(name)}/pause`, { method: 'POST', body: resume_at ? { resume_at } : {} }),
+    resumeQueue: (name: string) => action(`/queues/${encodeURIComponent(name)}/resume`, { method: 'POST' }),
+    deleteQueue: (name: string, purge_jobs: boolean) => action(`/queues/${encodeURIComponent(name)}?purge_jobs=${purge_jobs}`, { method: 'DELETE' }),
+    listWorkers: (signal?: AbortSignal) => read('/workers', z.array(schemas.WorkerSchema), { signal }),
+    listCrons: (signal?: AbortSignal) => read('/crons', z.array(schemas.CronSchema), { signal }),
+    listWorkflows: (params: PageParams = {}, signal?: AbortSignal) => read(`/workflows?${queryString({ ...params, pagination: true })}`, schemas.WorkflowPageSchema, { signal }),
+    getWorkflow: (id: string, signal?: AbortSignal) => read(`/workflows/${encodeURIComponent(id)}`, schemas.WorkflowSchema, { signal }),
+    getConfiguration: (signal?: AbortSignal) => read('/configuration', schemas.ConfigurationSchema, { signal }),
+    getSystem: (signal?: AbortSignal) => read('/system', schemas.SystemSchema, { signal }),
+    listPlugins: (signal?: AbortSignal) => read('/plugins', z.array(schemas.PluginSchema), { signal }),
+    getMetricsOverview: (signal?: AbortSignal) => read('/metrics', schemas.MetricsOverviewSchema, { signal }),
+    getMetricDetail: (key: string, params: MetricParams, signal?: AbortSignal) => read(`/metrics/${encodeURIComponent(key)}?${queryString(params)}`, schemas.MetricDetailSchema, { signal }),
+  };
+};

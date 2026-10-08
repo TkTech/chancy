@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import { getToken } from './auth';
+import { getToken } from './auth.ts';
 
 export class ApiError extends Error {
   status: number;
@@ -27,7 +26,7 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
-export async function request<T>(baseUrl: string, path: string, options: RequestOptions = {}): Promise<T> {
+export async function request(baseUrl: string, path: string, options: RequestOptions = {}): Promise<unknown> {
   const url = `${baseUrl}${path}`;
 
   const init: RequestInit = {
@@ -58,19 +57,9 @@ export async function request<T>(baseUrl: string, path: string, options: Request
     throw new ApiError(res.status, msg as string, json);
   }
 
-  return json as T;
+  return json;
 }
 
 function safeJsonParse(text: string) {
   try { return JSON.parse(text); } catch { return undefined; }
-}
-
-// Small helpers to validate server payloads as needed
-export function parseWith<T>(schema: z.ZodType<T>, data: unknown): T {
-  const result = schema.safeParse(data);
-  if (!result.success) {
-    console.error('Response validation failed:', result.error.format());
-    throw new Error('Invalid server response shape');
-  }
-  return result.data;
 }

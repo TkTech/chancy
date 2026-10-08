@@ -1,3 +1,4 @@
+import type { Cron } from '../../services/schemas';
 import { useRef, useMemo, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { TimelineConfig, calculateCronExecutions, getTimelineWidth } from '../../utils/timeline';
@@ -6,24 +7,8 @@ import { CronTimelineRow } from './CronTimelineRow';
 import { useDrawer } from '../common/DrawerContext';
 import { CronDetailView } from './CronDetailView';
 
-interface CronJob {
-  unique_key: string;
-  cron: string;
-  timezone: string;
-  next_run: string;
-  last_run: string;
-  job: {
-    func: string;
-    queue: string;
-    kwargs: unknown;
-    priority: number;
-    max_attempts: number;
-    limits: Array<{ key: string; value: number }>;
-  };
-}
-
 interface CronTimelineProps {
-  crons: CronJob[];
+  crons: Cron[];
 }
 
 const COLORS = [
@@ -89,7 +74,7 @@ export function CronTimeline({ crons }: CronTimelineProps) {
 
   const timelineWidth = getTimelineWidth(config);
 
-  const handleCronClick = (cron: CronJob) => {
+  const handleCronClick = (cron: Cron) => {
     drawer.open(
       <CronDetailView cron={cron} />,
       { title: `Scheduled Job` }

@@ -1,27 +1,13 @@
-interface FormCheckboxProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  field: any;
-  label: string;
-  id: string;
+import type { FieldControlProps, FormFieldState } from './FormField';
+
+interface FormCheckboxProps extends FieldControlProps {
+  field: FormFieldState<boolean | undefined, boolean>;
 }
 
-/**
- * Checkbox component integrated with TanStack Form
- */
-export function FormCheckbox({ field, label, id }: FormCheckboxProps) {
-  return (
-    <div className="form-check form-switch">
-      <input
-        className="form-check-input"
-        type="checkbox"
-        checked={!!field.state.value}
-        onChange={(e) => field.handleChange(e.target.checked)}
-        onBlur={field.handleBlur}
-        id={id}
-      />
-      <label className="form-check-label" htmlFor={id}>
-        {field.state.value ? label : `${label} (Disabled)`}
-      </label>
-    </div>
-  );
+export function FormCheckbox({ field, ...control }: FormCheckboxProps) {
+  return <div className="form-check form-switch">
+    <input {...control} className="form-check-input" type="checkbox"
+      checked={!!field.state.value} onChange={event => field.handleChange(event.target.checked)} onBlur={field.handleBlur} />
+    <span aria-hidden="true">{field.state.value ? 'Enabled' : 'Disabled'}</span>
+  </div>;
 }

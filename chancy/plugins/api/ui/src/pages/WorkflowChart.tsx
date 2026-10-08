@@ -3,29 +3,18 @@ import type {NodeProps} from '@xyflow/react';
 import {Edge, Handle, MarkerType, Node, NodeTypes, Position, ReactFlow, Background} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
-import {Workflow} from '../hooks/useWorkflows.tsx';
+import type { Workflow, Step } from '../services/schemas';
+import { StatusBadge } from '../components/common/StatusBadge';
 import {statusToColor, extractFunctionName} from '../utils.tsx';
 
 interface WorkflowChartProps {
   workflow: Workflow;
 }
 
-type CustomNode = Node<{
-  label: string,
-  jobId: string,
-  state: string,
-  job: {
-    func: string,
-    queue: string,
-    kwargs: unknown,
-    priority: number,
-    max_attempts: number,
-    limits: {
-      key: string,
-      value: number
-    }[]
-  }
-}, 'custom'>;
+type CustomNode = Node<Pick<Step, 'state' | 'job'> & {
+  label: string;
+  jobId: Step['job_id'];
+}, 'customNode'>;
 
 const CustomNode = ({ data }: NodeProps<CustomNode>) => {
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -38,9 +27,10 @@ const CustomNode = ({ data }: NodeProps<CustomNode>) => {
       <Handle type="target" position={Position.Left} style={{
         opacity: 0,
       }} />
-      <div className={`p-3 border border-2 border-${statusToColor(data.state)} bg-body`}>
-        <div className={"fw-bold text-truncate"} title={data.label}>
-          {data.label}
+      <div className={`p-3 border border-2 border-${statusToColor(data.state ?? 'waiting')} bg-body`}>
+        <div className="d-flex align-items-center justify-content-between gap-2">
+          <div className="fw-bold text-truncate" title={data.label}>{data.label}</div>
+          <StatusBadge status={data.state ?? 'waiting'} />
         </div>
         {functionName && (
           <div className={"text-muted small text-truncate"} title={data.job?.func}>

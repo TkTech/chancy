@@ -1,24 +1,10 @@
+import type { JobDefinition } from '../services/schemas';
 import { Link } from 'react-router';
 import { JsonViewer } from './JsonViewer';
 import { useTheme } from '../contexts/ThemeContext';
 
-interface PackedJob {
-  func: string;
-  queue: string;
-  kwargs?: unknown;
-  priority?: number;
-  max_attempts?: number;
-  unique_key?: string;
-  limits?: Array<{
-    key: string;
-    value: number;
-  }>;
-  meta?: unknown;
-  scheduled_at?: string;
-}
-
 interface PackedJobDetailsProps {
-  job: PackedJob;
+  job: JobDefinition;
 }
 
 export function PackedJobDetails({
@@ -63,14 +49,14 @@ export function PackedJobDetails({
             <td className="w-100">
               {job.limits.map((limit, idx) => (
                 <div key={idx}>
-                  <span className="badge bg-secondary me-1">{limit.key}</span>
+                  <span className="badge bg-secondary me-1">{limit.type}</span>
                   {limit.value}
                 </div>
               ))}
             </td>
           </tr>
         )}
-        {job.kwargs && Object.keys(job.kwargs as object).length > 0 ? (
+        {job.kwargs && Object.keys(job.kwargs).length > 0 ? (
           <tr>
             <th className="text-nowrap align-top">Arguments</th>
             <td className="w-100">
@@ -78,7 +64,7 @@ export function PackedJobDetails({
             </td>
           </tr>
         ) : null}
-        {job.meta && Object.keys(job.meta as object).length > 0 ? (
+        {job.meta && Object.keys(job.meta).length > 0 ? (
           <tr>
             <th className="text-nowrap align-top">Metadata</th>
             <td className="w-100">
