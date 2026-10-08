@@ -15,7 +15,7 @@ from starlette.websockets import WebSocketDisconnect
 from chancy import Chancy, Job, Queue, Worker
 from chancy.plugins.api import Api, SimpleAuthBackend, _SPAStaticFiles
 from chancy.plugins.api.plugin import ApiPlugin
-from chancy.plugins.workflow import WorkflowPlugin
+from chancy.plugins.workflow import Workflow, WorkflowPlugin
 from chancy.plugins.workflow.api import WorkflowApiPlugin
 
 
@@ -657,3 +657,91 @@ async def test_workflow_page_boundaries(api, chancy, worker_no_start, count):
             assert [item["id"] for item in page["items"]] == [str(UUID(int=1))]
             assert page["has_more"] is False
             assert page["next_cursor"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy", [{"plugins": [WorkflowPlugin()]}], indirect=True
+)
+@pytest.mark.parametrize("pagination", [False, True])
+@pytest.mark.parametrize(
+    "states",
+    [
+        ["succeeded"],
+        ["pending", "running", "succeeded", "failed", "retrying"],
+    ],
+)
+async def test_workflow_progress_counts_unsubmitted_steps(
+    api, chancy, worker_no_start, pagination, states
+):
+    await chancy.declare(Queue("default"))
+    workflow = Workflow("progress")
+    for i in range(len(states) + 2):
+        workflow.add(str(i), Job(func="unused"), [str(i - 1)] if i else [])
+    await WorkflowPlugin.push(chancy, workflow)
+    app = api.build_starlette_app(worker_no_start, chancy)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        login = await client.post(
+            "/api/v1/login", json={"username": "admin", "password": "password"}
+        )
+        client.headers["Authorization"] = f"Bearer {login.json()['token']}"
+
+        async def counts():
+            response = await client.get(
+                "/api/v1/workflows",
+                params={"pagination": str(pagination).lower()},
+            )
+            assert response.status_code == 200
+            items = response.json()["items"] if pagination else response.json()
+            assert len(items) == 1
+            return {
+                key: value
+                for key, value in items[0].items()
+                if key.endswith("_steps")
+            }
+
+        expected = {
+            "total_steps": len(workflow.steps),
+            "waiting_steps": len(workflow.steps),
+            **{
+                f"{state}_steps": 0
+                for state in [
+                    "pending",
+                    "running",
+                    "succeeded",
+                    "failed",
+                    "retrying",
+                ]
+            },
+        }
+        assert await counts() == expected
+
+        refs = []
+        for i, state in enumerate(states):
+            ref = await chancy.push(Job(func="unused"))
+            refs.append(ref)
+            async with chancy.pool.connection() as conn:
+                await conn.execute(
+                    sql.SQL(
+                        "UPDATE {} SET job_id = %s WHERE workflow_id = %s AND step_id = %s"
+                    ).format(sql.Identifier(f"{chancy.prefix}workflow_steps")),
+                    [ref.identifier, workflow.id, str(i)],
+                )
+                await conn.execute(
+                    sql.SQL("UPDATE {} SET state = %s WHERE id = %s").format(
+                        sql.Identifier(f"{chancy.prefix}jobs")
+                    ),
+                    [state, ref.identifier],
+                )
+            expected[f"{state}_steps"] += 1
+            expected["waiting_steps"] -= 1
+        assert await counts() == expected
+        assert expected["waiting_steps"] == 2
+        assert expected["succeeded_steps"] < expected["total_steps"]
+
+        # A purged job is not an unsubmitted step, and must not shrink the total.
+        await chancy.purge_jobs([refs[0]])
+        expected[f"{states[0]}_steps"] -= 1
+        assert await counts() == expected

@@ -382,12 +382,15 @@ export function Workflows() {
           </tr>
         )}
         {workflows?.map(workflow => {
-          const pendingSteps = workflow.pending_steps || 0;
-          const runningSteps = workflow.running_steps || 0;
-          const succeededSteps = workflow.succeeded_steps || 0;
-          const failedSteps = workflow.failed_steps || 0;
-          const retryingSteps = workflow.retrying_steps || 0;
-          const totalSteps = pendingSteps + runningSteps + succeededSteps + failedSteps + retryingSteps;
+          const totalSteps = workflow.total_steps;
+          const segments = [
+            { count: workflow.succeeded_steps, label: 'succeeded', color: 'bg-success' },
+            { count: workflow.running_steps, label: 'running', color: 'bg-primary' },
+            { count: workflow.retrying_steps, label: 'retrying', color: 'bg-warning' },
+            { count: workflow.failed_steps, label: 'failed', color: 'bg-danger' },
+            { count: workflow.pending_steps, label: 'pending in queue', color: 'bg-secondary' },
+            { count: workflow.waiting_steps, label: 'waiting to be queued', color: 'bg-body-secondary text-body progress-bar-striped' },
+          ];
 
           return (
             <tr key={workflow.id}>
@@ -398,58 +401,30 @@ export function Workflows() {
               </td>
               <td className={"text-center"} style={{minWidth: '200px'}}>
                 {totalSteps > 0 ? (
-                  <div className="progress" style={{height: '24px'}}>
-                    {succeededSteps > 0 && (
-                      <div
-                        className="progress-bar bg-success"
-                        role="progressbar"
-                        style={{width: `${(succeededSteps / totalSteps) * 100}%`}}
-                        title={`${succeededSteps} succeeded`}
-                      >
-                        {succeededSteps}
-                      </div>
-                    )}
-                    {runningSteps > 0 && (
-                      <div
-                        className="progress-bar bg-primary"
-                        role="progressbar"
-                        style={{width: `${(runningSteps / totalSteps) * 100}%`}}
-                        title={`${runningSteps} running`}
-                      >
-                        {runningSteps}
-                      </div>
-                    )}
-                    {retryingSteps > 0 && (
-                      <div
-                        className="progress-bar bg-warning"
-                        role="progressbar"
-                        style={{width: `${(retryingSteps / totalSteps) * 100}%`}}
-                        title={`${retryingSteps} retrying`}
-                      >
-                        {retryingSteps}
-                      </div>
-                    )}
-                    {failedSteps > 0 && (
-                      <div
-                        className="progress-bar bg-danger"
-                        role="progressbar"
-                        style={{width: `${(failedSteps / totalSteps) * 100}%`}}
-                        title={`${failedSteps} failed`}
-                      >
-                        {failedSteps}
-                      </div>
-                    )}
-                    {pendingSteps > 0 && (
-                      <div
-                        className="progress-bar bg-secondary"
-                        role="progressbar"
-                        style={{width: `${(pendingSteps / totalSteps) * 100}%`}}
-                        title={`${pendingSteps} pending`}
-                      >
-                        {pendingSteps}
-                      </div>
-                    )}
-                  </div>
+                  <>
+                    <div className="progress" style={{height: '24px'}}>
+                      {segments.filter(segment => segment.count > 0).map(segment => (
+                        <div
+                          key={segment.label}
+                          className={`progress-bar ${segment.color}`}
+                          role="progressbar"
+                          aria-label={segment.label}
+                          aria-valuenow={segment.count}
+                          aria-valuemin={0}
+                          aria-valuemax={totalSteps}
+                          style={{width: `${(segment.count / totalSteps) * 100}%`}}
+                          title={`${segment.count} ${segment.label}`}
+                        >
+                          {segment.count}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="small text-muted mt-1">
+                      {workflow.succeeded_steps}/{totalSteps} succeeded
+                      {workflow.waiting_steps > 0 && ` · ${workflow.waiting_steps} waiting`}
+                      {workflow.pending_steps > 0 && ` · ${workflow.pending_steps} queued`}
+                    </div>
+                  </>
                 ) : (
                   <span className="text-muted">-</span>
                 )}

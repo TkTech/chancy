@@ -50,6 +50,12 @@ class WorkflowApiPlugin(ApiPlugin):
         ``has_more``, and ``next_cursor`` (an ID to pass as ``before``, or
         null on the last page). Otherwise the response remains an array.
         ``limit`` must be positive and is capped at 100.
+
+        ``total_steps`` counts every workflow step. ``waiting_steps`` counts
+        steps not yet submitted (no job ID), including dependency-blocked
+        steps. ``pending_steps`` counts jobs already queued in pending state.
+        A step whose job was deleted still contributes to ``total_steps``
+        but is not counted as waiting or in any job state.
         """
         from chancy.plugins.api.core import parse_filters
         from chancy.rule import Rule
@@ -105,6 +111,8 @@ class WorkflowApiPlugin(ApiPlugin):
                         w.state,
                         w.created_at,
                         w.updated_at,
+                        COALESCE(stats.total_steps, 0) as total_steps,
+                        COALESCE(stats.waiting_steps, 0) as waiting_steps,
                         COALESCE(stats.pending_steps, 0) as pending_steps,
                         COALESCE(stats.running_steps, 0) as running_steps,
                         COALESCE(stats.succeeded_steps, 0) as succeeded_steps,
@@ -114,6 +122,8 @@ class WorkflowApiPlugin(ApiPlugin):
                     LEFT JOIN (
                         SELECT
                             ws.workflow_id,
+                            COUNT(*) as total_steps,
+                            COUNT(CASE WHEN ws.job_id IS NULL THEN 1 END) as waiting_steps,
                             COUNT(CASE WHEN j.state = 'pending' THEN 1 END) as pending_steps,
                             COUNT(CASE WHEN j.state = 'running' THEN 1 END) as running_steps,
                             COUNT(CASE WHEN j.state = 'succeeded' THEN 1 END) as succeeded_steps,

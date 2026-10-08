@@ -26,14 +26,19 @@ export interface Workflow {
   state: string,
   created_at: string,
   updated_at: string,
-  pending_steps?: number,
-  running_steps?: number,
-  succeeded_steps?: number,
-  failed_steps?: number,
-  retrying_steps?: number,
   steps? : {
     [key: string]: Step
   }
+}
+
+export interface WorkflowSummary extends Workflow {
+  total_steps: number;
+  waiting_steps: number;
+  pending_steps: number;
+  running_steps: number;
+  succeeded_steps: number;
+  failed_steps: number;
+  retrying_steps: number;
 }
 
 export function useWorkflow ({
@@ -60,7 +65,7 @@ export function useWorkflow ({
 export type FilterTriple = [string, string, string];
 
 export interface WorkflowPage {
-  items: Workflow[];
+  items: WorkflowSummary[];
   next_cursor: string | null;
   has_more: boolean;
 }
