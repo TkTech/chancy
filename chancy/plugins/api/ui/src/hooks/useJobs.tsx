@@ -42,6 +42,7 @@ export function useJobs ({
   func,
   filters,
   enabled,
+  pausePolling = false,
   before,
 }: {
   url: string | null,
@@ -49,6 +50,7 @@ export function useJobs ({
   func?: string | undefined,
   filters?: FilterTriple[],
   enabled?: boolean,
+  pausePolling?: boolean,
   before?: string,
 }) {
   const fullUrl = useMemo(() => {
@@ -78,9 +80,9 @@ export function useJobs ({
     enabled: enabled ?? (url !== null),
     // Reduce flicker by avoiding focus refetches and keeping data "warm"
     refetchOnWindowFocus: false,
-    refetchOnReconnect: !before,
+    refetchOnReconnect: !before && !pausePolling,
     staleTime: 0,
-    refetchInterval: !before && (enabled ?? (url !== null)) ? 5000 : false,
+    refetchInterval: !before && !pausePolling ? 5000 : false,
     placeholderData: keepPreviousData,
   });
 }

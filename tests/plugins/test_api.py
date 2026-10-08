@@ -2,6 +2,7 @@ import datetime
 import json
 from unittest.mock import AsyncMock, Mock
 from urllib.parse import quote, urljoin
+from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -14,6 +15,8 @@ from starlette.websockets import WebSocketDisconnect
 from chancy import Chancy, Job, Queue, Worker
 from chancy.plugins.api import Api, SimpleAuthBackend, _SPAStaticFiles
 from chancy.plugins.api.plugin import ApiPlugin
+from chancy.plugins.workflow import WorkflowPlugin
+from chancy.plugins.workflow.api import WorkflowApiPlugin
 
 
 @pytest.fixture
@@ -316,3 +319,341 @@ async def test_standalone_server_uses_factory(
     factory.assert_called_once_with(worker, chancy_just_app)
     assert server_factory.call_args.kwargs["config"].app is app
     server.serve.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["retry", "purge", "cancel"])
+async def test_batch_jobs_reports_each_committed_outcome(
+    api, chancy, worker_no_start, monkeypatch, action
+):
+    await chancy.declare(Queue("default"))
+    states = [
+        "pending",
+        "pending",
+        "pending",
+        "running",
+        "succeeded",
+        "retrying",
+    ]
+    refs = [await chancy.push(Job(func="unused")) for _ in states]
+    ids = [str(ref.identifier) for ref in refs]
+    async with chancy.pool.connection() as conn:
+        for ref, state in zip(refs, states):
+            await conn.execute(
+                sql.SQL("UPDATE {} SET state = %s WHERE id = %s").format(
+                    sql.Identifier(f"{chancy.prefix}jobs")
+                ),
+                [state, ref.identifier],
+            )
+
+    method = {
+        "retry": "retry_jobs_ex",
+        "purge": "purge_jobs_ex",
+        "cancel": "cancel_job_ex",
+    }[action]
+    original = getattr(chancy, method)
+
+    async def fail_one(cursor, references):
+        result = await original(cursor, references)
+        ref = references[0] if isinstance(references, list) else references
+        if ref == refs[1]:
+            # Even a failure after the write must roll back only this item.
+            raise RuntimeError("Simulated item failure")
+        return result
+
+    monkeypatch.setattr(chancy, method, fail_one)
+    notify = AsyncMock(wraps=chancy.notify)
+    monkeypatch.setattr(chancy, "notify", notify)
+    missing = "00000000-0000-0000-0000-000000000000"
+    app = api.build_starlette_app(worker_no_start, chancy)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        login = await client.post(
+            "/api/v1/login",
+            json={"username": "admin", "password": "password"},
+        )
+        client.headers["Authorization"] = f"Bearer {login.json()['token']}"
+        response = await client.post(
+            "/api/v1/jobs",
+            json={"action": action, "ids": [*ids, missing, "invalid", ids[0]]},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    results = payload["results"]
+    assert [result["id"] for result in results] == [*ids, missing, "invalid"]
+    expected = [
+        "completed",
+        "failed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "skipped",
+        "failed",
+    ]
+    if action == "retry":
+        expected[3] = "skipped"
+    elif action == "cancel":
+        expected[4] = "skipped"
+    assert [result["status"] for result in results] == expected
+    assert all(
+        result.get("message")
+        for result in results
+        if result["status"] != "completed"
+    )
+    assert "Simulated" not in response.text
+
+    async with chancy.pool.connection() as conn:
+        cursor = await conn.execute(
+            sql.SQL("SELECT id, state FROM {}").format(
+                sql.Identifier(f"{chancy.prefix}jobs")
+            )
+        )
+        remaining = {
+            str(job_id): state for job_id, state in await cursor.fetchall()
+        }
+    for job_id, state, status in zip(ids, states, expected):
+        if status != "completed":
+            assert remaining[job_id] == state
+        elif action == "purge":
+            assert job_id not in remaining
+        else:
+            assert (
+                remaining[job_id]
+                == {"retry": "retrying", "cancel": "failed"}[action]
+            )
+    if action == "purge":
+        notify.assert_not_awaited()
+    else:
+        assert notify.await_count == expected.count("completed")
+        assert all(
+            call.args[1]
+            == {"retry": "queue.pushed", "cancel": "job.cancelled"}[action]
+            for call in notify.await_args_list
+        )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"action": "unknown", "ids": ["invalid"]},
+        {"action": "retry", "ids": []},
+        {"action": "retry", "ids": "invalid"},
+        {"action": "retry", "ids": [None]},
+    ],
+)
+def test_batch_jobs_rejects_invalid_payload(api, chancy_just_app, payload):
+    app = api.build_starlette_app(Worker(chancy_just_app), chancy_just_app)
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/login",
+            json={"username": "admin", "password": "password"},
+        )
+        response = client.post(
+            "/api/v1/jobs",
+            json=payload,
+            headers={"Authorization": f"Bearer {login.json()['token']}"},
+        )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["retry", "purge", "cancel"])
+async def test_batch_jobs_success(api, chancy, worker_no_start, action):
+    await chancy.declare(Queue("default"))
+    ref = await chancy.push(Job(func="unused"))
+    job_id = str(ref.identifier)
+    app = api.build_starlette_app(worker_no_start, chancy)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        login = await client.post(
+            "/api/v1/login",
+            json={"username": "admin", "password": "password"},
+        )
+        response = await client.post(
+            "/api/v1/jobs",
+            json={"action": action, "ids": [job_id, job_id]},
+            headers={"Authorization": f"Bearer {login.json()['token']}"},
+        )
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "results": [{"id": job_id, "status": "completed"}],
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy", [{"plugins": [WorkflowPlugin()]}], indirect=True
+)
+@pytest.mark.parametrize("entity", ["jobs", "workflows"])
+@pytest.mark.parametrize("pagination", [False, True])
+@pytest.mark.parametrize("filtered", [False, True])
+async def test_history_pagination_across_mutations(
+    api, chancy, worker_no_start, entity, pagination, filtered
+):
+    table = sql.Identifier(f"{chancy.prefix}{entity}")
+    field = "func" if entity == "jobs" else "name"
+    now = datetime.datetime.now(datetime.UTC)
+    rows = [
+        (
+            UUID(int=i),
+            "other" if i % 7 == 0 else "match",
+            # Dates oppose ID order and contain ties; workflow dates may be null.
+            None
+            if entity == "workflows" and i % 11 == 0
+            else now - datetime.timedelta(days=i // 2),
+        )
+        for i in range(1, 252)
+    ]
+    insert = sql.SQL(
+        "INSERT INTO {} (id, {}, created_at, state{}) "
+        "VALUES (%s, %s, %s, 'pending'{})"
+    ).format(
+        table,
+        sql.Identifier(field),
+        sql.SQL(", queue") if entity == "jobs" else sql.SQL(""),
+        sql.SQL(", 'default'") if entity == "jobs" else sql.SQL(""),
+    )
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.executemany(insert, rows)
+    expected = [
+        str(row[0])
+        for row in reversed(rows)
+        if not filtered or row[1] == "match"
+    ]
+    app = api.build_starlette_app(worker_no_start, chancy)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        login = await client.post(
+            "/api/v1/login", json={"username": "admin", "password": "password"}
+        )
+        client.headers["Authorization"] = f"Bearer {login.json()['token']}"
+        # Both endpoints cap oversized pages at 100.
+        params = {"limit": 999}
+        if pagination:
+            params["pagination"] = "true"
+        if filtered:
+            params["filters"] = json.dumps([[field, "~", "match"]])
+        seen = []
+        while len(seen) < len(expected):
+            response = await client.get(f"/api/v1/{entity}", params=params)
+            assert response.status_code == 200
+            payload = response.json()
+            items = payload["items"] if pagination else payload
+            ids = [item["id"] for item in items]
+            assert ids == expected[len(seen) : len(seen) + 100]
+            seen.extend(ids)
+            if pagination:
+                has_more = len(seen) < len(expected)
+                assert payload["has_more"] is has_more
+                assert payload["next_cursor"] == (ids[-1] if has_more else None)
+            params["before"] = ids[-1]
+            if len(seen) == 100:
+                async with chancy.pool.connection() as conn:
+                    # Removing the cursor row must not invalidate its boundary.
+                    await conn.execute(
+                        sql.SQL("DELETE FROM {} WHERE id = ANY(%s)").format(
+                            table
+                        ),
+                        [[UUID(ids[-1]), UUID(int=1)]],
+                    )
+                    await conn.execute(insert, [UUID(int=1000), "match", now])
+                    await conn.execute(
+                        sql.SQL(
+                            "UPDATE {} SET created_at = NOW(), state = 'failed'"
+                        ).format(table)
+                    )
+                    await conn.execute(
+                        sql.SQL(
+                            "UPDATE {} SET {} = 'other' WHERE id = %s"
+                        ).format(table, sql.Identifier(field)),
+                        [UUID(int=2)],
+                    )
+                expected.remove(str(UUID(int=1)))
+                if filtered:
+                    expected.remove(str(UUID(int=2)))
+        assert seen == expected
+        assert len(seen) > 100
+        assert len(set(seen)) == len(seen)
+        response = await client.get(f"/api/v1/{entity}", params=params)
+        assert response.json() == (
+            {"items": [], "has_more": False, "next_cursor": None}
+            if pagination
+            else []
+        )
+
+
+@pytest.mark.parametrize("entity", ["jobs", "workflows"])
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"limit": "0"},
+        {"limit": "-1"},
+        {"limit": "invalid"},
+        {"before": "invalid"},
+    ],
+)
+def test_history_rejects_invalid_pagination(
+    api, chancy_just_app, entity, params
+):
+    api.plugins.add(WorkflowApiPlugin)
+    app = api.build_starlette_app(Worker(chancy_just_app), chancy_just_app)
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/login", json={"username": "admin", "password": "password"}
+        )
+        response = client.get(
+            f"/api/v1/{entity}",
+            params=params,
+            headers={"Authorization": f"Bearer {login.json()['token']}"},
+        )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "chancy", [{"plugins": [WorkflowPlugin()]}], indirect=True
+)
+@pytest.mark.parametrize("count", [0, 100, 101])
+async def test_workflow_page_boundaries(api, chancy, worker_no_start, count):
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.executemany(
+            sql.SQL(
+                "INSERT INTO {} (id, name, state) VALUES (%s, 'test', 'pending')"
+            ).format(sql.Identifier(f"{chancy.prefix}workflows")),
+            [(UUID(int=i),) for i in range(1, count + 1)],
+        )
+    app = api.build_starlette_app(worker_no_start, chancy)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        login = await client.post(
+            "/api/v1/login", json={"username": "admin", "password": "password"}
+        )
+        client.headers["Authorization"] = f"Bearer {login.json()['token']}"
+        response = await client.get(
+            "/api/v1/workflows", params={"pagination": "true"}
+        )
+        assert response.status_code == 200
+        page = response.json()
+        assert len(page["items"]) == min(count, 100)
+        assert page["has_more"] is (count > 100)
+        assert page["next_cursor"] == (
+            str(UUID(int=2)) if count > 100 else None
+        )
+        if page["has_more"]:
+            response = await client.get(
+                "/api/v1/workflows",
+                params={"pagination": "true", "before": page["next_cursor"]},
+            )
+            page = response.json()
+            assert [item["id"] for item in page["items"]] == [str(UUID(int=1))]
+            assert page["has_more"] is False
+            assert page["next_cursor"] is None

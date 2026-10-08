@@ -15,6 +15,7 @@ import { SearchFilter, FieldConfig } from '../components/common/SearchFilter';
 import { useQueues } from '../hooks/useQueues';
 import { useFunctions } from '../hooks/useFunctions';
 import { JobStateBarGraph } from '../components/JobStateBarGraph';
+import { BatchJobAction, BatchJobResponse } from '../services/chancy';
 
 export function Job() {
   const { job_id } = useParams<{job_id: string}>();
@@ -57,6 +58,7 @@ export function Jobs() {
     scope: string;
     cursors: (string | undefined)[];
     selected: Record<string, boolean>;
+    summary?: { action: BatchJobAction } & ({ response: BatchJobResponse } | { error: string });
   }>({ scope, cursors: [undefined], selected: {} });
   // A new server or filter set starts at the first page immediately, including
   // URL changes made with the browser's Back/Forward buttons.
@@ -65,8 +67,9 @@ export function Jobs() {
   if (view.scope !== scope) setView(currentView);
   const { cursors, selected } = currentView;
   const before = cursors[cursors.length - 1];
-  const selectedIds = Object.keys(selected).filter(k => selected[k]);
-  const freezeUpdates = selectedIds.length > 0;
+  const freezeUpdates = Object.values(selected).some(Boolean);
+  const actionLock = React.useRef(false);
+  const [actionPending, setActionPending] = React.useState(false);
   const setSelected = (selected: Record<string, boolean>) => {
     setView({ ...currentView, selected });
   };
@@ -131,10 +134,16 @@ export function Jobs() {
     url: url,
     state: undefined,
     filters: filters,
-    enabled: url !== null && !freezeUpdates,
+    pausePolling: freezeUpdates || actionPending,
     before,
   });
   const jobs = page?.items;
+  // Only visible, current rows may be acted on. This also reconciles rows
+  // removed by a mutation or by another operator while polling is paused.
+  const selectedIds = isPlaceholderData ? [] : (jobs ?? []).filter(j => selected[j.id]).map(j => j.id);
+  if (jobs && !isPlaceholderData && Object.keys(selected).some(id => selected[id] && !jobs.some(j => j.id === id))) {
+    setSelected(Object.fromEntries(selectedIds.map(id => [id, true])));
+  }
 
   const allSelected = jobs && jobs.length > 0 && jobs.every(j => selected[j.id]);
   const toggleAll = () => {
@@ -144,9 +153,41 @@ export function Jobs() {
     setSelected(next);
   }
 
-  const { retry, cancel, purge } = useJobActions();
+  const { batch } = useJobActions();
   const { confirm, dialog } = useConfirm();
   const drawer = useDrawer();
+  const actionsDisabled = actionPending || isFetching || isPlaceholderData || !!error;
+
+  const runAction = async (action: BatchJobAction) => {
+    if (actionLock.current || actionsDisabled || !selectedIds.length) return;
+    actionLock.current = true;
+    setActionPending(true);
+    const ids = selectedIds;
+    try {
+      if (action !== 'retry') {
+        const ok = await confirm(action === 'purge'
+          ? { title: 'Purge Jobs', message: `Permanently delete ${ids.length} job(s)?` }
+          : { title: 'Cancel Jobs', message: `Cancel ${ids.length} job(s)? Only pending, running, or retrying jobs can be cancelled.` });
+        if (!ok) return;
+      }
+      const response = await batch.mutateAsync({ ids, action });
+      const completed = new Set(response.results.filter(r => r.status === 'completed').map(r => r.id));
+      setView(view => view.scope === scope && view.cursors === cursors ? {
+        ...view,
+        selected: Object.fromEntries(Object.entries(view.selected).filter(([id, checked]) => checked && !completed.has(id))),
+        summary: { action, response },
+      } : view);
+    } catch (error) {
+      setView(view => view.scope === scope && view.cursors === cursors ? {
+        ...view,
+        summary: { action, error: error instanceof Error ? error.message : 'Request failed' },
+      } : view);
+    } finally {
+      actionLock.current = false;
+      setActionPending(false);
+    }
+  };
+  const summary = currentView.summary;
 
   // Avoid showing the global loader during background refetches
   // which causes visible flicker. Only show it before first data.
@@ -175,6 +216,27 @@ export function Jobs() {
         </div>
       )}
 
+      {summary && (
+        <div className={`alert ${'error' in summary || !summary.response.ok ? 'alert-warning' : 'alert-success'}`} role="status">
+          <strong>{{ retry: 'Retry', purge: 'Purge', cancel: 'Cancel' }[summary.action]}: </strong>
+          {'error' in summary ? <>Could not confirm the outcome: {summary.error}. Review the refreshed list before trying again.</> : <>
+            {summary.response.results.filter(r => r.status === 'completed').length} completed,{' '}
+            {summary.response.results.filter(r => r.status === 'skipped').length} skipped,{' '}
+            {summary.response.results.filter(r => r.status === 'failed').length} failed.
+            {!summary.response.ok && (
+              <details className="mt-2">
+                <summary>View unresolved items</summary>
+                <ul className="mb-0">
+                  {summary.response.results.filter(r => r.status !== 'completed').map(r => (
+                    <li key={r.id}><code>{r.id}</code>: {r.status} — {r.message}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>}
+        </div>
+      )}
+
       {selectedIds.length > 0 && (
         <div className="alert alert-primary d-flex justify-content-between align-items-center py-2 mb-3">
           <div className="fw-medium">
@@ -182,16 +244,9 @@ export function Jobs() {
             {selectedIds.length === 1 ? 'job' : 'jobs'} selected
           </div>
           <div className="btn-group btn-group-sm">
-            <button className="btn btn-primary" onClick={() => retry.mutate(selectedIds)}>Retry</button>
-            <button className="btn btn-danger" onClick={async () => {
-              const ok = await confirm({ title: 'Purge Jobs', message: `Permanently delete ${selectedIds.length} job(s)?` });
-              if (ok) purge.mutate(selectedIds);
-            }}>Purge</button>
-            <button className="btn btn-warning" onClick={async () => {
-              const ok = await confirm({ title: 'Cancel Jobs', message: `Cancel ${selectedIds.length} job(s)? They must be pending or running.` });
-              if (!ok) return;
-              for (const id of selectedIds) await cancel.mutateAsync(id);
-            }}>Cancel</button>
+            <button className="btn btn-primary" disabled={actionsDisabled} onClick={() => void runAction('retry')}>Retry</button>
+            <button className="btn btn-danger" disabled={actionsDisabled} onClick={() => void runAction('purge')}>Purge</button>
+            <button className="btn btn-warning" disabled={actionsDisabled} onClick={() => void runAction('cancel')}>Cancel</button>
           </div>
         </div>
       )}
@@ -200,7 +255,7 @@ export function Jobs() {
         <thead>
         <tr>
           <th style={{width: '1%'}}>
-            <input type="checkbox" aria-label="Select all jobs" disabled={isFetching || isPlaceholderData || !!error} checked={!!allSelected} onChange={toggleAll} />
+            <input type="checkbox" aria-label="Select all jobs" disabled={actionsDisabled} checked={!!allSelected} onChange={toggleAll} />
           </th>
           <th className={"w-100"}>Job</th>
           <th className={'text-center'}>State</th>
@@ -220,7 +275,7 @@ export function Jobs() {
         {jobs?.map((job) => (
           <tr key={job.id}>
             <td>
-              <input type="checkbox" aria-label={`Select job ${job.id}`} disabled={isFetching || isPlaceholderData || !!error} checked={!!selected[job.id]} onChange={e => setSelected({...selected, [job.id]: e.target.checked})} />
+              <input type="checkbox" aria-label={`Select job ${job.id}`} disabled={actionsDisabled} checked={!!selected[job.id]} onChange={e => setSelected({...selected, [job.id]: e.target.checked})} />
             </td>
             <td className={"text-break"}>
               <Link to={`/jobs/${job.id}`}
@@ -266,8 +321,8 @@ export function Jobs() {
         </div>
         <div className="d-flex align-items-center gap-2">
           <span className="small text-muted">Page {cursors.length}</span>
-          <button className="btn btn-sm btn-outline-secondary" disabled={isFetching || cursors.length === 1} onClick={() => navigate(cursors.slice(0, -1))}>Previous</button>
-          <button className="btn btn-sm btn-outline-secondary" disabled={isFetching || isPlaceholderData || !!error || !page?.has_more || !page.next_cursor} onClick={() => {
+          <button className="btn btn-sm btn-outline-secondary" disabled={actionPending || isFetching || cursors.length === 1} onClick={() => navigate(cursors.slice(0, -1))}>Previous</button>
+          <button className="btn btn-sm btn-outline-secondary" disabled={actionsDisabled || !page?.has_more || !page.next_cursor} onClick={() => {
             if (page?.next_cursor) navigate([...cursors, page.next_cursor]);
           }}>Next</button>
         </div>

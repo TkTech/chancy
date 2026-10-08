@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChancyApi } from '../services/chancy';
+import { BatchJobAction, ChancyApi } from '../services/chancy';
 import { useServerConfiguration } from './useServerConfiguration';
 import { useToast } from '../components/common/ToastContext';
 
@@ -17,9 +17,8 @@ export function useJobActions() {
   };
 
   const retry = useMutation({
-    mutationFn: async (id: string | string[]) => {
+    mutationFn: async (id: string) => {
       if (!api) throw new Error('No API URL');
-      if (Array.isArray(id)) return api.batchJobs(id, 'retry');
       return api.retryJob(id);
     },
     onSuccess: async () => {
@@ -42,9 +41,8 @@ export function useJobActions() {
   });
 
   const purge = useMutation({
-    mutationFn: async (id: string | string[]) => {
+    mutationFn: async (id: string) => {
       if (!api) throw new Error('No API URL');
-      if (Array.isArray(id)) return api.batchJobs(id, 'purge');
       return api.purgeJob(id);
     },
     onSuccess: async () => {
@@ -54,5 +52,14 @@ export function useJobActions() {
     onError: (e) => toast.show(e?.message || 'Failed to purge job(s)', 'error'),
   });
 
-  return { retry, cancel, purge } as const;
+  const batch = useMutation({
+    mutationFn: async ({ ids, action }: { ids: string[]; action: BatchJobAction }) => {
+      if (!api) throw new Error('No API URL');
+      return api.batchJobs(ids, action);
+    },
+    // Refresh once, even when a lost response leaves the outcome uncertain.
+    onSettled: invalidate,
+  });
+
+  return { retry, cancel, purge, batch } as const;
 }

@@ -45,6 +45,17 @@ export type Queue = z.infer<typeof QueueSchema>;
 
 type FilterTriple = [string, string, string];
 
+export type BatchJobAction = 'retry' | 'purge' | 'cancel';
+export interface BatchJobResult {
+  id: string;
+  status: 'completed' | 'skipped' | 'failed';
+  message?: string;
+}
+export interface BatchJobResponse {
+  ok: boolean;
+  results: BatchJobResult[];
+}
+
 export const ChancyApi = (baseUrl: string) => ({
   // Jobs
   listJobs: async (params: { state?: string; queue?: string; func?: string; filters?: FilterTriple[]; limit?: number; before?: string } = {}) => {
@@ -68,7 +79,7 @@ export const ChancyApi = (baseUrl: string) => ({
   retryJob: async (id: string) => request(baseUrl, `/api/v1/jobs/${id}/retry`, { method: 'POST' }),
   cancelJob: async (id: string) => request(baseUrl, `/api/v1/jobs/${id}/cancel`, { method: 'POST' }),
   purgeJob: async (id: string) => request(baseUrl, `/api/v1/jobs/${id}`, { method: 'DELETE' }),
-  batchJobs: async (ids: string[], action: 'retry' | 'purge') => request(baseUrl, `/api/v1/jobs`, { method: 'POST', body: { action, ids } }),
+  batchJobs: async (ids: string[], action: BatchJobAction) => request<BatchJobResponse>(baseUrl, `/api/v1/jobs`, { method: 'POST', body: { action, ids } }),
 
   // Queues
   listQueues: async () => {
@@ -89,4 +100,3 @@ export const ChancyApi = (baseUrl: string) => ({
 });
 
 export type ChancyApiType = ReturnType<typeof ChancyApi>;
-

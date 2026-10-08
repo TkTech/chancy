@@ -21,6 +21,61 @@ _functions_cache = {"data": None, "timestamp": 0}
 _FUNCTIONS_CACHE_TTL = 60  # 60 seconds
 
 
+async def _batch_job_action(chancy, action: str, job_id: str) -> dict:
+    """Apply one batch item, locking its state until the action commits."""
+    try:
+        ref = Reference(job_id)
+    except ValueError:
+        return {"id": job_id, "status": "failed", "message": "Invalid job ID"}
+
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+        conn.transaction(),
+    ):
+        await cursor.execute(
+            sql.SQL("SELECT state FROM {} WHERE id = %s FOR UPDATE").format(
+                sql.Identifier(f"{chancy.prefix}jobs")
+            ),
+            [ref.identifier],
+        )
+        job = await cursor.fetchone()
+        if job is None:
+            return {
+                "id": job_id,
+                "status": "skipped",
+                "message": "Job no longer exists",
+            }
+        if action == "retry" and job["state"] == "running":
+            return {
+                "id": job_id,
+                "status": "skipped",
+                "message": "Running jobs cannot be retried",
+            }
+        if action == "cancel" and job["state"] not in (
+            "pending",
+            "running",
+            "retrying",
+        ):
+            return {
+                "id": job_id,
+                "status": "skipped",
+                "message": "Job is already finished",
+            }
+
+        if action == "retry":
+            queues = await chancy.retry_jobs_ex(cursor, [ref])
+            for queue in queues:
+                await chancy.notify(cursor, "queue.pushed", {"q": queue})
+        elif action == "purge":
+            await chancy.purge_jobs_ex(cursor, [ref])
+        else:
+            await chancy.cancel_job_ex(cursor, ref)
+            await chancy.notify(cursor, "job.cancelled", {"j": ref.identifier})
+
+    return {"id": job_id, "status": "completed"}
+
+
 def parse_filters(filters_param, field_config):
     """
     Parse filter triples and build a rule from them.
@@ -503,7 +558,18 @@ class CoreApiPlugin(ApiPlugin):
     async def jobs(request: Request, *, chancy, worker):
         """
         GET: Get a list of jobs with filters and pagination.
-        POST: Batch job actions (retry, purge).
+        POST: Batch job actions (retry, purge, cancel).
+
+        POST accepts ``{"action": "retry", "ids": ["job-uuid", ...]}``.
+        Each distinct ID is processed independently, in request order. The
+        response contains ``results`` with an ``id``, a ``status`` of
+        ``completed``, ``skipped``, or ``failed``, and a ``message`` for skipped
+        or failed items. ``ok`` is true only if every item completed. Earlier
+        successes are not rolled back when a later item fails.
+
+        Missing jobs are skipped. Retry skips running jobs; cancel accepts
+        pending, running, and retrying jobs and skips finished jobs. Purge
+        deletes any existing job without cancelling its execution.
 
         GET returns jobs in descending ID order. Pass the last returned ID as
         ``before`` to fetch the next page of lower IDs with the same filters.
@@ -518,27 +584,54 @@ class CoreApiPlugin(ApiPlugin):
         """
         if request.method == "POST":
             data = await request.json()
-            action = (data.get("action") or "").lower()
-            ids = data.get("ids") or []
-            if not ids:
-                return Response(
-                    json_dumps({"title": "No job IDs provided"}),
-                    media_type="application/json",
-                    status_code=422,
-                )
-            refs = [Reference(j) for j in ids]
-            if action == "retry":
-                await chancy.retry_jobs(refs)
-            elif action == "purge":
-                await chancy.purge_jobs(refs)
-            else:
+            action = data.get("action") if isinstance(data, dict) else None
+            ids = data.get("ids") if isinstance(data, dict) else None
+            if not isinstance(action, str) or action.lower() not in (
+                "retry",
+                "purge",
+                "cancel",
+            ):
                 return Response(
                     json_dumps({"title": "Invalid batch action"}),
                     media_type="application/json",
                     status_code=422,
                 )
+            if (
+                not isinstance(ids, list)
+                or not ids
+                or not all(isinstance(job_id, str) for job_id in ids)
+            ):
+                return Response(
+                    json_dumps(
+                        {"title": "ids must be a nonempty array of strings"}
+                    ),
+                    media_type="application/json",
+                    status_code=422,
+                )
+            results = []
+            for job_id in dict.fromkeys(ids):
+                try:
+                    result = await _batch_job_action(
+                        chancy, action.lower(), job_id
+                    )
+                except Exception:
+                    chancy.log.exception(
+                        "Batch %s failed for job %s", action, job_id
+                    )
+                    result = {
+                        "id": job_id,
+                        "status": "failed",
+                        "message": "Action failed; see server logs",
+                    }
+                results.append(result)
             return Response(
-                json_dumps({"ok": True}), media_type="application/json"
+                json_dumps(
+                    {
+                        "ok": all(r["status"] == "completed" for r in results),
+                        "results": results,
+                    }
+                ),
+                media_type="application/json",
             )
 
         # Support both legacy query params and new filter triples
@@ -558,6 +651,14 @@ class CoreApiPlugin(ApiPlugin):
         pagination = request.query_params.get("pagination") == "true"
         fetch_limit = limit + 1 if pagination else limit
         before = request.query_params.get("before")
+        try:
+            before = Reference(before).identifier if before else None
+        except ValueError:
+            return Response(
+                json_dumps({"title": "before must be a valid UUID"}),
+                media_type="application/json",
+                status_code=422,
+            )
 
         # New filter triples: filters=[["key","op","value"],...]
         filters_param = request.query_params.get("filters")

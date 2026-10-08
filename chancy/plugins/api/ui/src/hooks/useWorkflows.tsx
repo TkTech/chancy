@@ -1,5 +1,5 @@
 import React from 'react';
-import {useQuery} from '@tanstack/react-query';
+import {keepPreviousData, useQuery} from '@tanstack/react-query';
 import { request } from '../services/http';
 
 export interface Step {
@@ -59,29 +59,43 @@ export function useWorkflow ({
 
 export type FilterTriple = [string, string, string];
 
+export interface WorkflowPage {
+  items: Workflow[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
 export function useWorkflows ({
   url,
-  filters
+  filters,
+  before,
 }: {
   url: string | null,
-  filters?: FilterTriple[]
+  filters?: FilterTriple[],
+  before?: string,
 }) {
   const fullUrl = React.useMemo(() => {
     const params = new URLSearchParams();
+    params.set('pagination', 'true');
+    if (before) params.set('before', before);
     if (filters && filters.length > 0) {
       params.append('filters', JSON.stringify(filters));
     }
     return `${url}/api/v1/workflows?${params.toString()}`;
-  }, [url, filters]);
+  }, [url, filters, before]);
 
-  return useQuery<Workflow[]>({
+  return useQuery<WorkflowPage>({
     queryKey: ['workflows', fullUrl],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const urlBase = url as string;
       const path = `/api/v1/workflows?${new URL(fullUrl).searchParams.toString()}`;
-      return await request<Workflow[]>(urlBase, path);
+      return await request<WorkflowPage>(urlBase, path, { signal });
     },
     enabled: url !== null,
-    refetchInterval: 5000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: !before,
+    staleTime: 0,
+    refetchInterval: !before ? 5000 : false,
+    placeholderData: keepPreviousData,
   });
 }

@@ -1,3 +1,8 @@
+export function formatExecutionTime(seconds: number): string {
+  if (seconds >= 1) return `${seconds.toFixed(1)}s`;
+  return `${Math.round(seconds * 1000)}ms`;
+}
+
 export function relativeTime (date: string) {
   // Convert a date string to a relative time string
   // like "7 minutes ago" or "in 2 days"

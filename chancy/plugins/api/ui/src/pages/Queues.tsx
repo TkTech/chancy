@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatExecutionTime } from '../utils';
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
 import {Link, useParams} from 'react-router';
 import {Loading} from '../components/Loading.tsx';
@@ -168,7 +169,7 @@ export function Queue() {
               url={url!}
               resolution={resolution}
               stat="avg"
-              formatValue={(v) => `${v.toFixed(0)}ms`}
+              formatValue={formatExecutionTime}
               sparklineColor="#8b5cf6"
             />
           </div>

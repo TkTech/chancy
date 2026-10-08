@@ -1,4 +1,5 @@
 import {useServerConfiguration} from '../hooks/useServerConfiguration.tsx';
+import { formatExecutionTime } from '../utils';
 import {Loading} from '../components/Loading.tsx';
 import {Link, useParams} from 'react-router';
 import {useWorkers, Worker} from '../hooks/useWorkers.tsx';
@@ -136,7 +137,7 @@ export function WorkerDetails () {
                     url={url!}
                     resolution={resolution}
                     stat="avg"
-                    formatValue={(v) => `${v.toFixed(0)}ms`}
+                    formatValue={formatExecutionTime}
                     sparklineColor="#8b5cf6"
                     workerId={worker.worker_id}
                   />

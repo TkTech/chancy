@@ -7,7 +7,7 @@ import { useDrawer } from '../components/common/DrawerContext';
 import { JobDetailsView } from '../features/jobs/JobDetailsView';
 // Drawer and JobDetailsView are not directly used here; navigation state opens drawer in Layout
 import {CountdownTimer} from '../components/UpdatingTime.tsx';
-import {statusToColor, extractFunctionName} from '../utils.tsx';
+import {statusToColor, extractFunctionName, formatExecutionTime} from '../utils.tsx';
 import WorkflowChart from './WorkflowChart.tsx';
 import {ReactFlowProvider} from '@xyflow/react';
 import { PageHeader } from '../components/common/PageHeader';
@@ -112,7 +112,7 @@ export function Workflow() {
             url={url!}
             resolution={resolution}
             stat="avg"
-            formatValue={(v) => `${v.toFixed(1)}s`}
+            formatValue={formatExecutionTime}
             sparklineColor="#8b5cf6"
           />
         </div>
@@ -255,6 +255,18 @@ export function Workflows() {
     }, { replace: true });
   };
 
+  const scope = JSON.stringify([url, filters]);
+  const [view, setView] = React.useState<{
+    scope: string;
+    cursors: (string | undefined)[];
+  }>({ scope, cursors: [undefined] });
+  // Match Jobs: filter/server changes, including Back/Forward, start at page one.
+  const currentView = view.scope === scope ? view : { scope, cursors: [undefined] };
+  if (view.scope !== scope) setView(currentView);
+  const { cursors } = currentView;
+  const before = cursors[cursors.length - 1];
+  const navigate = (cursors: (string | undefined)[]) => setView({ scope, cursors });
+
   // Define filter field configuration
   const workflowFilterFields: Record<string, FieldConfig> = React.useMemo(() => ({
     state: {
@@ -277,9 +289,10 @@ export function Workflows() {
     }
   }), []);
 
-  const {data: workflows, dataUpdatedAt, isLoading} = useWorkflows({url, filters});
+  const {data: page, dataUpdatedAt, isFetching, isPlaceholderData, error, refetch} = useWorkflows({url, filters, before});
+  const workflows = page?.items;
 
-  if (isLoading) return <Loading />;
+  if (!workflows && !error) return <Loading />;
 
   return (
     <div className={'container-fluid'}>
@@ -343,6 +356,13 @@ export function Workflows() {
         onChange={setFilters}
         placeholder="Add filter... (state, name)"
       />
+
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          Could not load workflows: {error.message}{' '}
+          <button className="btn btn-sm btn-outline-danger" disabled={isFetching} onClick={() => void refetch()}>Try again</button>
+        </div>
+      )}
 
       <DataTable>
         <thead>
@@ -445,11 +465,19 @@ export function Workflows() {
         })}
         </tbody>
       </DataTable>
-      {workflows && workflows.length >= 100 && (
-        <div className="text-muted text-center mt-2" style={{fontSize: '0.875rem'}}>
-          Only showing the first 100 results...
+      <nav aria-label="Workflows pagination" className="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+        <div className="text-muted small" role="status">
+          {before ? 'Updates paused while browsing older workflows.' : 'Showing latest workflows · Updates every 5 seconds.'}
+          {isFetching && ' Loading…'}
         </div>
-      )}
+        <div className="d-flex align-items-center gap-2">
+          <span className="small text-muted">Page {cursors.length}</span>
+          <button className="btn btn-sm btn-outline-secondary" disabled={isFetching || cursors.length === 1} onClick={() => navigate(cursors.slice(0, -1))}>Previous</button>
+          <button className="btn btn-sm btn-outline-secondary" disabled={isFetching || isPlaceholderData || !!error || !page?.has_more || !page.next_cursor} onClick={() => {
+            if (page?.next_cursor) navigate([...cursors, page.next_cursor]);
+          }}>Next</button>
+        </div>
+      </nav>
     </div>
   );
 }

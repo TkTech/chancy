@@ -1,6 +1,7 @@
 import { useMetricDetail, MetricData } from '../../hooks/useMetrics';
 import { MiniSparkline } from './MiniSparkline';
 import { Link } from 'react-router';
+import { formatExecutionTime } from '../../utils';
 
 interface QueueMetricsProps {
   queueName: string;
@@ -12,11 +13,6 @@ const formatNumber = (num: number) => {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
   return num.toString();
-};
-
-const formatTime = (ms: number) => {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.round(ms)}ms`;
 };
 
 /**
@@ -156,7 +152,7 @@ export function QueueMetrics({ queueName, url, resolution = '5min' }: QueueMetri
             <div className="text-uppercase text-secondary mb-1" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
               Avg Time
             </div>
-            <div className="h5 mb-0">{formatTime(avgExecutionTime)}</div>
+            <div className="h5 mb-0">{formatExecutionTime(avgExecutionTime)}</div>
             <div style={{ height: '30px', marginTop: '4px' }}>
               <MiniSparkline data={getSparklineData(executionTimeData, true)} color="#3b82f6" height={30} />
             </div>
