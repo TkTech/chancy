@@ -12,7 +12,7 @@ import { QueueForm } from '../features/queues/QueueForm.tsx';
 import { JsonViewer } from '../components/JsonViewer';
 import { useTheme } from '../contexts/ThemeContext';
 import { useEntityForm } from '../hooks/useEntityForm';
-import { QueueFormSchema, queueToFormValues } from '../schemas/queue';
+import { QueueFormSchema, defaultQueueValues, queueToFormValues } from '../schemas/queue';
 import { FormInput } from '../components/forms/FormInput';
 import { FormCheckbox } from '../components/forms/FormCheckbox';
 import { FormTagInput } from '../components/forms/FormTagInput';
@@ -71,7 +71,7 @@ export function Queue() {
 
   const { form, isSubmitting } = useEntityForm({
     schema: QueueFormSchema,
-    defaultValues: queue ? queueToFormValues(queue) : { name: '', concurrency: '', polling_interval: '5', eager_polling: false, rate_limit: '', rate_limit_window: '', tags: [], executor_options: '{}' },
+    defaultValues: queue ? queueToFormValues(queue) : defaultQueueValues,
     mutation: formMutation as UseMutationResult<unknown, Error, z.output<typeof QueueFormSchema>>,
     onSuccess: () => setIsEditing(false),
   });
@@ -262,13 +262,16 @@ export function Queue() {
                 {isEditing ? (
                   <form.Field name="tags">
                     {(field) => (
-                      <FormTagInput field={field} />
+                      <>
+                        <FormTagInput field={field} />
+                        <div className="form-text">Use .* to match all workers. No tags leaves the queue unassigned.</div>
+                      </>
                     )}
                   </form.Field>
                 ) : (
                   <div>
                     {queue.tags.length === 0 ? (
-                      <span className="text-muted">No tags</span>
+                      <span className="text-muted">Unassigned (no tags)</span>
                     ) : (
                       queue.tags.map(tag => (
                         <span key={tag} className="badge bg-primary me-1 mb-1">{tag}</span>

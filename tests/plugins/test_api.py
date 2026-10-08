@@ -7,7 +7,7 @@ from starlette.responses import JSONResponse
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from chancy import Chancy, Worker
+from chancy import Chancy, Queue, Worker
 from chancy.plugins.api import Api, SimpleAuthBackend, _SPAStaticFiles
 from chancy.plugins.api.plugin import ApiPlugin
 
@@ -37,6 +37,41 @@ def mount(app, prefix):
             parent.mount(f"/{segment}", app)
             app = parent
     return app
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {},
+        {"tags": []},
+        {"tags": ["reporting"]},
+        {"concurrency": 2, "polling_interval": 10, "eager_polling": True},
+    ],
+)
+def test_create_queue_uses_python_defaults(
+    api, chancy_just_app, monkeypatch, overrides
+):
+    declare = AsyncMock(side_effect=lambda queue, **kwargs: queue)
+    monkeypatch.setattr(chancy_just_app, "declare", declare)
+    app = api.build_starlette_app(Worker(chancy_just_app), chancy_just_app)
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/login",
+            json={"username": "admin", "password": "password"},
+        )
+        response = client.post(
+            "/api/v1/queues",
+            json={"name": "review", **overrides},
+            headers={"Authorization": f"Bearer {login.json()['token']}"},
+        )
+
+    options = dict(overrides)
+    if "tags" in options:
+        options["tags"] = set(options["tags"])
+    expected = Queue("review", **options)
+    assert response.status_code == 200
+    assert response.json() == expected.pack()
+    declare.assert_awaited_once_with(expected, upsert=True)
 
 
 @pytest.mark.parametrize("prefix", ["", "/chancy", "/internal/chancy"])

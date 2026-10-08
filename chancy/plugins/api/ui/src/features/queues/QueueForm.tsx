@@ -111,6 +111,7 @@ export function QueueForm({ mode, initial, onSubmit, onCancel }: QueueFormProps)
                 {(field) => (
                   <FormField label="Tags">
                     <FormTagInput field={field} />
+                    <div className="form-text">Use .* to match all workers. No tags leaves the queue unassigned.</div>
                   </FormField>
                 )}
               </form.Field>

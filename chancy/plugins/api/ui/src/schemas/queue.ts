@@ -26,7 +26,7 @@ export const QueueFormSchema = z.object({
     z.number(),
     z.null()
   ]).optional(),
-  tags: z.array(z.string()).default([]),
+  tags: z.array(z.string()).default(['.*']),
   executor_options: z.union([
     z.string().transform(val => {
       if (val.trim() === '') return {};
@@ -49,7 +49,7 @@ export const defaultQueueValues: QueueFormInput = {
   eager_polling: false,
   rate_limit: '',
   rate_limit_window: '',
-  tags: [],
+  tags: ['.*'],
   executor_options: '{}',
 };
 

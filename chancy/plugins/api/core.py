@@ -411,6 +411,10 @@ class CoreApiPlugin(ApiPlugin):
         """
         GET: Get a list of all queues.
         POST: Create a queue.
+
+        Omitted fields use :class:`~chancy.queue.Queue` defaults. Omitted tags
+        match all workers; an explicit empty tag list leaves the queue
+        unassigned, so no worker will process its jobs.
         """
         if request.method == "GET":
             queues = await chancy.get_all_queues()
@@ -421,20 +425,8 @@ class CoreApiPlugin(ApiPlugin):
 
         data = await request.json()
         try:
-            q = Queue(
-                name=data["name"],
-                concurrency=data.get("concurrency"),
-                tags=set(data.get("tags") or []),
-                state=Queue.State(data.get("state", "active")),
-                executor=data.get("executor")
-                or "chancy.executors.process.ProcessExecutor",
-                executor_options=data.get("executor_options") or {},
-                polling_interval=data.get("polling_interval", 5),
-                rate_limit=data.get("rate_limit"),
-                rate_limit_window=data.get("rate_limit_window"),
-                resume_at=data.get("resume_at"),
-                eager_polling=data.get("eager_polling", False),
-            )
+            defaults = Queue(name=data["name"]).pack()
+            q = Queue.unpack(defaults | data)
         except (KeyError, TypeError, ValueError) as e:
             return Response(
                 json_dumps(
