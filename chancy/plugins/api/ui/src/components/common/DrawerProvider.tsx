@@ -1,76 +1,35 @@
 import React from 'react';
 import { DrawerContext, DrawerOptions } from './DrawerContext';
+import { Dialog } from './Dialog';
 
 export function DrawerProvider({ children }: { children: React.ReactNode }) {
-  const [isOpen, setOpen] = React.useState(false);
-  const [content, setContent] = React.useState<React.ReactNode>(null);
-  const [title, setTitle] = React.useState<string | undefined>(undefined);
-  const [width, setWidth] = React.useState<number>(720);
-  const onCloseRef = React.useRef<(() => void) | undefined>(undefined);
+  const [drawer, setDrawer] = React.useState<{
+    content: React.ReactNode;
+    options?: DrawerOptions;
+  } | null>(null);
 
-  const open = (node: React.ReactNode, opts?: DrawerOptions) => {
-    setContent(node);
-    setTitle(opts?.title);
-    setWidth(opts?.width ?? 720);
-    onCloseRef.current = opts?.onClose;
-    setOpen(true);
+  const open = (content: React.ReactNode, options?: DrawerOptions) => {
+    setDrawer({ content, options });
   };
 
   const close = () => {
-    try {
-      onCloseRef.current?.();
-    } finally {
-      setOpen(false);
-    }
-    // allow exit animation before clearing (optional)
-    setTimeout(() => setContent(null), 200);
+    setDrawer(null);
+    drawer?.options?.onClose?.();
   };
-
-  // prevent background scroll when drawer is open
-  React.useEffect(() => {
-    if (isOpen) {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = prev;
-      };
-    }
-  }, [isOpen]);
 
   return (
     <DrawerContext.Provider value={{ open, close }}>
       {children}
-      {/* overlay */}
-      <div
-        role="presentation"
-        onClick={close}
-        style={{
-          position: 'fixed', inset: 0, background: isOpen ? 'rgba(0,0,0,0.35)' : 'transparent',
-          pointerEvents: isOpen ? 'auto' : 'none', transition: 'background 0.2s ease', zIndex: 2049,
-        }}
-      />
-      {/* drawer */}
-      <aside
-        aria-hidden={!isOpen}
-        style={{
-          position: 'fixed', top: 0, right: 0, height: '100vh', width,
-          // Use Bootstrap body colors so the drawer matches the app theme
-          background: 'var(--bs-body-bg)',
-          color: 'var(--bs-body-color)',
-          boxShadow: '0 0 20px rgba(0,0,0,0.15)',
-          transform: `translateX(${isOpen ? 0 : width}px)`, transition: 'transform 0.2s ease', zIndex: 2050,
-          display: 'flex', flexDirection: 'column',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="d-flex align-items-center border-bottom bg-body-tertiary px-3 py-2">
-          <strong className="me-auto">{title || 'Details'}</strong>
-          <button className="btn-close" aria-label="Close" onClick={close} />
-        </div>
-        <div className="flex-grow-1 overflow-auto p-3 bg-body">
-          {content}
-        </div>
-      </aside>
+      {drawer && (
+        <Dialog
+          title={drawer.options?.title || 'Details'}
+          variant="drawer"
+          width={drawer.options?.width}
+          onClose={close}
+        >
+          {drawer.content}
+        </Dialog>
+      )}
     </DrawerContext.Provider>
   );
 }

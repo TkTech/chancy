@@ -295,9 +295,9 @@ function Layout() {
           </button>
         </div>
       </div>
-      <div className="flex-grow-1 overflow-x-scroll vh-100 p-4">
+      <main tabIndex={-1} className="flex-grow-1 overflow-x-scroll vh-100 p-4">
           <Outlet/>
-      </div>
+      </main>
     </div>
     </DrawerProvider>
   );

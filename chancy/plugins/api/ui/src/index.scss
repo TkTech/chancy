@@ -18,6 +18,51 @@ body,
     overflow: hidden;
 }
 
+// Shared modal and drawer layout. The browser manages the modal top layer.
+.app-dialog.modal {
+    inset: 0;
+    width: min(var(--dialog-width), calc(100% - 2rem));
+    height: fit-content;
+    max-width: none;
+    max-height: calc(100dvh - 2rem);
+    margin: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--bs-body-color);
+    overflow: visible;
+
+    &[open] { display: flex; }
+    &::backdrop { background: rgba(0, 0, 0, 0.5); }
+
+    .modal-content {
+        max-height: inherit;
+        overflow: hidden;
+    }
+    .modal-header, .modal-footer { flex-shrink: 0; }
+    .modal-title { overflow-wrap: anywhere; }
+    .btn-close { flex-shrink: 0; }
+    .modal-body {
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        overflow-wrap: anywhere;
+    }
+
+    &.app-dialog--drawer {
+        width: min(var(--dialog-width), 100%);
+        height: 100dvh;
+        max-height: 100dvh;
+        margin: 0 0 0 auto;
+        .modal-content { height: 100%; border-radius: 0; }
+    }
+}
+
+// Keep the page stationary even when multiple dialogs are stacked.
+body:has(.app-dialog[open]) {
+    main, .sidebar-scrollable { overflow: hidden !important; }
+}
+
 // ============================================
 // Theme Refinements
 // ============================================
