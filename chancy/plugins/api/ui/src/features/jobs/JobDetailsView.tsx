@@ -57,6 +57,22 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
             <td className="w-100"><StatusBadge status={job.state} /></td>
           </tr>
           <tr>
+            <th className="text-nowrap">Worker</th>
+            <td className="w-100 text-break">
+              {job.taken_by ? (
+                <Link to={`/workers/${encodeURIComponent(job.taken_by)}`}>{job.taken_by}</Link>
+              ) : 'Unassigned'}
+            </td>
+          </tr>
+          <tr>
+            <th className="text-nowrap">Claim ID</th>
+            <td className="w-100 text-break">
+              {job.claim_id === undefined ? 'Unavailable' : (
+                job.claim_id ? <code className="text-break">{job.claim_id}</code> : 'None'
+              )}
+            </td>
+          </tr>
+          <tr>
             <th className="text-nowrap">Attempts</th>
             <td className="w-100">{job.attempts} / {job.max_attempts}</td>
           </tr>
@@ -69,6 +85,18 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
           <tr>
             <th className="text-nowrap">Priority</th>
             <td className="w-100">{job.priority}</td>
+          </tr>
+          <tr>
+            <th className="text-nowrap">Limits</th>
+            <td className="w-100">
+              {job.limits.length > 0 ? job.limits.map((limit, idx) => (
+                <div key={idx}>
+                  {limit.type === 'time'
+                    ? `Time: ${limit.value.toLocaleString()} s`
+                    : `Memory: ${limit.value.toLocaleString()} bytes`}
+                </div>
+              )) : 'None'}
+            </td>
           </tr>
           </tbody>
         </table>

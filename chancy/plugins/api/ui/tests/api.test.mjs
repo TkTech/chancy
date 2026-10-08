@@ -49,6 +49,11 @@ test('normalizes queued, cron and workflow limits, preserving nullable fields', 
   assert.deepEqual(queued.limits, expectedLimits);
   assert.equal(queued.started_at, null);
   assert.equal(queued.unique_key, null);
+  assert.equal(queued.claim_id, null);
+  fetch.mock.mockImplementation(async () => Response.json({ ...job, claim_id: job.id, taken_by: 'worker-1' }));
+  const claimed = await api.getJob(job.id);
+  assert.equal(claimed.claim_id, job.id);
+  assert.equal(claimed.taken_by, 'worker-1');
   fetch.mock.mockImplementation(async () => Response.json([cron]));
   const [scheduled] = await api.listCrons();
   assert.deepEqual(scheduled.job.limits, expectedLimits);
@@ -58,6 +63,19 @@ test('normalizes queued, cron and workflow limits, preserving nullable fields', 
   assert.deepEqual(result.steps.first.job.limits, expectedLimits);
   assert.equal(result.steps.first.state, null);
   assert.equal(result.steps.first.job_id, null);
+});
+
+test('loads job pages and details with absent, null, or populated claims', async t => {
+  const fetch = respond(t, null);
+  for (const claim_id of [undefined, null, job.id]) {
+    const payload = { ...job, claim_id };
+    fetch.mock.mockImplementation(async () => Response.json(page(payload)));
+    const result = await api.listJobs();
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].claim_id, claim_id);
+    fetch.mock.mockImplementation(async () => Response.json(payload));
+    assert.equal((await api.getJob(job.id)).claim_id, claim_id);
+  }
 });
 
 test('rejects malformed limits and missing required fields before caching', async t => {
@@ -71,6 +89,7 @@ test('rejects malformed limits and missing required fields before caching', asyn
     { ...job, limits: undefined },
     { ...job, errors: undefined },
     { ...job, taken_by: undefined },
+    { ...job, claim_id: 123 },
   ]) {
     fetch.mock.mockImplementation(async () => Response.json(page(invalid)));
     const key = queryKeys.jobPage(baseUrl, {});

@@ -25,6 +25,7 @@ export const JobSchema = JobDefinitionSchema.extend({
   state: z.string(),
   attempts: z.number(),
   taken_by: z.string().nullable(),
+  claim_id: z.string().nullish(),
   created_at: z.string(),
   started_at: z.string().nullable(),
   completed_at: z.string().nullable(),
