@@ -191,8 +191,10 @@ class Plugin(abc.ABC):
         Use :meth:`on_job_updated` for work that requires committed updates.
 
         :param worker: The worker saving the updates.
-        :param jobs: The updates in their original order, including repeated
-                     updates to the same job.
+        :param jobs: Only updates whose claims matched and whose database rows
+                     were updated, in their original order, including repeated
+                     accepted updates to the same job. Rejected updates are
+                     omitted; this hook is not called if none were accepted.
         :param cursor: The cursor for the current update transaction.
         """
 
@@ -203,14 +205,15 @@ class Plugin(abc.ABC):
         job: QueuedJob,
     ):
         """
-        Called after a job has been run and saved.
+        Called for each accepted job update after its transaction commits.
 
-        Unlike on_job_completed, this method cannot modify the job, but the job
-        is guaranteed to have been updated in the database by the time it is
-        called.
+        This method cannot modify the saved update. Updates rejected because
+        their claims no longer match or their jobs no longer exist do not
+        invoke this hook. Accepted updates retain their original batch order,
+        including repeated updates to the same job.
 
-        :param worker: The worker that is running the job.
-        :param job: The job that was completed.
+        :param worker: The worker saving the update.
+        :param job: The accepted update that was committed.
         """
 
     def get_tables(self) -> list[str]:

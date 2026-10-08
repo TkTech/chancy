@@ -63,8 +63,13 @@ class AsyncExecutor(Executor):
             await self.on_job_completed(job=job, exc=exc, result=None)
 
     async def cancel(self, ref: Reference):
-        for task, job in self.jobs.items():
+        for job in self.get_running_jobs():
             if job.id == ref.identifier:
+                await self.cancel_execution(job)
+
+    async def cancel_execution(self, job: QueuedJob):
+        for task, running in self.jobs.items():
+            if running.id == job.id and running.claim_id == job.claim_id:
                 task.cancel()
                 return
 

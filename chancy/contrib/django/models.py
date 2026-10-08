@@ -28,6 +28,7 @@ class Job(models.Model):
     attempts = models.IntegerField(default=0)
     max_attempts = models.IntegerField(default=1)
     taken_by = models.TextField(null=True)
+    claim_id = models.UUIDField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True)
     completed_at = models.DateTimeField(null=True)

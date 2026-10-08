@@ -54,6 +54,8 @@ Changelog
 
 🐛 Fixes
 
+- Fixed a race where an abandoned execution could overwrite a recovered
+  job's result. Stop old workers, run migrations, then start updated workers.
 - Bound cron searches across rejected DST occurrences so schedules with no
   usable next run cannot keep searching indefinitely.
 - Empty workflow submissions are now rejected. Existing active empty workflows

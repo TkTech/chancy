@@ -1187,6 +1187,9 @@ class Chancy:
         """
         Cancel a job by reference.
 
+        Marks the job failed and invalidates its execution claim, preventing
+        a late completion from overwriting the cancellation.
+
         This will attempt to cancel a job that is currently running, if it
         is possible to do so. Notifications must be enabled for this to work.
 
@@ -1225,7 +1228,7 @@ class Chancy:
             sql.SQL(
                 """
                 UPDATE {jobs}
-                SET state = 'failed'
+                SET state = 'failed', claim_id = NULL, completed_at = NOW()
                 WHERE id = %s
                 """
             ).format(jobs=sql.Identifier(f"{self.prefix}jobs")),
@@ -1326,6 +1329,7 @@ class Chancy:
                     started_at = NULL,
                     completed_at = NULL,
                     taken_by = NULL,
+                    claim_id = NULL,
                     scheduled_at = NOW(),
                     state = 'retrying',
                     attempts = 0

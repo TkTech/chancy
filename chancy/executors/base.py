@@ -290,7 +290,7 @@ class Executor(abc.ABC):
     @abc.abstractmethod
     async def cancel(self, ref: Reference):
         """
-        Attempt to cancel a running job.
+        Attempt to cancel every running execution of the referenced job.
 
         It's not guaranteed that the job will be cancelled, as it may have
         already completed by the time this method is called or the executor
@@ -310,6 +310,16 @@ class Executor(abc.ABC):
             if job.id == ref.identifier:
                 return job
         return None
+
+    async def cancel_execution(self, job: QueuedJob):
+        """
+        Attempt to cancel only the execution identified by ``job.claim_id``.
+
+        Recovery uses this optional hook instead of job-wide cancellation.
+        Custom executors must match both the job ID and claim ID. The default
+        does nothing; database fencing still rejects the abandoned execution's
+        updates when cancellation is unsupported or unsuccessful.
+        """
 
     @abc.abstractmethod
     def get_running_jobs(self) -> list[QueuedJob]:
@@ -396,8 +406,13 @@ class ConcurrentExecutor(Executor, ABC):
         self.pool.shutdown(wait=False, cancel_futures=True)
 
     async def cancel(self, ref: Reference):
-        for future, job in self.jobs.items():
+        for job in self.get_running_jobs():
             if job.id == ref.identifier:
+                await self.cancel_execution(job)
+
+    async def cancel_execution(self, job: QueuedJob):
+        for future, running in self.jobs.items():
+            if running.id == job.id and running.claim_id == job.claim_id:
                 future.cancel()
                 return
 

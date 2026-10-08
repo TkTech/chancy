@@ -222,6 +222,9 @@ class QueuedJob(Job):
 
     #: The unique identifier for this job instance.
     id: UUID
+    #: Identifies this execution's claim. Replaced whenever a worker claims
+    #: the job; cleared by recovery, cancellation, or a manual retry.
+    claim_id: UUID | None = None
     #: The time at which this job was created.
     created_at: datetime
     #: The time at which this job was started, if it has been started.
@@ -276,8 +279,12 @@ class QueuedJob(Job):
     @classmethod
     def unpack(cls, data: dict) -> "QueuedJob":
         id_ = data["id"]
+        claim_id = data.get("claim_id")
         return cls(
             id=id_ if isinstance(id_, UUID) else UUID(id_),
+            claim_id=(
+                UUID(claim_id) if isinstance(claim_id, str) else claim_id
+            ),
             func=data["func"],
             kwargs=data["kwargs"],
             priority=data["priority"],

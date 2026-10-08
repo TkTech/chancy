@@ -245,6 +245,7 @@ class Worker:
             raise MigrationsNeededError()
 
         self.hub.on("job.cancelled", self._handle_cancellation)
+        self.hub.on("job.recovered", self._handle_recovery)
         self.hub.on("queue.pushed", self._handle_queue_pushed)
 
         for plugin in self.chancy.plugins.values():
@@ -635,6 +636,9 @@ class Worker:
         update transaction; failures roll back the batch. ``on_job_updated``
         hooks run only after the transaction has committed.
 
+        Updates from a claim invalidated by recovery, a new execution, or a
+        manual retry are discarded without invoking either update hook.
+
         .. code-block:: python
 
             await worker.queue_update(updated_job)
@@ -657,10 +661,10 @@ class Worker:
                 # updates to the same job; keep the retained batch and hooks
                 # in their original order.
                 ordered_updates = sorted(
-                    pending_updates,
-                    key=lambda update: (
-                        lock_order_key(update.unique_key),
-                        update.id,
+                    enumerate(pending_updates),
+                    key=lambda item: (
+                        lock_order_key(item[1].unique_key),
+                        item[1].id,
                     ),
                 )
 
@@ -685,6 +689,8 @@ class Worker:
                                 max_attempts = %(max_attempts)s
                             WHERE
                                 id = %(id)s
+                                AND claim_id IS NOT DISTINCT FROM %(claim_id)s
+                            RETURNING id
                             """
                         ).format(
                             jobs=sql.Identifier(f"{self.chancy.prefix}jobs")
@@ -692,6 +698,7 @@ class Worker:
                         [
                             {
                                 "id": update.id,
+                                "claim_id": update.claim_id,
                                 "state": update.state.value,
                                 "started_at": update.started_at,
                                 "completed_at": update.completed_at,
@@ -701,20 +708,32 @@ class Worker:
                                 "meta": Json(update.meta),
                                 "max_attempts": update.max_attempts,
                             }
-                            for update in ordered_updates
+                            for _, update in ordered_updates
                         ],
+                        returning=True,
                     )
 
-                    updates = tuple(pending_updates)
-                    for plugin in self.chancy.plugins.values():
-                        await plugin.on_jobs_updated_in_transaction(
-                            worker=self, jobs=updates, cursor=cursor
-                        )
+                    accepted = set()
+                    for position, _ in ordered_updates:
+                        if await cursor.fetchone() is not None:
+                            accepted.add(position)
+                        cursor.nextset()
+
+                    updates = tuple(
+                        update
+                        for position, update in enumerate(pending_updates)
+                        if position in accepted
+                    )
+                    if updates:
+                        for plugin in self.chancy.plugins.values():
+                            await plugin.on_jobs_updated_in_transaction(
+                                worker=self, jobs=updates, cursor=cursor
+                            )
 
                 # Only discard the batch once its transaction has committed.
                 self._pending_updates = []
 
-                for update in pending_updates:
+                for update in updates:
                     for plugin in self.chancy.plugins.values():
                         await plugin.on_job_updated(job=update, worker=self)
 
@@ -906,6 +925,7 @@ class Worker:
                         SET
                             started_at = NOW(),
                             state = 'running',
+                            claim_id = gen_random_uuid(),
                             taken_by = %(worker_id)s
                         FROM
                             selected_jobs
@@ -1070,6 +1090,25 @@ class Worker:
         )
         for executor in self._executors.values():
             await executor.cancel(Reference(event.body["j"]))
+
+    async def _handle_recovery(self, event: Event):
+        """Stop only the abandoned execution, never its replacement."""
+        job_id = uuid.UUID(event.body["j"])
+        claim_id = uuid.UUID(event.body["c"])
+        for queue_name, executor in list(self._executors.items()):
+            try:
+                for job in executor.get_running_jobs():
+                    if job.id == job_id and job.claim_id == claim_id:
+                        await executor.cancel_execution(job)
+            except Exception:
+                # Cancellation is best-effort; the invalidated claim already
+                # prevents this execution from updating the recovered job.
+                self.chancy.log.exception(
+                    "Failed to cancel recovered job %s (claim %s) in queue %s.",
+                    job_id,
+                    claim_id,
+                    queue_name,
+                )
 
     async def _handle_queue_pushed(self, event: Event):
         q = event.body["q"]

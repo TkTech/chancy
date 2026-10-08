@@ -32,6 +32,11 @@ class Recovery(Plugin):
     This will transition any matching jobs back to the "pending" state, and
     increment the `max_attempts` counter by 1 to allow it to be retried.
 
+    Recovery invalidates the old execution's claim and requests best-effort
+    cancellation of that execution. It does not wait for acknowledgement:
+    the old worker may be unreachable, and cancellation may be unsupported.
+    Late updates from the old claim are discarded even if it keeps running.
+
     :param poll_interval: The number of seconds between recovery poll intervals.
     """
 
@@ -85,25 +90,29 @@ class Recovery(Plugin):
         """
         query = sql.SQL(
             """
-            UPDATE
-                {jobs} cj
+            WITH abandoned AS (
+                SELECT cj.id, cj.claim_id
+                FROM {jobs} cj
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {workers} cw
+                    WHERE cw.worker_id = cj.taken_by
+                      AND cw.last_seen >= NOW() - INTERVAL '{interval} SECOND'
+                )
+                AND cj.state = 'running'
+                FOR UPDATE OF cj SKIP LOCKED
+            )
+            UPDATE {jobs} cj
             SET
                 state = 'pending',
                 taken_by = NULL,
+                claim_id = NULL,
                 started_at = NULL,
                 max_attempts = max_attempts + 1
-            WHERE
-               NOT EXISTS (
-                    SELECT 1
-                    FROM {workers} cw
-                    WHERE (
-                        cw.worker_id = cj.taken_by
-                        AND
-                        cw.last_seen >= NOW() - INTERVAL '{interval} SECOND'
-                    )
-              )
-              AND state = 'running';
-        """
+            FROM abandoned
+            WHERE cj.id = abandoned.id
+            RETURNING cj.id, abandoned.claim_id;
+            """
         ).format(
             jobs=sql.Identifier(f"{chancy.prefix}jobs"),
             workers=sql.Identifier(f"{chancy.prefix}workers"),
@@ -111,4 +120,16 @@ class Recovery(Plugin):
         )
 
         await cursor.execute(query)
-        return cursor.rowcount
+        recovered = await cursor.fetchall()
+        await chancy.notify_many(
+            cursor,
+            (
+                (
+                    "job.recovered",
+                    {"j": str(row["id"]), "c": str(row["claim_id"])},
+                )
+                for row in recovered
+                if row["claim_id"] is not None
+            ),
+        )
+        return len(recovered)

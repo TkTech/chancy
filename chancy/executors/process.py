@@ -16,7 +16,6 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import Any
 from uuid import UUID
 
-from chancy import Reference
 from chancy.executors.base import ConcurrentExecutor, Executor
 from chancy.job import Limit, QueuedJob
 
@@ -59,6 +58,8 @@ class ProcessExecutor(ConcurrentExecutor):
     capabilities = (
         Executor.Capability.SYNC_JOBS | Executor.Capability.ASYNC_JOBS
     )
+    # Child-local state; cleared before returning control to the process pool.
+    _current_execution: tuple[UUID, Any] | None = None
 
     @classmethod
     def get_capabilities(cls) -> Executor.Capability:
@@ -88,11 +89,10 @@ class ProcessExecutor(ConcurrentExecutor):
 
         self.manager = ctx.Manager()
         self.pids_for_job = self.manager.dict()
-        # Jobs whose cancellation arrived before the child process registered
-        # its PID. Consumed at the top of ``job_wrapper`` to close the race
-        # between dispatch and SIGUSR1 delivery.
+        # Execution-specific cancellation requests. SIGUSR1 only wakes the
+        # child; this marker determines whether its current job is cancelled.
         self.pending_cancellations = self.manager.dict()
-        self.timeouts: dict[str, asyncio.Task] = {}
+        self.timeouts: dict[UUID, asyncio.Task] = {}
         self.pool = ProcessPoolExecutor(
             max_workers=queue.concurrency,
             max_tasks_per_child=maximum_jobs_per_worker,
@@ -149,16 +149,17 @@ class ProcessExecutor(ConcurrentExecutor):
         if time_limit is not None and self.supports(
             Executor.Capability.AUTOMATIC_TIME_LIMITS
         ):
-            self.timeouts[job.id] = asyncio.create_task(
-                self._handle_timeout(job.id, time_limit)
+            execution_id = job.claim_id or job.id
+            self.timeouts[execution_id] = asyncio.create_task(
+                self._handle_timeout(execution_id, time_limit)
             )
 
         return future
 
-    async def _handle_timeout(self, job_id: UUID, time_limit: int):
+    async def _handle_timeout(self, execution_id: UUID, time_limit: int):
         try:
             await asyncio.sleep(time_limit)
-            pid = self.pids_for_job.get(job_id)
+            pid = self.pids_for_job.get(execution_id)
             if pid is not None:
                 os.kill(pid, signal.SIGALRM)
         except asyncio.CancelledError:
@@ -183,12 +184,13 @@ class ProcessExecutor(ConcurrentExecutor):
             resources as the main process.
         """
         cleanup: list[Callable] = []
+        execution_id = job.claim_id or job.id
         try:
-            pids_for_job[job.id] = os.getpid()
-            # Cancel arrived during child startup, before we could register
-            # to receive SIGUSR1. Honor it now.
-            if pending_cancellations.pop(job.id, None) is not None:
-                raise CancelledError("Job was cancelled.")
+            pids_for_job[execution_id] = os.getpid()
+            cls._current_execution = (execution_id, pending_cancellations)
+            # Also honor requests received before PID registration.
+            if hasattr(signal, "SIGUSR1"):
+                cls.job_signal_handler(signal.SIGUSR1, None)
             job, func, kwargs = cls.prepare_job_for_execution(job)
 
             for limit in job.limits:
@@ -210,14 +212,16 @@ class ProcessExecutor(ConcurrentExecutor):
 
             result = cls.run_function(func, kwargs)
         finally:
-            pids_for_job.pop(job.id)
+            cls._current_execution = None
+            pids_for_job.pop(execution_id)
+            pending_cancellations.pop(execution_id, None)
             for clean in cleanup:
                 clean()
 
         return job, result
 
-    @staticmethod
-    def job_signal_handler(signum: int, frame):
+    @classmethod
+    def job_signal_handler(cls, signum: int, frame):
         """
         Handles signals sent to a running job process.
 
@@ -231,7 +235,19 @@ class ProcessExecutor(ConcurrentExecutor):
             resources as the main process.
         """
         if getattr(signal, "SIGUSR1", None) == signum:
-            raise CancelledError("Job was cancelled.")
+            if cls._current_execution is None:
+                return
+            execution_id, pending_cancellations = cls._current_execution
+            # A second signal must not interrupt the manager proxy's RPC.
+            previous_mask = signal.pthread_sigmask(
+                signal.SIG_BLOCK, {signal.SIGUSR1}
+            )
+            try:
+                if pending_cancellations.pop(execution_id, None) is not None:
+                    cls._current_execution = None
+                    raise CancelledError("Job was cancelled.")
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         if getattr(signal, "SIGALRM", None) == signum:
             raise TimeoutError("Job timeout out.")
 
@@ -242,7 +258,7 @@ class ProcessExecutor(ConcurrentExecutor):
         if job is None:
             return
 
-        timeout_task = self.timeouts.pop(job.id, None)
+        timeout_task = self.timeouts.pop(job.claim_id or job.id, None)
         if timeout_task is not None:
             timeout_task.cancel()
 
@@ -263,7 +279,8 @@ class ProcessExecutor(ConcurrentExecutor):
             task.cancel()
 
         if hasattr(signal, "SIGUSR1"):
-            for pid in list(self.pids_for_job.values()):
+            for execution_id, pid in list(self.pids_for_job.items()):
+                self.pending_cancellations[execution_id] = True
                 try:
                     os.kill(pid, signal.SIGUSR1)
                 except (ProcessLookupError, PermissionError):
@@ -272,7 +289,7 @@ class ProcessExecutor(ConcurrentExecutor):
         await super()._stop_on_cancel()
         await asyncio.to_thread(self.manager.shutdown)
 
-    async def cancel(self, ref: Reference):
+    async def cancel_execution(self, job: QueuedJob):
         """
         Make an attempt to cancel a running job.
 
@@ -281,26 +298,33 @@ class ProcessExecutor(ConcurrentExecutor):
         example if the job is running a long computation in a C extension,
         it may not be possible to interrupt it until it returns.
 
-        :param ref: The reference to the job to cancel.
+        :param job: The specific execution to cancel.
         """
         future = next(
-            (f for f, j in self.jobs.items() if j.id == ref.identifier),
+            (
+                f
+                for f, j in self.jobs.items()
+                if j.id == job.id and j.claim_id == job.claim_id
+            ),
             None,
         )
-        if future is None:
+        if future is None or future.done():
             return
 
-        future.cancel()
-        if not self.supports(Executor.Capability.CANCELLATION):
+        if future.cancel() or not self.supports(
+            Executor.Capability.CANCELLATION
+        ):
             return
 
-        pid = self.pids_for_job.get(ref.identifier)
+        execution_id = job.claim_id or job.id
+        self.pending_cancellations[execution_id] = True
+        pid = self.pids_for_job.get(execution_id)
         if pid is not None:
-            os.kill(pid, signal.SIGUSR1)
-        else:
-            # Child hasn't registered its PID yet. ``job_wrapper`` will
-            # consume this marker as its first action after registering.
-            self.pending_cancellations[ref.identifier] = True
+            try:
+                os.kill(pid, signal.SIGUSR1)
+            except OSError:
+                # The process may have exited or become inaccessible.
+                pass
 
     def get_default_concurrency(self) -> int:
         """
