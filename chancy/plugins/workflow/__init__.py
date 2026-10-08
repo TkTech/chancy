@@ -81,6 +81,17 @@ class WorkflowStep:
 
 @dataclass
 class Workflow:
+    """
+    A collection of jobs with dependencies between steps.
+
+    Define steps using :meth:`add` or :meth:`add_group`, then submit the
+    workflow using :meth:`WorkflowPlugin.push`. Each step is queued once all
+    of its dependencies have succeeded. Steps without dependencies can run
+    in parallel.
+
+    For jobs that should run one after another, use :class:`Sequence`.
+    """
+
     class State(enum.Enum):
         PENDING = "pending"
         RUNNING = "running"
