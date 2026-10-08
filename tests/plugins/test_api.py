@@ -1,13 +1,17 @@
+import datetime
+import json
 from unittest.mock import AsyncMock, Mock
 from urllib.parse import quote, urljoin
 
 import pytest
+from httpx import ASGITransport, AsyncClient
+from psycopg import sql
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from chancy import Chancy, Queue, Worker
+from chancy import Chancy, Job, Queue, Worker
 from chancy.plugins.api import Api, SimpleAuthBackend, _SPAStaticFiles
 from chancy.plugins.api.plugin import ApiPlugin
 
@@ -72,6 +76,95 @@ def test_create_queue_uses_python_defaults(
     assert response.status_code == 200
     assert response.json() == expected.pack()
     declare.assert_awaited_once_with(expected, upsert=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pagination", [False, True])
+@pytest.mark.parametrize("limit", [2, 5])
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {},
+        {"queue": "pages"},
+        {"filters": json.dumps([["queue", "=", "pages"]])},
+    ],
+)
+async def test_jobs_pagination_uses_id_order(
+    api, chancy, worker_no_start, filters, pagination, limit
+):
+    await chancy.declare(Queue("pages"))
+    now = datetime.datetime.now(datetime.UTC)
+    refs = [
+        await chancy.push(
+            Job(
+                func="unused",
+                queue="pages",
+                # Oppose ID order, with tied dates and null completion times.
+                scheduled_at=now + datetime.timedelta(days=3 - i // 2),
+            )
+        )
+        for i in range(5)
+    ]
+    expected = sorted((str(ref.identifier) for ref in refs), reverse=True)
+    app = api.build_starlette_app(worker_no_start, chancy)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        login = await client.post(
+            "/api/v1/login",
+            json={"username": "admin", "password": "password"},
+        )
+        client.headers["Authorization"] = f"Bearer {login.json()['token']}"
+        params = {"limit": limit, **filters}
+        if pagination:
+            params["pagination"] = "true"
+        for offset in range(0, len(expected), limit):
+            response = await client.get("/api/v1/jobs", params=params)
+            assert response.status_code == 200
+            payload = response.json()
+            items = payload["items"] if pagination else payload
+            ids = [job["id"] for job in items]
+            assert ids == expected[offset : offset + limit]
+            if pagination:
+                has_more = offset + limit < len(expected)
+                assert payload["has_more"] is has_more
+                assert payload["next_cursor"] == (ids[-1] if has_more else None)
+            params["before"] = ids[-1]
+
+            if offset == 0:
+                # Completion and rescheduling between pages must not move
+                # jobs across the cursor boundary.
+                async with chancy.pool.connection() as conn:
+                    await conn.execute(
+                        sql.SQL(
+                            "UPDATE {} SET state = 'succeeded', "
+                            "completed_at = NOW(), scheduled_at = NOW()"
+                        ).format(sql.Identifier(f"{chancy.prefix}jobs"))
+                    )
+
+        response = await client.get("/api/v1/jobs", params=params)
+        assert response.status_code == 200
+        assert response.json() == (
+            {"items": [], "has_more": False, "next_cursor": None}
+            if pagination
+            else []
+        )
+
+
+@pytest.mark.parametrize("limit", ["0", "-1", "invalid"])
+def test_jobs_reject_invalid_page_limits(api, chancy_just_app, limit):
+    app = api.build_starlette_app(Worker(chancy_just_app), chancy_just_app)
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/login",
+            json={"username": "admin", "password": "password"},
+        )
+        response = client.get(
+            "/api/v1/jobs",
+            params={"pagination": "true", "limit": limit},
+            headers={"Authorization": f"Bearer {login.json()['token']}"},
+        )
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize("prefix", ["", "/chancy", "/internal/chancy"])

@@ -30,12 +30,8 @@ export function Jobs() {
   const {url} = useServerConfiguration();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [selected, setSelected] = React.useState<Record<string, boolean>>({});
-  const selectedIds = Object.keys(selected).filter(k => selected[k]);
-  const freezeUpdates = selectedIds.length > 0;
-
   // Parse filters from URL
-  const filtersFromUrl = React.useMemo(() => {
+  const filters = React.useMemo(() => {
     const filtersParam = searchParams.get('filters');
     if (!filtersParam) return [];
     try {
@@ -46,10 +42,7 @@ export function Jobs() {
     }
   }, [searchParams]);
 
-  const [filters, setFilters] = React.useState<FilterTriple[]>(filtersFromUrl);
-
-  // Sync filters to URL
-  React.useEffect(() => {
+  const setFilters = (filters: FilterTriple[]) => {
     const newParams = new URLSearchParams(searchParams);
     if (filters.length > 0) {
       newParams.set('filters', JSON.stringify(filters));
@@ -57,7 +50,29 @@ export function Jobs() {
       newParams.delete('filters');
     }
     setSearchParams(newParams, { replace: true });
-  }, [filters]);
+  };
+
+  const scope = JSON.stringify([url, filters]);
+  const [view, setView] = React.useState<{
+    scope: string;
+    cursors: (string | undefined)[];
+    selected: Record<string, boolean>;
+  }>({ scope, cursors: [undefined], selected: {} });
+  // A new server or filter set starts at the first page immediately, including
+  // URL changes made with the browser's Back/Forward buttons.
+  const currentView: typeof view = view.scope === scope
+    ? view : { scope, cursors: [undefined], selected: {} };
+  if (view.scope !== scope) setView(currentView);
+  const { cursors, selected } = currentView;
+  const before = cursors[cursors.length - 1];
+  const selectedIds = Object.keys(selected).filter(k => selected[k]);
+  const freezeUpdates = selectedIds.length > 0;
+  const setSelected = (selected: Record<string, boolean>) => {
+    setView({ ...currentView, selected });
+  };
+  const navigate = (cursors: (string | undefined)[]) => {
+    setView({ scope, cursors, selected: {} });
+  };
 
   // Fetch queues and functions for autocomplete
   const { data: queues } = useQueues(url);
@@ -112,12 +127,14 @@ export function Jobs() {
     }
   }), [queues, functions]);
 
-  const { data: jobs, dataUpdatedAt } = useJobs({
+  const { data: page, dataUpdatedAt, isFetching, isPlaceholderData, error, refetch } = useJobs({
     url: url,
     state: undefined,
     filters: filters,
     enabled: url !== null && !freezeUpdates,
+    before,
   });
+  const jobs = page?.items;
 
   const allSelected = jobs && jobs.length > 0 && jobs.every(j => selected[j.id]);
   const toggleAll = () => {
@@ -133,7 +150,7 @@ export function Jobs() {
 
   // Avoid showing the global loader during background refetches
   // which causes visible flicker. Only show it before first data.
-  if (!jobs) return <Loading />;
+  if (!jobs && !error) return <Loading />;
 
   return (
     <div className={"container-fluid"}>
@@ -150,6 +167,13 @@ export function Jobs() {
         onChange={setFilters}
         placeholder="Add filter... (state, queue, func, priority, attempts)"
       />
+
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          Could not load jobs: {error.message}{' '}
+          <button className="btn btn-sm btn-outline-danger" disabled={isFetching} onClick={() => void refetch()}>Try again</button>
+        </div>
+      )}
 
       {selectedIds.length > 0 && (
         <div className="alert alert-primary d-flex justify-content-between align-items-center py-2 mb-3">
@@ -176,7 +200,7 @@ export function Jobs() {
         <thead>
         <tr>
           <th style={{width: '1%'}}>
-            <input type="checkbox" checked={!!allSelected} onChange={toggleAll} />
+            <input type="checkbox" aria-label="Select all jobs" disabled={isFetching || isPlaceholderData || !!error} checked={!!allSelected} onChange={toggleAll} />
           </th>
           <th className={"w-100"}>Job</th>
           <th className={'text-center'}>State</th>
@@ -196,7 +220,7 @@ export function Jobs() {
         {jobs?.map((job) => (
           <tr key={job.id}>
             <td>
-              <input type="checkbox" checked={!!selected[job.id]} onChange={e => setSelected(s => ({...s, [job.id]: e.target.checked}))} />
+              <input type="checkbox" aria-label={`Select job ${job.id}`} disabled={isFetching || isPlaceholderData || !!error} checked={!!selected[job.id]} onChange={e => setSelected({...selected, [job.id]: e.target.checked})} />
             </td>
             <td className={"text-break"}>
               <Link to={`/jobs/${job.id}`}
@@ -233,11 +257,21 @@ export function Jobs() {
         ))}
         </tbody>
       </DataTable>
-      {jobs && jobs.length >= 100 && (
-        <div className="text-muted text-center mt-2" style={{fontSize: '0.875rem'}}>
-          Only showing the first 100 results...
+      <nav aria-label="Jobs pagination" className="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+        <div className="text-muted small" role="status">
+          {before ? 'Updates paused while browsing older jobs.'
+            : freezeUpdates ? 'Updates paused while jobs are selected.'
+            : 'Showing latest jobs · Updates every 5 seconds.'}
+          {isFetching && ' Loading…'}
         </div>
-      )}
+        <div className="d-flex align-items-center gap-2">
+          <span className="small text-muted">Page {cursors.length}</span>
+          <button className="btn btn-sm btn-outline-secondary" disabled={isFetching || cursors.length === 1} onClick={() => navigate(cursors.slice(0, -1))}>Previous</button>
+          <button className="btn btn-sm btn-outline-secondary" disabled={isFetching || isPlaceholderData || !!error || !page?.has_more || !page.next_cursor} onClick={() => {
+            if (page?.next_cursor) navigate([...cursors, page.next_cursor]);
+          }}>Next</button>
+        </div>
+      </nav>
       {dialog}
     </div>
   )

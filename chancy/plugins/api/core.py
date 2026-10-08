@@ -504,6 +504,17 @@ class CoreApiPlugin(ApiPlugin):
         """
         GET: Get a list of jobs with filters and pagination.
         POST: Batch job actions (retry, purge).
+
+        GET returns jobs in descending ID order. Pass the last returned ID as
+        ``before`` to fetch the next page of lower IDs with the same filters.
+        Completion and scheduling times do not affect this order. Pages are
+        live results, not a snapshot: jobs may be removed or stop matching
+        filters between requests.
+
+        Set ``pagination=true`` to receive an object with ``items``,
+        ``has_more``, and ``next_cursor`` (an ID to pass as ``before``, or
+        null on the last page). Otherwise the response remains a job array.
+        ``limit`` must be positive and is capped at 100.
         """
         if request.method == "POST":
             data = await request.json()
@@ -534,7 +545,18 @@ class CoreApiPlugin(ApiPlugin):
         state = request.query_params.get("state")
         queue = request.query_params.get("queue")
         func = request.query_params.get("func")
-        limit = min(int(request.query_params.get("limit", 100)), 100)
+        try:
+            limit = min(int(request.query_params.get("limit", 100)), 100)
+            if limit < 1:
+                raise ValueError
+        except ValueError:
+            return Response(
+                json_dumps({"title": "limit must be a positive integer"}),
+                media_type="application/json",
+                status_code=422,
+            )
+        pagination = request.query_params.get("pagination") == "true"
+        fetch_limit = limit + 1 if pagination else limit
         before = request.query_params.get("before")
 
         # New filter triples: filters=[["key","op","value"],...]
@@ -592,35 +614,45 @@ class CoreApiPlugin(ApiPlugin):
                     """
                         SELECT * FROM {jobs}
                         WHERE ({rule})
-                        ORDER BY (
-                            completed_at,
-                            scheduled_at
-                        ) DESC
+                        ORDER BY id DESC
                         LIMIT {limit}
                         """
                 ).format(
                     jobs=sql.Identifier(f"{chancy.prefix}jobs"),
                     rule=rule.to_sql(),
-                    limit=sql.Literal(limit),
+                    limit=sql.Literal(fetch_limit),
                 )
             else:
                 query = sql.SQL(
                     """
                         SELECT * FROM {jobs}
-                        ORDER BY (
-                            completed_at,
-                            scheduled_at
-                        ) DESC
+                        ORDER BY id DESC
                         LIMIT {limit}
                         """
                 ).format(
                     jobs=sql.Identifier(f"{chancy.prefix}jobs"),
-                    limit=sql.Literal(limit),
+                    limit=sql.Literal(fetch_limit),
                 )
 
             await cursor.execute(query)
 
             result = await cursor.fetchall()
+            if pagination:
+                has_more = len(result) > limit
+                return Response(
+                    json_dumps(
+                        {
+                            "items": result[:limit],
+                            "has_more": has_more,
+                            "next_cursor": (
+                                str(result[limit - 1]["id"])
+                                if has_more
+                                else None
+                            ),
+                        }
+                    ),
+                    media_type="application/json",
+                )
             return Response(
                 json_dumps(result or []),
                 media_type="application/json",

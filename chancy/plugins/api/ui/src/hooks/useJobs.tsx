@@ -30,21 +30,31 @@ export interface Job {
 
 export type FilterTriple = [string, string, string];
 
+export interface JobPage {
+  items: Job[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
 export function useJobs ({
   url,
   state,
   func,
   filters,
   enabled,
+  before,
 }: {
   url: string | null,
   state: string | undefined,
   func?: string | undefined,
   filters?: FilterTriple[],
   enabled?: boolean,
+  before?: string,
 }) {
   const fullUrl = useMemo(() => {
     const params = new URLSearchParams();
+    params.set('pagination', 'true');
+    if (before) params.set('before', before);
     if (state) {
       params.append('state', state);
     }
@@ -55,21 +65,22 @@ export function useJobs ({
       params.append('filters', JSON.stringify(filters));
     }
     return `${url}/api/v1/jobs?${params.toString()}`;
-  }, [url, state, func, filters]);
+  }, [url, state, func, filters, before]);
 
-  return useQuery<Job[]>({
+  return useQuery<JobPage>({
     queryKey: ['jobs', fullUrl],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       // Use our request helper to attach token automatically
       const urlBase = url as string;
       const path = `/api/v1/jobs?${new URL(fullUrl).searchParams.toString()}`;
-      return await request<Job[]>(urlBase, path);
+      return await request<JobPage>(urlBase, path, { signal });
     },
     enabled: enabled ?? (url !== null),
     // Reduce flicker by avoiding focus refetches and keeping data "warm"
     refetchOnWindowFocus: false,
-    staleTime: 5_000,
-    refetchInterval: (enabled ?? (url !== null)) ? 5000 : false,
+    refetchOnReconnect: !before,
+    staleTime: 0,
+    refetchInterval: !before && (enabled ?? (url !== null)) ? 5000 : false,
     placeholderData: keepPreviousData,
   });
 }
