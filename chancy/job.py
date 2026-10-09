@@ -234,6 +234,11 @@ class BaseJob:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Job(BaseJob):
+    """
+    A job that can be pushed onto a queue, optionally limited by a
+    :class:`ConcurrencyRule` across all workers.
+    """
+
     #: The concurrency rule for this job. This determines how many instances of
     #: this job can run concurrently across all workers.
     concurrency_rule: ConcurrencyRule | None = None
