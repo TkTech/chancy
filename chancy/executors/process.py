@@ -10,9 +10,10 @@ except ImportError:
     # Windows doesn't have the `resource` module
     resource = None
 import signal
-from asyncio import CancelledError, Future
+from asyncio import CancelledError
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from typing import Any
 from uuid import UUID
 
@@ -86,6 +87,8 @@ class ProcessExecutor(ConcurrentExecutor):
         # We're using `spawn` explicitly to get ahead of the curve, however
         # this is slower than `fork`.
         ctx = mp_context or multiprocessing.get_context("spawn")
+        self._mp_context = ctx
+        self._maximum_jobs_per_worker = maximum_jobs_per_worker
 
         self.manager = ctx.Manager()
         self.pids_for_job = self.manager.dict()
@@ -93,11 +96,14 @@ class ProcessExecutor(ConcurrentExecutor):
         # child; this marker determines whether its current job is cancelled.
         self.pending_cancellations = self.manager.dict()
         self.timeouts: dict[UUID, asyncio.Task] = {}
-        self.pool = ProcessPoolExecutor(
-            max_workers=queue.concurrency,
-            max_tasks_per_child=maximum_jobs_per_worker,
+        self.pool = self._create_pool()
+
+    def _create_pool(self) -> ProcessPoolExecutor:
+        return ProcessPoolExecutor(
+            max_workers=self.queue.concurrency,
+            max_tasks_per_child=self._maximum_jobs_per_worker,
             initializer=self.on_initialize_worker,
-            mp_context=ctx,
+            mp_context=self._mp_context,
         )
 
     @classmethod
@@ -133,18 +139,27 @@ class ProcessExecutor(ConcurrentExecutor):
     async def push(self, job: QueuedJob) -> Future:
         job = await self.on_job_starting(job)
 
-        future: Future = self.pool.submit(
-            self.job_wrapper,
-            job,
-            self.pids_for_job,
-            self.pending_cancellations,
-        )
-        self.jobs[future] = job
-        future.add_done_callback(
-            functools.partial(
-                self._on_job_completed, loop=asyncio.get_running_loop()
+        args = (job, self.pids_for_job, self.pending_cancellations)
+        try:
+            future = self.pool.submit(self.job_wrapper, *args)
+        except BrokenProcessPool:
+            # Only this rejected submission is safe to resubmit. Accepted
+            # jobs fail through their futures and Chancy's normal retry policy.
+            old_pool = self.pool
+            self.pool = self._create_pool()
+            old_pool.shutdown(wait=False)
+            self.worker.chancy.log.warning(
+                "Replaced broken process pool for queue %s.", self.queue.name
             )
-        )
+            try:
+                future = self.pool.submit(self.job_wrapper, *args)
+            except BrokenProcessPool as exc:
+                # Bound recovery even if the replacement immediately breaks.
+                # Use the same completion path as an accepted failed job.
+                future = Future()
+                future.set_exception(exc)
+
+        self.jobs[future] = job
         time_limit = self.get_limit(job, Limit.Type.TIME)
         if time_limit is not None and self.supports(
             Executor.Capability.AUTOMATIC_TIME_LIMITS
@@ -153,6 +168,14 @@ class ProcessExecutor(ConcurrentExecutor):
             self.timeouts[execution_id] = asyncio.create_task(
                 self._handle_timeout(execution_id, time_limit)
             )
+
+        # A completed future runs its callback immediately, so register all
+        # execution state before attaching it.
+        future.add_done_callback(
+            functools.partial(
+                self._on_job_completed, loop=asyncio.get_running_loop()
+            )
+        )
 
         return future
 
@@ -251,18 +274,31 @@ class ProcessExecutor(ConcurrentExecutor):
         if getattr(signal, "SIGALRM", None) == signum:
             raise TimeoutError("Job timeout out.")
 
-    def _on_job_completed(
-        self, future: Future, loop: asyncio.AbstractEventLoop
+    async def _complete_job(
+        self,
+        future: Future,
+        job: QueuedJob,
+        exc: BaseException | None,
+        result: Any,
     ):
-        job = self.jobs.get(future)
-        if job is None:
-            return
-
-        timeout_task = self.timeouts.pop(job.claim_id or job.id, None)
+        # Run on the event loop, where timeout tasks and cancellations live.
+        # A crashed child cannot execute job_wrapper's finally block.
+        execution_id = job.claim_id or job.id
+        timeout_task = self.timeouts.pop(execution_id, None)
         if timeout_task is not None:
             timeout_task.cancel()
-
-        super()._on_job_completed(future, loop)
+        try:
+            self.pids_for_job.pop(execution_id, None)
+            self.pending_cancellations.pop(execution_id, None)
+        except Exception:
+            # The manager may have exited during shutdown. Cleanup must not
+            # discard the job's result or prevent its slot from being freed.
+            self.worker.chancy.log.exception(
+                "Failed to clean up process state for job %s (claim %s).",
+                job.id,
+                job.claim_id,
+            )
+        await super()._complete_job(future, job, exc, result)
 
     def _shutdown_blocking(self):
         super()._shutdown_blocking()

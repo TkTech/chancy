@@ -72,6 +72,9 @@ compares job IDs with strings or requires string values.
 
 🐛 Fixes
 
+- Process executors now replace broken pools after a child process crashes,
+  keeping the worker alive and respecting job attempt limits. Thanks to
+  @olivermeyer for the report and original fix (#94, #95).
 - Fixed inaccurate metric averages, stale table-size readings, and incorrect
   workflow durations. Metric retention now follows elapsed time.
 - Metrics now preserve history when worker IDs are reused and save recent
