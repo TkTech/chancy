@@ -36,7 +36,13 @@ def queued_job(func, **kwargs):
         id=uuid4(),
         claim_id=uuid4(),
         created_at=datetime.now(tz=UTC),
-        limits=[Limit(Limit.Type.TIME, 30)],
+        limits=(
+            [Limit(Limit.Type.TIME, 30)]
+            if ProcessExecutor.supports(
+                ProcessExecutor.Capability.AUTOMATIC_TIME_LIMITS
+            )
+            else []
+        ),
     )
 
 

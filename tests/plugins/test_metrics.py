@@ -257,11 +257,14 @@ async def test_periodic_flush_failure_retries_without_stopping_worker(
     metrics = chancy.plugins["chancy.metrics"]
     metrics.sync_interval = 0.01
     flush = metrics.flush
+    recorded = asyncio.Event()
     succeeded = asyncio.Event()
     attempts = 0
 
     async def flaky_flush(app):
         nonlocal attempts
+        # Startup flushes must not satisfy the test before "retry" is recorded.
+        await recorded.wait()
         attempts += 1
         if attempts == 1:
             raise psycopg.OperationalError("temporary connection failure")
@@ -270,7 +273,10 @@ async def test_periodic_flush_failure_retries_without_stopping_worker(
 
     monkeypatch.setattr(metrics, "flush", flaky_flush)
     async with Worker(chancy, register_signal_handlers=False) as worker:
-        await worker.increment_counter("retry", 5)
+        try:
+            await worker.increment_counter("retry", 5)
+        finally:
+            recorded.set()
         await asyncio.wait_for(succeeded.wait(), timeout=2)
         assert attempts >= 2
         assert (await metrics.get_metrics(chancy))["series"][
