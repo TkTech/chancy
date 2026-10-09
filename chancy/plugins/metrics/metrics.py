@@ -4,49 +4,125 @@ Metrics plugin for collecting and sharing metrics across workers.
 
 import asyncio
 import datetime
-import json
-from collections import defaultdict
-from dataclasses import dataclass, field
-from itertools import groupby
+import logging
+import math
+import time
+from collections import OrderedDict
+from dataclasses import dataclass, replace
+from functools import partial
 from typing import Literal, cast
+from uuid import UUID, uuid4
 
-import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
-from chancy.app import Chancy
 from chancy.job import QueuedJob
 from chancy.plugin import Plugin
-from chancy.utils import timed_block
-from chancy.worker import Worker
 
 Resolution = Literal["1min", "5min", "1hour", "1day"]
-MetricValue = int | float | dict[str, int | float]
-MetricPoint = tuple[datetime.datetime, MetricValue]
 MetricType = Literal["counter", "gauge", "histogram"]
+MetricValue = float | dict[str, float | int]
+RESOLUTIONS = {"1min": 60, "5min": 300, "1hour": 3600, "1day": 86400}
+DEFAULT_POINTS = {"1min": 60, "5min": 288, "1hour": 168, "1day": 90}
+CHUNK_SIZE = 12
+log = logging.getLogger(__name__)
+
+
+def utcnow():
+    return datetime.datetime.now(datetime.UTC)
+
+
+def bucket_time(timestamp: datetime.datetime, seconds: int):
+    return datetime.datetime.fromtimestamp(
+        math.floor(timestamp.timestamp() / seconds) * seconds, datetime.UTC
+    )
+
+
+@dataclass(frozen=True)
+class MetricPoint:
+    """
+    An observed value for one time bucket.
+
+    :param timestamp: Start of the time bucket.
+    :param value: A counter total, gauge value, or histogram statistics.
+    :param sampled_at: Time of the most recent observation in this bucket.
+    """
+
+    timestamp: datetime.datetime
+    value: MetricValue
+    sampled_at: datetime.datetime
 
 
 @dataclass
 class Metric:
     """
-    A class representing a metric with values at different resolutions.
+    A metric's observations and summary for a requested time range.
+
+    :param type: ``counter``, ``gauge`` or ``histogram``.
+    :param unit: Unit of the recorded values, such as ``count`` or ``seconds``.
+    :param data: Observed data points in chronological order.
     """
 
-    metric_type: MetricType
-    values_1min: list[MetricPoint] = field(default_factory=list)
-    values_5min: list[MetricPoint] = field(default_factory=list)
-    values_1hour: list[MetricPoint] = field(default_factory=list)
-    values_1day: list[MetricPoint] = field(default_factory=list)
+    type: MetricType
+    unit: str
+    data: list[MetricPoint]
 
     @property
-    def values(self) -> dict[Resolution, list[MetricPoint]]:
-        """Get all values in a dictionary keyed by resolution."""
+    def aggregation(self):
+        """
+        How values are summarized: ``sum``, ``last`` or ``summary``.
+        """
+        return {"counter": "sum", "gauge": "last", "histogram": "summary"}[
+            self.type
+        ]
+
+    @property
+    def sampled_at(self):
+        """
+        Time of the latest observation, or ``None`` if no data is available.
+        """
+        return max((point.sampled_at for point in self.data), default=None)
+
+    @property
+    def summary(self) -> MetricValue | None:
+        """
+        Summarize observations in this metric's time range.
+
+        Returns the counter total, most recent gauge value, or histogram
+        statistics (``count``, ``sum``, ``avg``, ``min`` and ``max``).
+        Returns ``None`` when there are no observations.
+        """
+        if not self.data:
+            return None
+        if self.type == "counter":
+            return sum(cast(float, point.value) for point in self.data)
+        if self.type == "gauge":
+            return max(self.data, key=lambda point: point.sampled_at).value
+        values = [
+            cast(dict[str, float | int], point.value) for point in self.data
+        ]
+        count = sum(value["count"] for value in values)
+        total = sum(value["sum"] for value in values)
         return {
-            "1min": self.values_1min,
-            "5min": self.values_5min,
-            "1hour": self.values_1hour,
-            "1day": self.values_1day,
+            "count": count,
+            "sum": total,
+            "avg": total / count,
+            "min": min(value["min"] for value in values),
+            "max": max(value["max"] for value in values),
         }
+
+
+@dataclass(frozen=True)
+class _Bucket:
+    type: MetricType
+    unit: str
+    count: int
+    total: float
+    minimum: float
+    maximum: float
+    value: float
+    sampled_at: datetime.datetime
 
 
 class Metrics(Plugin):
@@ -54,11 +130,9 @@ class Metrics(Plugin):
     A plugin that collects and aggregates various metrics from jobs and queues.
 
     The plugin maintains time-series data for various metrics, with automatic
-    aggregation and pruning to keep storage requirements low while providing
-    useful historical data.
+    aggregation and pruning to provide useful historical data.
 
-    Metrics are synchronized across workers, so each worker has access to the
-    full set of metrics.
+    Metrics from all workers can be queried together or filtered by worker.
 
     .. note::
         This plugin is enabled by default, you only need to provide it in the
@@ -76,8 +150,12 @@ class Metrics(Plugin):
         async with Chancy(..., plugins=[Metrics()]) as chancy:
             ...
 
-    The metrics are stored in a compact time-series format, with data points
-    aggregated at different resolutions (1 minute, 5 minutes, 1 hour, 1 day).
+    Data points are aggregated at different resolutions (1 minute, 5 minutes,
+    1 hour, 1 day). Counters total observed increments, gauges show the latest
+    value, and histograms summarize observations with a weighted average.
+
+    Retention is based on elapsed time, including periods with no observations.
+    Missing observations are not treated as zero.
 
     **Default Retention Policy:**
 
@@ -86,7 +164,7 @@ class Metrics(Plugin):
        :widths: 20 20 30
 
        * - Resolution
-         - Points Retained
+         - Time Buckets
          - Total Time Period
        * - 1 minute
          - 60
@@ -101,6 +179,12 @@ class Metrics(Plugin):
          - 90
          - 90 days (3 months)
 
+    Job counters count saved job updates, including retries, rather than the
+    number of jobs currently in a queue. Job execution times are in seconds
+    and measure the final attempt. Metrics become available after the next
+    flush, every 60 seconds by default; an abrupt worker exit can lose recent
+    observations that have not yet been saved.
+
     .. note::
 
         While you can use this plugin to record your own arbitrary metrics,
@@ -114,167 +198,216 @@ class Metrics(Plugin):
         *,
         sync_interval: int = 60,
         max_points_per_resolution: dict[Resolution, int] | None = None,
-        maximum_metric_age: int = 60 * 60 * 24 * 90,
+        maximum_metric_age: int = 86400 * 90,
         collection_interval: int = 30,
+        max_buffered_points: int = 10000,
     ):
         """
         Initialize the metrics plugin.
 
-        :param sync_interval: How often to synchronize metrics with the
-                              database and other workers.
-        :param max_points_per_resolution: How many points to keep for each
-                                          resolution.
+        :param sync_interval: How often to save recorded metrics, in seconds.
+                              Defaults to 60 seconds.
+        :param max_points_per_resolution: How many time buckets to retain at each
+                                          resolution. For example, ``{"5min": 144}``
+                                          retains 12 hours of five-minute data.
+                                          Unspecified resolutions keep their defaults.
         :param maximum_metric_age: The maximum age of metrics to keep in the
                                    database, in seconds. Defaults to 90 days.
         :param collection_interval: The interval at which to collect table size
                                     metrics, in seconds.
+        :param max_buffered_points: Maximum number of data points to hold in memory
+                                    across workers sharing this plugin. Defaults to
+                                    10,000. New points exceeding this limit are
+                                    dropped with a warning.
         """
         super().__init__()
+        self.max_points = DEFAULT_POINTS | (max_points_per_resolution or {})
+        if (
+            set(self.max_points) != set(RESOLUTIONS)
+            or any(
+                not isinstance(v, int) or v <= 0
+                for v in self.max_points.values()
+            )
+            or min(
+                sync_interval,
+                maximum_metric_age,
+                collection_interval,
+                max_buffered_points,
+            )
+            <= 0
+        ):
+            raise ValueError(
+                "Metric intervals, retention and buffer limits must be positive"
+            )
         self.sync_interval = sync_interval
-
-        self.worker_id = None
-
-        # Default retention policy: how many points to keep for each resolution
-        self.max_points: dict[Resolution, int] = {
-            "1min": 60,  # 1 hour of 1-minute data
-            "5min": 288,  # 1 day of 5-minute data
-            "1hour": 168,  # 1 week of hourly data
-            "1day": 90,  # 90 days of daily data
-        }
-
-        if max_points_per_resolution:
-            self.max_points.update(max_points_per_resolution)
-
-        # In-memory cache of local metrics for this worker, updated in
-        # real-time and synced to DB.
-        self.local_metrics_cache: dict[str, Metric] = {}
-
-        # In-memory cache of aggregated metrics from all workers, updated on
-        # pulls from DB.
-        self.aggregated_metrics_cache: dict[str, Metric] = {}
-
-        # Track metrics that have been modified locally since last sync.
-        self.modified_metrics: set[str] = set()
-        # Protect access to modified_metrics to avoid races with sync.
-        self.modified_lock: asyncio.Lock = asyncio.Lock()
-
-        # Last sync timestamp.
-        self.last_sync_time = datetime.datetime.now(datetime.UTC)
-
-        # Locks to prevent race conditions.
-        self.metric_locks: dict[str, asyncio.Lock] = {}
-
-        # Maximum age of metrics to keep in the database
         self.maximum_metric_age = maximum_metric_age
-
-        # The interval at which to collect table size metrics
         self.collection_interval = collection_interval
+        self.max_buffered_points = max_buffered_points
+        self.worker_id = ""
+        self.session_id = uuid4()
+        self._workers = {}
+        self._buckets: dict[
+            tuple[str, int, datetime.datetime, UUID, str], _Bucket
+        ] = {}
+        self._dirty: set[tuple[str, int, datetime.datetime, UUID, str]] = set()
+        self._types: dict[str, tuple[MetricType, str]] = {}
+        self._flush_lock = asyncio.Lock()
+        self._read_lock = asyncio.Lock()
+        self._read_cache = OrderedDict()
+        self._last_warning = 0.0
 
-    async def run(self, worker: Worker, chancy: Chancy):
-        """
-        Run the metrics plugin.
+    @staticmethod
+    def get_identifier():
+        return "chancy.metrics"
 
-        This continuously synchronizes metrics with the database and
-        other workers.
-        """
-        # Store the worker_id for use in metrics storage/retrieval
-        self.worker_id = worker.worker_id
-
-        self.aggregated_metrics_cache.update(
-            await self._get_raw_metrics(chancy)
-        )
-
-        # Subscribe to generic metric events from the hub
-        worker.hub.on("metrics.counter", self._handle_counter_event)
-        worker.hub.on("metrics.gauge", self._handle_gauge_event)
-        worker.hub.on("metrics.histogram", self._handle_histogram_event)
-
-        # Start a task to collect table size metrics
-        worker.manager.add(
-            f"metrics_table_sizes_{self.worker_id}",
-            self._collect_table_sizes(worker, chancy),
-        )
-
-        while await self.sleep(self.sync_interval):
-            await self._sync_metrics(chancy)
-
-    def migrate_package(self) -> str:
+    def migrate_package(self):
         """
         Get the package that contains the migrations for the metrics plugin.
         """
         return "chancy.plugins.metrics.migrations"
 
-    def migrate_key(self) -> str:
+    def migrate_key(self):
         """
         Get the unique identifier for this plugin's migrations.
         """
         return "metrics"
 
-    async def on_job_updated(self, *, worker: "Worker", job: QueuedJob):
-        if job.started_at and job.completed_at:
-            execution_time = (job.completed_at - job.started_at).total_seconds()
-            await self.record_histogram_value(
-                f"job:{job.func}:execution_time",
-                execution_time,
-            )
-            await self.record_histogram_value(
-                f"queue:{job.queue}:execution_time",
-                execution_time,
-            )
-
-        state = job.state.value
-        await self.increment_counter(f"job:{job.func}:{state}", 1)
-        await self.increment_counter(f"global:status:{state}", 1)
-        await self.increment_counter(f"queue:{job.queue}:throughput", 1)
-        await self.increment_counter(f"queue:{job.queue}:{state}", 1)
-
-    async def cleanup(self, chancy: Chancy) -> int | None:
+    def get_tables(self):
         """
-        Clean up old metrics data.
-
-        Called automatically by the Pruner plugin, or may be manually invoked.
+        Get the names of all tables this plugin is responsible for.
         """
+        return ["metrics", "metric_definitions"]
 
-        async with (
-            chancy.pool.connection() as conn,
-            conn.cursor(row_factory=dict_row) as cursor,
-        ):
-            query = sql.SQL(
-                """
-                    DELETE
-                    FROM {metrics_table}
-                    WHERE
-                        updated_at < NOW() - interval '{max_age} seconds'
-                    """
-            ).format(
-                metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
-                max_age=sql.Literal(self.maximum_metric_age),
-            )
+    def api_plugin(self):
+        return "chancy.plugins.metrics.api.MetricsApiPlugin"
 
-            await cursor.execute(query)
-            return cursor.rowcount if cursor.rowcount > 0 else None
+    async def on_worker_started(self, *, worker):
+        if worker in self._workers:
+            return
+        handler = partial(self._handle_event, worker=worker)
+        self._workers[worker] = uuid4(), handler
+        for kind in ("counter", "gauge", "histogram"):
+            worker.hub.on(f"metrics.{kind}", handler)
 
-    async def _handle_counter_event(self, event):
-        """Handle counter metric events from the hub."""
-        await self.increment_counter(event.body["key"], event.body["value"])
+    async def on_worker_stopped(self, *, worker):
+        # Keep subscriptions alive through final on_job_updated callbacks.
+        # A failed flush retains both the subscriptions and dirty snapshots.
+        await self.flush(worker.chancy)
+        registration = self._workers.pop(worker, None)
+        if registration:
+            _, handler = registration
+            for kind in ("counter", "gauge", "histogram"):
+                worker.hub.remove(f"metrics.{kind}", handler)
+        self._prune_buffer()
 
-    async def _handle_gauge_event(self, event):
-        """Handle gauge metric events from the hub."""
-        await self.record_gauge(event.body["key"], event.body["value"])
+    async def run(self, worker, chancy):
+        """
+        Run the metrics plugin.
 
-    async def _handle_histogram_event(self, event):
-        """Handle histogram metric events from the hub."""
-        await self.record_histogram_value(
-            event.body["key"], event.body["value"]
+        Periodically save recorded metrics and collect database table sizes.
+        Workers start this automatically when the plugin is enabled.
+        """
+        await self.on_worker_started(worker=worker)
+        worker.manager.add(
+            "metrics_table_sizes", self._collect_table_sizes(worker, chancy)
         )
+        delay = self.sync_interval
+        while await self.sleep(delay):
+            try:
+                await self.flush(chancy)
+            except Exception:
+                chancy.log.exception(
+                    "Metrics flush failed; buffered observations will be retried"
+                )
+                delay = min(delay * 2, 300)
+            else:
+                delay = self.sync_interval
 
-    async def _get_metric_lock(self, metric_key: str) -> asyncio.Lock:
-        """Get a lock for a specific metric to prevent race conditions."""
-        if metric_key not in self.metric_locks:
-            self.metric_locks[metric_key] = asyncio.Lock()
-        return self.metric_locks[metric_key]
+    def _warn(self, message):
+        # Invalid custom observations must neither flood logs nor stop a worker.
+        now = time.monotonic()
+        if now - self._last_warning >= 60:
+            log.warning(message)
+            self._last_warning = now
 
-    async def increment_counter(self, metric_key: str, value: float) -> None:
+    def _record(self, key, value, kind, unit, *, worker=None):
+        unit = unit or ("count" if kind == "counter" else "number")
+        try:
+            finite = (
+                not isinstance(value, bool)
+                and isinstance(value, (int, float))
+                and math.isfinite(value)
+            )
+        except OverflowError:
+            finite = False
+        try:
+            valid_key = (
+                isinstance(key, str)
+                and "\x00" not in key
+                and 0 < len(key.encode()) <= 1024
+            )
+            valid_unit = (
+                isinstance(unit, str)
+                and "\x00" not in unit
+                and 0 < len(unit) <= 64
+            )
+            if valid_unit:
+                unit.encode()
+        except UnicodeEncodeError:
+            valid_key = valid_unit = False
+        if not valid_key or not valid_unit or not finite:
+            self._warn(
+                "Dropped invalid metric: keys must be 1–1024 bytes and values finite numbers"
+            )
+            return
+        value = float(value)
+        definition = kind, unit
+        if self._types.get(key, definition) != definition:
+            self._warn(f"Dropped metric with conflicting type or unit: {key}")
+            return
+        now = utcnow()
+        session = self._workers.get(worker)
+        session_id = session[0] if session else self.session_id
+        worker_id = worker.worker_id if worker is not None else self.worker_id
+        keys = [
+            (key, seconds, bucket_time(now, seconds), session_id, worker_id)
+            for seconds in RESOLUTIONS.values()
+        ]
+        if (
+            len(self._buckets) + sum(k not in self._buckets for k in keys)
+            > self.max_buffered_points
+        ):
+            self._warn(
+                "Metrics buffer is full; dropping new buckets until it can be flushed"
+            )
+            return
+        updates = {}
+        for k in keys:
+            old = self._buckets.get(k)
+            if old is None or kind == "gauge":
+                point = _Bucket(kind, unit, 1, value, value, value, value, now)
+            else:
+                total = old.total + value
+                if not math.isfinite(total):
+                    self._warn(f"Dropped overflowing metric: {key}")
+                    return
+                point = replace(
+                    old,
+                    count=old.count + 1,
+                    total=total,
+                    minimum=min(old.minimum, value),
+                    maximum=max(old.maximum, value),
+                    value=value,
+                    sampled_at=now,
+                )
+            updates[k] = point
+        self._types[key] = definition
+        self._buckets.update(updates)
+        self._dirty.update(updates)
+
+    async def increment_counter(
+        self, metric_key: str, value: float, *, unit: str = "count"
+    ):
         """
         Increment a counter metric.
 
@@ -282,45 +415,14 @@ class Metrics(Plugin):
 
         :param metric_key: The unique key for the metric
         :param value: The value to increment the counter by
+        :param unit: Unit of the increments. Defaults to ``count``; use the same
+                     unit for every observation of this metric key.
         """
-        now = datetime.datetime.now(datetime.UTC)
+        self._record(metric_key, value, "counter", unit)
 
-        async with await self._get_metric_lock(metric_key):
-            if metric_key not in self.local_metrics_cache:
-                self.local_metrics_cache[metric_key] = Metric(
-                    metric_type="counter"
-                )
-
-            metric = self.local_metrics_cache[metric_key]
-
-            for resolution in self.max_points:
-                match resolution:
-                    case "1min":
-                        points = metric.values_1min
-                    case "5min":
-                        points = metric.values_5min
-                    case "1hour":
-                        points = metric.values_1hour
-                    case "1day":
-                        points = metric.values_1day
-
-                bucket_time = self._get_bucket_time(now, resolution)
-
-                if points and self._same_bucket(
-                    points[0][0], bucket_time, resolution
-                ):
-                    current_value = cast(int | float, points[0][1])
-                    points[0] = (points[0][0], current_value + value)
-                else:
-                    points.insert(0, (bucket_time, value))
-
-                if len(points) > self.max_points[resolution]:
-                    points.pop()
-
-                async with self.modified_lock:
-                    self.modified_metrics.add(metric_key)
-
-    async def record_gauge(self, metric_key: str, value: float) -> None:
+    async def record_gauge(
+        self, metric_key: str, value: float, *, unit: str = "number"
+    ):
         """
         Record a gauge metric which represents a point-in-time value.
 
@@ -328,45 +430,14 @@ class Metrics(Plugin):
 
         :param metric_key: The unique key for the metric
         :param value: The value to record
+        :param unit: Unit of the value. Defaults to ``number``; use the same
+                     unit for every observation of this metric key.
         """
-        now = datetime.datetime.now(datetime.UTC)
-
-        async with await self._get_metric_lock(metric_key):
-            if metric_key not in self.local_metrics_cache:
-                self.local_metrics_cache[metric_key] = Metric(
-                    metric_type="gauge"
-                )
-
-            metric = self.local_metrics_cache[metric_key]
-
-            for resolution in self.max_points:
-                if resolution == "1min":
-                    points = metric.values_1min
-                elif resolution == "5min":
-                    points = metric.values_5min
-                elif resolution == "1hour":
-                    points = metric.values_1hour
-                elif resolution == "1day":
-                    points = metric.values_1day
-
-                bucket_time = self._get_bucket_time(now, resolution)
-
-                if points and self._same_bucket(
-                    points[0][0], bucket_time, resolution
-                ):
-                    points[0] = (points[0][0], value)
-                else:
-                    points.insert(0, (bucket_time, value))
-
-                if len(points) > self.max_points[resolution]:
-                    points.pop()
-
-                async with self.modified_lock:
-                    self.modified_metrics.add(metric_key)
+        self._record(metric_key, value, "gauge", unit)
 
     async def record_histogram_value(
-        self, metric_key: str, value: float
-    ) -> None:
+        self, metric_key: str, value: float, *, unit: str = "number"
+    ):
         """
         Record a value to a histogram metric.
 
@@ -375,376 +446,583 @@ class Metrics(Plugin):
 
         :param metric_key: The unique key for the metric
         :param value: The value to record
+        :param unit: Unit of the observations, such as ``seconds``. Defaults to
+                     ``number``; use the same unit for this metric key.
         """
-        now = datetime.datetime.now(datetime.UTC)
+        self._record(metric_key, value, "histogram", unit)
 
-        async with await self._get_metric_lock(metric_key):
-            if metric_key not in self.local_metrics_cache:
-                self.local_metrics_cache[metric_key] = Metric(
-                    metric_type="histogram"
+    async def _handle_event(self, event, *, worker=None):
+        self._record(
+            event.body.get("key"),
+            event.body.get("value"),
+            event.name.removeprefix("metrics."),
+            event.body.get("unit"),
+            worker=worker,
+        )
+
+    async def on_job_updated(self, *, worker, job: QueuedJob):
+        if job.started_at and job.completed_at:
+            duration = (job.completed_at - job.started_at).total_seconds()
+            for key in (
+                f"job:{job.func}:execution_time",
+                f"queue:{job.queue}:execution_time",
+            ):
+                self._record(
+                    key, duration, "histogram", "seconds", worker=worker
                 )
+        for key in (
+            f"job:{job.func}:{job.state.value}",
+            f"global:status:{job.state.value}",
+            f"queue:{job.queue}:throughput",
+            f"queue:{job.queue}:{job.state.value}",
+        ):
+            self._record(key, 1, "counter", "count", worker=worker)
 
-            metric = self.local_metrics_cache[metric_key]
+    def retention(self, resolution):
+        """
+        Get the retention period for a resolution, in seconds.
 
-            for resolution in self.max_points:
-                if resolution == "1min":
-                    points = metric.values_1min
-                elif resolution == "5min":
-                    points = metric.values_5min
-                elif resolution == "1hour":
-                    points = metric.values_1hour
-                elif resolution == "1day":
-                    points = metric.values_1day
+        The configured bucket count and ``maximum_metric_age`` both limit how
+        long observations remain available.
+        """
+        return min(
+            self.max_points[resolution] * RESOLUTIONS[resolution],
+            self.maximum_metric_age,
+        )
 
-                bucket_time = self._get_bucket_time(now, resolution)
+    def _prune_buffer(self):
+        now = utcnow()
+        retention = {
+            seconds: self.retention(name)
+            for name, seconds in RESOLUTIONS.items()
+        }
+        active_sessions = {session for session, _ in self._workers.values()} | {
+            self.session_id
+        }
+        for key in list(self._buckets):
+            _, seconds, timestamp, session_id, _ = key
+            expired = (
+                timestamp.timestamp() + retention[seconds] <= now.timestamp()
+            )
+            closed = (
+                bucket_time(timestamp, seconds * CHUNK_SIZE).timestamp()
+                + seconds * CHUNK_SIZE
+                <= now.timestamp()
+            )
+            if expired or (
+                (closed or session_id not in active_sessions)
+                and key not in self._dirty
+            ):
+                self._buckets.pop(key)
+                self._dirty.discard(key)
+        active = {key[0] for key in self._buckets}
+        self._types = {
+            key: value for key, value in self._types.items() if key in active
+        }
 
-                if points and self._same_bucket(
-                    points[0][0], bucket_time, resolution
+    async def flush(self, chancy):
+        """
+        Save recorded metrics so they can be queried.
+
+        Workers call this periodically and during graceful shutdown. Call it
+        explicitly when you need pending observations saved sooner. If saving
+        fails, pending observations are kept so this method can be retried.
+
+        :param chancy: The Chancy application instance.
+        """
+        async with self._flush_lock:
+            self._prune_buffer()
+            chunks = {
+                (
+                    key,
+                    seconds,
+                    bucket_time(timestamp, seconds * CHUNK_SIZE),
+                    session_id,
+                    worker_id,
+                )
+                for key, seconds, timestamp, session_id, worker_id in self._dirty
+            }
+            grouped = {}
+            for key, point in self._buckets.items():
+                name, seconds, timestamp, session_id, worker_id = key
+                chunk = (
+                    name,
+                    seconds,
+                    bucket_time(timestamp, seconds * CHUNK_SIZE),
+                    session_id,
+                    worker_id,
+                )
+                if chunk in chunks:
+                    grouped.setdefault(chunk, {})[key] = point
+            pending = sorted(grouped)
+            for offset in range(0, len(pending), 250):
+                batch = pending[offset : offset + 250]
+                snapshot = {
+                    key: value
+                    for chunk in batch
+                    for key, value in grouped[chunk].items()
+                }
+                definitions = {
+                    key[0]: (value.type, value.unit)
+                    for key, value in snapshot.items()
+                }
+                async with (
+                    chancy.pool.connection() as conn,
+                    conn.transaction(),
+                    conn.cursor(row_factory=dict_row) as cursor,
                 ):
-                    current_stats = cast(dict[str, int | float], points[0][1])
-
-                    count = cast(int, current_stats.get("count", 0)) + 1
-                    current_sum = (
-                        cast(float, current_stats.get("sum", 0)) + value
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO {definitions} (
+                                key,
+                                metric_type,
+                                unit
+                            )
+                            SELECT
+                                key,
+                                metric_type,
+                                unit
+                            FROM jsonb_to_recordset(%s) AS input(
+                                key TEXT,
+                                metric_type TEXT,
+                                unit TEXT
+                            )
+                            ORDER BY key
+                            ON CONFLICT (key) DO NOTHING
+                            """
+                        ).format(
+                            definitions=sql.Identifier(
+                                f"{chancy.prefix}metric_definitions"
+                            )
+                        ),
+                        [
+                            Jsonb(
+                                [
+                                    {
+                                        "key": key,
+                                        "metric_type": kind,
+                                        "unit": unit,
+                                    }
+                                    for key, (kind, unit) in definitions.items()
+                                ]
+                            )
+                        ],
                     )
-                    current_min = min(
-                        cast(float, current_stats.get("min", value)), value
+                    await cursor.execute(
+                        sql.SQL(
+                            """
+                            SELECT *
+                            FROM {}
+                            WHERE key = ANY(%s)
+                            ORDER BY id
+                            FOR KEY SHARE
+                            """
+                        ).format(
+                            sql.Identifier(f"{chancy.prefix}metric_definitions")
+                        ),
+                        [list(definitions)],
                     )
-                    current_max = max(
-                        cast(float, current_stats.get("max", value)), value
-                    )
+                    stored = await cursor.fetchall()
+                    if len(stored) != len(definitions):
+                        raise RuntimeError(
+                            "Metric catalog changed during flush; retry required"
+                        )
+                    ids = {}
+                    for row in stored:
+                        if definitions[row["key"]] == (
+                            row["metric_type"],
+                            row["unit"],
+                        ):
+                            ids[row["key"]] = row["id"]
+                        else:
+                            self._warn(
+                                f"Dropped metric conflicting with its stored definition: {row['key']}"
+                            )
+                    rows = []
+                    for name, seconds, chunk, session_id, worker_id in batch:
+                        if name not in ids:
+                            continue
+                        points = sorted(
+                            grouped[
+                                name, seconds, chunk, session_id, worker_id
+                            ].items()
+                        )
+                        kind = points[0][1].type
+                        rows.append(
+                            {
+                                "metric_id": ids[name],
+                                "resolution": seconds,
+                                "chunk": chunk,
+                                "session_id": session_id,
+                                "worker_id": worker_id,
+                                "buckets": [key[2] for key, _ in points],
+                                "counts": [v.count for _, v in points]
+                                if kind == "histogram"
+                                else None,
+                                "totals": [v.total for _, v in points]
+                                if kind != "gauge"
+                                else None,
+                                "minimums": [v.minimum for _, v in points]
+                                if kind == "histogram"
+                                else None,
+                                "maximums": [v.maximum for _, v in points]
+                                if kind == "histogram"
+                                else None,
+                                "gauges": [v.value for _, v in points]
+                                if kind == "gauge"
+                                else None,
+                                "sampled_at": [v.sampled_at for _, v in points],
+                            }
+                        )
+                    if rows:
+                        await cursor.executemany(
+                            sql.SQL(
+                                """
+                                INSERT INTO {metrics} (
+                                    metric_id,
+                                    resolution,
+                                    chunk,
+                                    session_id,
+                                    worker_id,
+                                    buckets,
+                                    counts,
+                                    totals,
+                                    minimums,
+                                    maximums,
+                                    gauges,
+                                    sampled_at
+                                )
+                                VALUES (
+                                    %(metric_id)s,
+                                    %(resolution)s,
+                                    %(chunk)s,
+                                    %(session_id)s,
+                                    %(worker_id)s,
+                                    %(buckets)s,
+                                    %(counts)s,
+                                    %(totals)s,
+                                    %(minimums)s,
+                                    %(maximums)s,
+                                    %(gauges)s,
+                                    %(sampled_at)s
+                                )
+                                ON CONFLICT (metric_id, resolution, chunk, session_id)
+                                DO UPDATE SET
+                                    buckets = EXCLUDED.buckets,
+                                    counts = EXCLUDED.counts,
+                                    totals = EXCLUDED.totals,
+                                    minimums = EXCLUDED.minimums,
+                                    maximums = EXCLUDED.maximums,
+                                    gauges = EXCLUDED.gauges,
+                                    sampled_at = EXCLUDED.sampled_at
+                                """
+                            ).format(
+                                metrics=sql.Identifier(
+                                    f"{chancy.prefix}metrics"
+                                )
+                            ),
+                            rows,
+                        )
+                for key, value in snapshot.items():
+                    if self._buckets.get(key) is value:
+                        self._dirty.discard(key)
+            self._prune_buffer()
+            self._read_cache.clear()
 
-                    new_stats = {
-                        "count": count,
-                        "sum": current_sum,
-                        "avg": current_sum / count,
-                        "min": current_min,
-                        "max": current_max,
-                    }
-                    points[0] = (points[0][0], new_stats)
-                else:
-                    initial_stats = {
-                        "count": 1,
-                        "sum": value,
-                        "avg": value,
-                        "min": value,
-                        "max": value,
-                    }
-                    points.insert(0, (bucket_time, initial_stats))
-
-                if len(points) > self.max_points[resolution]:
-                    points.pop()
-
-                async with self.modified_lock:
-                    self.modified_metrics.add(metric_key)
-
-    async def _sync_metrics(self, chancy: Chancy) -> None:
+    def window(
+        self,
+        resolution="5min",
+        *,
+        start=None,
+        end=None,
+        range_seconds=None,
+        limit=None,
+    ):
         """
-        Synchronize metrics with the database and other workers.
-        Records health metrics and avoids dropping updates occurring during sync.
+        Get the start and end times for a metric query.
+
+        Times must include a timezone and align to the chosen resolution. The
+        start is inclusive and the end is exclusive. By default the range ends
+        at the end of the current, potentially incomplete bucket.
+
+        Accepts the same window options as :meth:`get_metrics`.
+
+        :return: A ``(start, end)`` pair.
+        :raises ValueError: If the requested window is invalid.
         """
-        # Snapshot the modified set up-front to prevent losing updates recorded
-        # during this method.
-        async with self.modified_lock:
-            to_push = set(self.modified_metrics)
-            self.modified_metrics.clear()
-
-        with timed_block() as t_sync:
-            if to_push:
-                try:
-                    await self._push_metrics_to_db(chancy, metric_keys=to_push)
-                except Exception:
-                    await self.increment_counter("metrics:sync_errors", 1)
-                    raise
-
-            with timed_block() as t_pull:
-                try:
-                    aggregated = await self._get_raw_metrics(chancy)
-                except Exception:
-                    await self.increment_counter("metrics:sync_errors", 1)
-                    raise
-
-            self.aggregated_metrics_cache.update(aggregated)
-            self.last_sync_time = datetime.datetime.now(datetime.UTC)
-
-        await self.increment_counter("metrics:sync_count", 1)
-        await self.record_histogram_value(
-            "metrics:sync_duration_s", t_sync.elapsed
-        )
-        await self.record_histogram_value(
-            "metrics:db_pull_duration_s", t_pull.elapsed
-        )
-        await self.record_gauge(
-            "metrics:local_cache_size", len(self.local_metrics_cache)
-        )
-        await self.record_gauge(
-            "metrics:aggregated_cache_size",
-            len(self.aggregated_metrics_cache),
-        )
-        await self.record_gauge(
-            "metrics:last_sync_s", self.last_sync_time.timestamp()
-        )
-
-        async with self.modified_lock:
-            to_push_health = set(self.modified_metrics)
-            self.modified_metrics.clear()
-        if to_push_health:
-            try:
-                await self._push_metrics_to_db(
-                    chancy, metric_keys=to_push_health
+        if resolution not in RESOLUTIONS:
+            raise ValueError("resolution must be 1min, 5min, 1hour or 1day")
+        seconds = RESOLUTIONS[resolution]
+        retention = self.retention(resolution)
+        if limit is not None:
+            if start is not None or range_seconds is not None:
+                raise ValueError("limit cannot be combined with start or range")
+            if not 1 <= limit <= self.max_points[resolution]:
+                raise ValueError("limit exceeds the retained bucket count")
+            range_seconds = limit * seconds
+        if end is None:
+            end = bucket_time(utcnow(), seconds) + datetime.timedelta(
+                seconds=seconds
+            )
+        if start is None:
+            span = (
+                range_seconds
+                if range_seconds is not None
+                else min(86400, retention)
+            )
+            if not seconds <= span <= retention or span % seconds:
+                raise ValueError(
+                    "range must be a multiple of resolution within retention"
                 )
-            except Exception:
-                await self.increment_counter("metrics:sync_errors", 1)
-                raise
-
-    async def _push_metrics_to_db(
-        self, chancy: Chancy, *, metric_keys: set[str] | None = None
-    ) -> None:
-        """
-        Push modified metrics to the database.
-
-        Only pushes metrics from the local_metrics_cache, not the aggregated
-        cache.
-        """
-        metric_keys = metric_keys or self.modified_metrics
-        if not metric_keys:
-            return
-
-        metrics_to_insert = []
-
-        for metric_key in metric_keys:
-            if metric_key not in self.local_metrics_cache:
-                continue
-
-            # Copy points under the per-metric lock to avoid races with writers.
-            async with await self._get_metric_lock(metric_key):
-                metric = self.local_metrics_cache[metric_key]
-
-            for resolution in self.max_points:
-                if resolution == "1min":
-                    points = metric.values_1min
-                elif resolution == "5min":
-                    points = metric.values_5min
-                elif resolution == "1hour":
-                    points = metric.values_1hour
-                elif resolution == "1day":
-                    points = metric.values_1day
-                else:
-                    continue
-
-                if not points:
-                    continue
-
-                timestamps = [point[0] for point in points]
-                values = [json.dumps(point[1]) for point in points]
-
-                metrics_to_insert.append(
-                    {
-                        "metric_key": metric_key,
-                        "resolution": resolution,
-                        "worker_id": self.worker_id,
-                        "timestamps": timestamps,
-                        "values": values,
-                        "metric_type": metric.metric_type,
-                    }
+            start = end - datetime.timedelta(seconds=span)
+        elif range_seconds is not None:
+            raise ValueError("start cannot be combined with range")
+        for value in (start, end):
+            if value.tzinfo is None or value != bucket_time(value, seconds):
+                raise ValueError(
+                    "start and end must be timezone-aware bucket boundaries"
                 )
+        if not 0 < (end - start).total_seconds() <= retention:
+            raise ValueError("requested window exceeds retention")
+        if (end - start).total_seconds() / seconds > 1000:
+            raise ValueError("requested window exceeds 1000 buckets")
+        return start, end
 
-        if not metrics_to_insert:
-            return
+    async def get_metrics(
+        self,
+        chancy,
+        metric_prefix=None,
+        worker_id=None,
+        *,
+        resolution="5min",
+        start=None,
+        end=None,
+        range_seconds=None,
+        limit=None,
+    ):
+        """
+        Get metrics matching the given prefix and time range.
 
+        Metrics from all workers are combined unless ``worker_id`` is provided.
+        Counters sum observed increments, gauges return the most recent value,
+        and histogram averages are weighted by the number of observations.
+        Missing data points are omitted rather than filled with zeros.
+
+        For example, to get the default queue's metrics for the last 24 hours:
+
+        .. code-block:: python
+
+            result = await metrics.get_metrics(
+                chancy,
+                metric_prefix="queue:default",
+                resolution="5min",
+                range_seconds=86400,
+            )
+            for key, metric in result["series"].items():
+                print(key, metric.summary, metric.unit)
+
+        :param chancy: The Chancy application instance.
+        :param metric_prefix: Optional metric key or prefix. ``queue:default``
+                              matches that key and its ``:``-separated descendants.
+        :param worker_id: Optional worker ID to filter by.
+        :param resolution: Size of each time bucket: ``1min``, ``5min``, ``1hour``
+                           or ``1day``. Defaults to ``5min``.
+        :param start: Optional inclusive start time, with a timezone and aligned
+                      to the chosen resolution. Cannot be combined with
+                      ``range_seconds`` or ``limit``.
+        :param end: Optional exclusive end time, with a timezone and aligned to
+                    the chosen resolution. Defaults to the end of the current,
+                    potentially incomplete bucket.
+        :param range_seconds: Length of the requested time range, in seconds.
+                              Must be a multiple of the resolution and within
+                              retention. Defaults to 24 hours or the retention
+                              period, whichever is shorter.
+        :param limit: Alternative way to specify the range as a number of time
+                      buckets, including buckets with no observations. Cannot be
+                      combined with ``start`` or ``range_seconds``.
+        :return: A dictionary containing ``start``, ``end``, ``resolution``,
+                 ``generated_at`` and a ``series`` mapping of keys to metrics.
+                 Only saved observations are returned; results may be up to ten
+                 seconds behind newly saved data.
+        :raises ValueError: If the window is invalid, exceeds retention or 1,000
+                            time buckets, or matches more than 100 metric keys.
+        """
+        start, end = self.window(
+            resolution,
+            start=start,
+            end=end,
+            range_seconds=range_seconds,
+            limit=limit,
+        )
+        cache_key = metric_prefix, worker_id, resolution, start, end
+        async with self._read_lock:
+            cached = self._read_cache.get(cache_key)
+            if cached and time.monotonic() - cached[0] < 10:
+                self._read_cache.move_to_end(cache_key)
+                return cached[1]
+            result = await self._query_metrics(
+                chancy, metric_prefix, worker_id, resolution, start, end
+            )
+            self._read_cache[cache_key] = time.monotonic(), result
+            while (
+                len(self._read_cache) > 32
+                or sum(
+                    len(metric.data)
+                    for _, response in self._read_cache.values()
+                    for metric in response["series"].values()
+                )
+                > 50000
+            ):
+                self._read_cache.popitem(last=False)
+            return result
+
+    async def _query_metrics(
+        self, chancy, prefix, worker_id, resolution, start, end
+    ):
         async with (
             chancy.pool.connection() as conn,
             conn.cursor(row_factory=dict_row) as cursor,
         ):
-            await cursor.executemany(
+            condition = sql.SQL("TRUE")
+            params = {}
+            if prefix:
+                escaped = (
+                    prefix.replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_")
+                )
+                condition = sql.SQL("key = %(prefix)s OR key LIKE %(children)s")
+                params = {"prefix": prefix, "children": escaped + ":%"}
+            await cursor.execute(
                 sql.SQL(
                     """
-                        INSERT INTO {metrics_table} (
-                            metric_key,
-                            resolution,
-                            worker_id,
-                            timestamps,
-                            values,
-                            metric_type,
-                            updated_at
-                        ) VALUES (
-                            %(metric_key)s,
-                            %(resolution)s,
-                            %(worker_id)s, 
-                            %(timestamps)s,
-                            %(values)s,
-                            %(metric_type)s,
-                            NOW()
-                        )
-                        ON CONFLICT (
-                            metric_key,
-                            resolution,
-                            worker_id
-                        ) DO UPDATE
-                        SET
-                            timestamps = %(timestamps)s,
-                            values = %(values)s,
-                            metric_type = %(metric_type)s,
-                            updated_at = NOW()
+                    SELECT *
+                    FROM {definitions}
+                    WHERE ({condition})
+                    ORDER BY key
+                    LIMIT 101
                     """
                 ).format(
-                    metrics_table=sql.Identifier(f"{chancy.prefix}metrics")
+                    definitions=sql.Identifier(
+                        f"{chancy.prefix}metric_definitions"
+                    ),
+                    condition=condition,
                 ),
-                metrics_to_insert,
+                params,
             )
-
-    @staticmethod
-    def _get_bucket_time(
-        timestamp: datetime.datetime, resolution: Resolution
-    ) -> datetime.datetime:
-        """
-        Get the appropriate time bucket for a given timestamp and resolution.
-        """
-        if resolution == "1min":
-            return timestamp.replace(second=0, microsecond=0)
-        elif resolution == "5min":
-            minute = (timestamp.minute // 5) * 5
-            return timestamp.replace(minute=minute, second=0, microsecond=0)
-        elif resolution == "1hour":
-            return timestamp.replace(minute=0, second=0, microsecond=0)
-        elif resolution == "1day":
-            return timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-        else:
-            raise ValueError(f"Unknown resolution: {resolution}")
-
-    @staticmethod
-    def _same_bucket(
-        time1: datetime.datetime,
-        time2: datetime.datetime,
-        resolution: Resolution,
-    ) -> bool:
-        """
-        Check if two timestamps belong to the same bucket for a given
-        resolution.
-        """
-        if resolution == "1min":
-            return (
-                time1.year == time2.year
-                and time1.month == time2.month
-                and time1.day == time2.day
-                and time1.hour == time2.hour
-                and time1.minute == time2.minute
-            )
-        elif resolution == "5min":
-            return (
-                time1.year == time2.year
-                and time1.month == time2.month
-                and time1.day == time2.day
-                and time1.hour == time2.hour
-                and time1.minute // 5 == time2.minute // 5
-            )
-        elif resolution == "1hour":
-            return (
-                time1.year == time2.year
-                and time1.month == time2.month
-                and time1.day == time2.day
-                and time1.hour == time2.hour
-            )
-        elif resolution == "1day":
-            return (
-                time1.year == time2.year
-                and time1.month == time2.month
-                and time1.day == time2.day
-            )
-        else:
-            raise ValueError(f"Unknown resolution: {resolution}")
-
-    def api_plugin(self) -> str | None:
-        return "chancy.plugins.metrics.api.MetricsApiPlugin"
-
-    def get_tables(self) -> list[str]:
-        """Get the names of all tables this plugin is responsible for."""
-        return ["metrics"]
-
-    @staticmethod
-    def get_identifier() -> str:
-        return "chancy.metrics"
-
-    async def _collect_table_sizes(self, worker: Worker, chancy: Chancy):
-        """
-        Collect size metrics for database tables.
-
-        This runs as a separate task and collects table sizes every 30 seconds,
-        but only when this worker is the leader to avoid duplicate metrics.
-        """
-        core_tables = [
-            "jobs",
-            "queues",
-            "workers",
-            "leader",
-            "queue_rate_limits",
-        ]
-
-        while await self.sleep(self.collection_interval):
-            await self.wait_for_leader(worker)
-
-            plugin_tables = []
-            for plugin in chancy.plugins.values():
-                plugin_tables.extend(plugin.get_tables())
-
-            all_tables = list(set(plugin_tables + core_tables))
-            prefixed_tables = [
-                f"{chancy.prefix}{table}" for table in all_tables
-            ]
-
-            with timed_block() as t_sizes:
-                try:
-                    async with (
-                        chancy.pool.connection() as conn,
-                        conn.cursor(row_factory=dict_row) as cursor,
-                    ):
-                        query = sql.SQL(
-                            """
-                                SELECT
-                                    table_name,
-                                    pg_total_relation_size(table_name) as total_size_bytes,
-                                    pg_relation_size(table_name) as table_size_bytes,
-                                    pg_indexes_size(table_name) as index_size_bytes
-                                FROM unnest({tables}::text[]) AS table_name
-                                """
-                        ).format(tables=sql.Literal(prefixed_tables))
-
-                        await cursor.execute(query)
-
-                        async for result in cursor:
-                            table_name = result["table_name"].removeprefix(
-                                chancy.prefix
-                            )
-
-                            await self.record_histogram_value(
-                                f"table:{table_name}:total_size_bytes",
-                                result["total_size_bytes"],
-                            )
-                            await self.record_histogram_value(
-                                f"table:{table_name}:table_size_bytes",
-                                result["table_size_bytes"],
-                            )
-                            await self.record_histogram_value(
-                                f"table:{table_name}:index_size_bytes",
-                                result["index_size_bytes"],
-                            )
-                except psycopg.Error:
-                    await self.increment_counter("metrics:table_size_errors", 1)
-                finally:
-                    await self.increment_counter("metrics:table_size_runs", 1)
-                    await self.record_histogram_value(
-                        "metrics:table_size_duration_s", t_sizes.elapsed
+            definitions = await cursor.fetchall()
+            if len(definitions) > 100:
+                raise ValueError(
+                    "prefix matches more than 100 series; choose a narrower prefix"
+                )
+            result = {
+                row["key"]: Metric(row["metric_type"], row["unit"], [])
+                for row in definitions
+            }
+            if definitions:
+                cutoff = bucket_time(
+                    utcnow(), RESOLUTIONS[resolution]
+                ) + datetime.timedelta(
+                    seconds=RESOLUTIONS[resolution] - self.retention(resolution)
+                )
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        SELECT
+                            d.key,
+                            d.metric_type,
+                            p.bucket,
+                            sum(p.count) AS count,
+                            sum(p.total) AS total,
+                            min(p.minimum) AS minimum,
+                            max(p.maximum) AS maximum,
+                            (
+                                array_agg(
+                                    p.value
+                                    ORDER BY p.sampled_at DESC, m.session_id DESC
+                                ) FILTER (WHERE d.metric_type = 'gauge')
+                            )[1] AS value,
+                            max(p.sampled_at) AS sampled_at
+                        FROM {metrics} m
+                        JOIN {definitions} d ON d.id = m.metric_id
+                        CROSS JOIN LATERAL unnest(
+                            m.buckets,
+                            m.counts,
+                            m.totals,
+                            m.minimums,
+                            m.maximums,
+                            m.gauges,
+                            m.sampled_at
+                        ) AS p(
+                            bucket,
+                            count,
+                            total,
+                            minimum,
+                            maximum,
+                            value,
+                            sampled_at
+                        )
+                        WHERE m.metric_id = ANY(%(ids)s)
+                            AND m.resolution = %(resolution)s
+                            AND m.chunk >= %(chunk_start)s
+                            AND m.chunk < %(end)s
+                            AND p.bucket >= %(start)s
+                            AND p.bucket < %(end)s
+                            {worker_filter}
+                        GROUP BY d.id, p.bucket
+                        ORDER BY d.key, p.bucket
+                        """
+                    ).format(
+                        metrics=sql.Identifier(f"{chancy.prefix}metrics"),
+                        definitions=sql.Identifier(
+                            f"{chancy.prefix}metric_definitions"
+                        ),
+                        worker_filter=sql.SQL("AND m.worker_id = %(worker)s")
+                        if worker_id
+                        else sql.SQL(""),
+                    ),
+                    {
+                        "ids": [row["id"] for row in definitions],
+                        "resolution": RESOLUTIONS[resolution],
+                        "start": max(start, cutoff),
+                        "chunk_start": bucket_time(
+                            max(start, cutoff),
+                            RESOLUTIONS[resolution] * CHUNK_SIZE,
+                        ),
+                        "end": end,
+                        "worker": worker_id,
+                    },
+                )
+                for row in await cursor.fetchall():
+                    kind = row["metric_type"]
+                    value = row["total"] if kind == "counter" else row["value"]
+                    if kind == "histogram":
+                        value = {
+                            "count": int(row["count"]),
+                            "sum": row["total"],
+                            "avg": row["total"] / int(row["count"]),
+                            "min": row["minimum"],
+                            "max": row["maximum"],
+                        }
+                    result[row["key"]].data.append(
+                        MetricPoint(row["bucket"], value, row["sampled_at"])
                     )
+        return {
+            "start": start,
+            "end": end,
+            "resolution": resolution,
+            "generated_at": utcnow(),
+            "series": result,
+        }
 
-    async def _get_raw_metrics(
-        self,
-        chancy: Chancy,
-        *,
-        metric_prefix: str | None = None,
-        worker_id: str | None = None,
-    ) -> dict[str, Metric]:
-        results = {}
+    async def list_metrics(self, chancy):
+        """
+        Get the keys of all available metrics, in alphabetical order.
 
+        :param chancy: The Chancy application instance.
+        :return: A list of metric keys.
+        """
         async with (
             chancy.pool.connection() as conn,
             conn.cursor(row_factory=dict_row) as cursor,
@@ -752,163 +1030,161 @@ class Metrics(Plugin):
             await cursor.execute(
                 sql.SQL(
                     """
-                        SELECT 
-                            metric_key,
-                            resolution,
-                            metric_type,
-                            json_agg(timestamps ORDER BY worker_id, updated_at) as all_timestamps,
-                            json_agg(values ORDER BY worker_id, updated_at) as all_values
-                        FROM 
-                            {metrics_table}
-                        WHERE
-                            (
-                                %(worker_id)s::text IS NULL OR
-                                    worker_id = %(worker_id)s
-                            )
-                        AND
-                            (
-                                %(metric_prefix)s::text IS NULL OR
-                                    metric_key LIKE %(metric_prefix)s
-                            )
-                        GROUP BY 
-                            metric_key, resolution, metric_type
-                        ORDER BY 
-                            metric_key, resolution
-                        """
-                ).format(
-                    metrics_table=sql.Identifier(f"{chancy.prefix}metrics"),
-                ),
-                {
-                    "worker_id": worker_id,
-                    "metric_prefix": (
-                        f"{metric_prefix}%" if metric_prefix else None
-                    ),
-                },
+                    SELECT key
+                    FROM {}
+                    ORDER BY key
+                    """
+                ).format(sql.Identifier(f"{chancy.prefix}metric_definitions"))
             )
+            return [row["key"] for row in await cursor.fetchall()]
 
-            for metric_key, group in groupby(
-                [r async for r in cursor],
-                key=lambda r: r["metric_key"],
-            ):
-                if metric_prefix and not self.matches_prefix(
-                    metric_prefix, metric_key
-                ):
-                    continue
+    async def cleanup(self, chancy):
+        """
+        Clean up old metrics data.
 
-                group_list = list(group)
+        Called automatically by the Pruner plugin, or may be manually invoked.
 
-                metric = results.setdefault(
-                    metric_key,
-                    Metric(metric_type=group_list[0]["metric_type"]),
+        Expired data is excluded from queries even before cleanup runs.
+        """
+        now = utcnow()
+        conditions = []
+        for name, seconds in RESOLUTIONS.items():
+            cutoff = bucket_time(now, seconds) + datetime.timedelta(
+                seconds=seconds - self.retention(name)
+            )
+            conditions.append(
+                sql.SQL("(resolution = {} AND chunk < {})").format(
+                    sql.Literal(seconds),
+                    sql.Literal(bucket_time(cutoff, seconds * CHUNK_SIZE)),
                 )
-
-                for row in group_list:
-                    resolution = cast(Resolution, row["resolution"])
-                    merged_points = defaultdict(list)
-
-                    for worker_idx, timestamps_array in enumerate(
-                        row["all_timestamps"]
-                    ):
-                        values_array = row["all_values"][worker_idx]
-
-                        for i in range(len(timestamps_array)):
-                            timestamp = timestamps_array[i]
-                            merged_points[timestamp].append(values_array[i])
-
-                    result_points = []
-                    for timestamp, values_list in merged_points.items():
-                        if metric.metric_type == "counter":
-                            merged_value = sum(values_list)
-                        elif metric.metric_type == "gauge":
-                            merged_value = values_list[0]
-                        elif metric.metric_type == "histogram":
-                            total_count = sum(
-                                v.get("count", 0) for v in values_list
-                            )
-                            total_sum = sum(
-                                v.get("sum", 0) for v in values_list
-                            )
-
-                            all_mins = [
-                                v.get("min") for v in values_list if "min" in v
-                            ]
-                            all_maxs = [
-                                v.get("max") for v in values_list if "max" in v
-                            ]
-
-                            merged_value = {
-                                "count": total_count,
-                                "sum": total_sum,
-                                "avg": (
-                                    total_sum / total_count
-                                    if total_count > 0
-                                    else 0
-                                ),
-                                "min": min(all_mins) if all_mins else 0,
-                                "max": max(all_maxs) if all_maxs else 0,
-                            }
-
-                        result_points.append((timestamp, merged_value))
-
-                    result_points.sort(key=lambda p: p[0], reverse=True)
-
-                    max_points = self.max_points[resolution]
-                    match resolution:
-                        case "1min":
-                            metric.values_1min = result_points[:max_points]
-                        case "5min":
-                            metric.values_5min = result_points[:max_points]
-                        case "1hour":
-                            metric.values_1hour = result_points[:max_points]
-                        case "1day":
-                            metric.values_1day = result_points[:max_points]
-
-        return results
-
-    async def get_metrics(
-        self,
-        chancy: Chancy,
-        metric_prefix: str | None = None,
-        worker_id: str | None = None,
-    ) -> dict[str, Metric]:
-        """
-        Get metrics matching the given prefix.
-
-        If a worker_id is provided, only metrics for that worker are returned
-        and are queried directly from the database. Otherwise, aggregated
-        metrics are returned from the metrics cache.
-
-        :param chancy: The Chancy application instance
-        :param metric_prefix: Optional prefix to filter metrics by
-        :param worker_id: Optional worker_id to filter metrics by
-        """
-        if worker_id and worker_id == self.worker_id:
-            return {
-                key: metric
-                for key, metric in self.local_metrics_cache.items()
-                if not metric_prefix or self.matches_prefix(metric_prefix, key)
-            }
-        elif worker_id:
-            return await self._get_raw_metrics(
-                chancy,
-                metric_prefix=metric_prefix,
-                worker_id=worker_id,
             )
-        else:
-            return {
-                key: metric
-                for key, metric in self.aggregated_metrics_cache.items()
-                if not metric_prefix or self.matches_prefix(metric_prefix, key)
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            await cursor.execute(
+                sql.SQL(
+                    """
+                    WITH expired AS (
+                        SELECT ctid
+                        FROM {metrics}
+                        WHERE {conditions}
+                        LIMIT 10000
+                        FOR UPDATE SKIP LOCKED
+                    )
+                    DELETE FROM {metrics}
+                    WHERE ctid IN (SELECT ctid FROM expired)
+                    """
+                ).format(
+                    metrics=sql.Identifier(f"{chancy.prefix}metrics"),
+                    conditions=sql.SQL(" OR ").join(conditions),
+                )
+            )
+            removed = cursor.rowcount
+            # Lock catalog entries before checking for orphans again. Writers
+            # take a key-share lock before inserting buckets, preventing a
+            # pruning transaction from deleting a concurrently reused key.
+            await cursor.execute(
+                sql.SQL(
+                    """
+                    SELECT d.id
+                    FROM {definitions} d
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM {metrics} m
+                        WHERE m.metric_id = d.id
+                    )
+                    ORDER BY d.id
+                    LIMIT 1000
+                    FOR UPDATE SKIP LOCKED
+                    """
+                ).format(
+                    definitions=sql.Identifier(
+                        f"{chancy.prefix}metric_definitions"
+                    ),
+                    metrics=sql.Identifier(f"{chancy.prefix}metrics"),
+                )
+            )
+            orphan_ids = [row["id"] for row in await cursor.fetchall()]
+            if orphan_ids:
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        DELETE FROM {definitions} d
+                        WHERE id = ANY(%s)
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM {metrics} m
+                                WHERE m.metric_id = d.id
+                            )
+                        """
+                    ).format(
+                        definitions=sql.Identifier(
+                            f"{chancy.prefix}metric_definitions"
+                        ),
+                        metrics=sql.Identifier(f"{chancy.prefix}metrics"),
+                    ),
+                    [orphan_ids],
+                )
+        self._read_cache.clear()
+        return removed or None
+
+    async def _collect_table_sizes(self, worker, chancy):
+        """
+        Collect size metrics for database tables.
+
+        This runs as a separate task and collects table sizes at the configured collection interval,
+        but only when this worker is the leader to avoid duplicate metrics.
+        """
+        while True:
+            await asyncio.sleep(self.collection_interval)
+            if not worker.is_leader.is_set():
+                continue
+            tables = {
+                "jobs",
+                "queues",
+                "workers",
+                "leader",
+                "queue_rate_limits",
             }
-
-    @staticmethod
-    def matches_prefix(prefix: str, key: str) -> bool:
-        """
-        Check if the given key matches the given complete prefix.
-
-        :param prefix: The prefix to match
-        :param key: The key to check
-        """
-        key = key.split(":")
-        prefix = prefix.split(":")
-        return key[: len(prefix)] == prefix
+            for plugin in chancy.plugins.values():
+                tables.update(plugin.get_tables())
+            try:
+                async with (
+                    chancy.pool.connection() as conn,
+                    conn.cursor(row_factory=dict_row) as cursor,
+                ):
+                    await cursor.execute(
+                        """
+                        SELECT
+                            name,
+                            pg_total_relation_size(relation) AS total_size_bytes,
+                            pg_relation_size(relation) AS table_size_bytes,
+                            pg_indexes_size(relation) AS index_size_bytes
+                        FROM unnest(%s::text[], %s::regclass[]) AS t(name, relation)
+                        """,
+                        [
+                            sorted(tables),
+                            [
+                                sql.Identifier(
+                                    f"{chancy.prefix}{name}"
+                                ).as_string()
+                                for name in sorted(tables)
+                            ],
+                        ],
+                    )
+                    for row in await cursor.fetchall():
+                        for size in (
+                            "total_size_bytes",
+                            "table_size_bytes",
+                            "index_size_bytes",
+                        ):
+                            self._record(
+                                f"table:{row['name']}:{size}",
+                                row[size],
+                                "gauge",
+                                "bytes",
+                                worker=worker,
+                            )
+            except Exception:
+                chancy.log.exception("Could not collect table size metrics")

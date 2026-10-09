@@ -132,7 +132,7 @@ export function WorkerDetails () {
                 </div>
                 <div className="col-12 col-md-6 col-xl-3">
                   <MetricHistogramCard
-                    title="Avg Execution Time"
+                    title="Avg final attempt time"
                     metricKey={`queue:${queueName}:execution_time`}
                     url={url!}
                     resolution={resolution}

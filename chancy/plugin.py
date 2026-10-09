@@ -199,6 +199,27 @@ class Plugin(abc.ABC):
         :param cursor: The cursor for the current update transaction.
         """
 
+    async def on_worker_started(self, *, worker: "Worker"):
+        """
+        Called when a worker starts, before plugin tasks begin running.
+
+        Use this hook to register event handlers or prepare resources needed
+        by other plugins. It is called for plugins with worker scope.
+
+        :param worker: The worker being started.
+        """
+
+    async def on_worker_stopped(self, *, worker: "Worker"):
+        """
+        Called during shutdown, after the worker saves its final job updates.
+
+        Use this hook to save remaining plugin data and release resources.
+        Background tasks have already stopped. If shutdown fails and is retried,
+        this hook may be called again, so repeated calls must be safe.
+
+        :param worker: The worker being stopped.
+        """
+
     async def on_job_updated(
         self,
         *,

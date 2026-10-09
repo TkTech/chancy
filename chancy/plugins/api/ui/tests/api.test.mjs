@@ -134,8 +134,8 @@ test('every read validates responses and forwards its AbortSignal', async t => {
     [() => api.listPlugins(signal), [{ identifier: 'test', tables: [], migrate_key: null, migrate_package: null, api_plugin: null, dependencies: [], scope: 'worker' }]],
     [() => api.getMetricsOverview(signal), { categories: { queue: ['execution_time'] }, count: 1 }],
     [() => api.getMetricDetail('queue:execution_time', { resolution: '5min', limit: 60 }, signal), {
-      duration: { type: 'gauge', data: [{ timestamp, value: 0.5 }] },
-      states: { type: 'histogram', data: [{ timestamp, value: { pending: 3 } }] },
+      start: timestamp, end: timestamp, generated_at: timestamp, resolution: '5min',
+      series: { duration: { type: 'gauge', unit: 'seconds', aggregation: 'last', sampled_at: timestamp, summary: 0.5, data: [{ timestamp, sampled_at: timestamp, value: 0.5 }] } },
     }],
   ];
   for (const [read, payload] of cases) {

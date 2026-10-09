@@ -29,15 +29,15 @@ function QueueThroughputSpark({ queueName, apiUrl }: { queueName: string, apiUrl
     url: apiUrl,
     key: key,
     resolution: '5min',
-    limit: 20,
+    range: 86400,
     enabled: !!apiUrl
   })
 
-  if (isLoading || !data || !data[key]) {
+  if (isLoading || !data || !data.series[key]) {
     return <div className="sparkline-placeholder" />;
   }
 
-  return <SparklineChart points={data[key].data} resolution="5min" />;
+  return <SparklineChart window={data} metric={data.series[key]} />;
 }
 
 export function Queue() {
@@ -114,7 +114,7 @@ export function Queue() {
           </div>
           <div className="col-12 col-md-6 col-xl-3">
             <MetricHistogramCard
-              title="Avg Execution Time"
+              title="Avg final attempt time"
               metricKey={`queue:${queue.name}:execution_time`}
               url={url!}
               resolution={resolution}
@@ -288,7 +288,7 @@ export function Queues() {
         <tr>
           <th>Name</th>
           <th className={"w-100"}>Tags</th>
-          {hasMetricsPlugin && <th className="text-center">Throughput</th>}
+          {hasMetricsPlugin && <th className="text-center">Update events (24h)</th>}
           <th className={"text-center"}>State</th>
         </tr>
         </thead>

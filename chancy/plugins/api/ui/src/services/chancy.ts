@@ -8,7 +8,7 @@ export type FilterTriple = [string, string, string];
 export type BatchJobAction = 'retry' | 'purge' | 'cancel';
 export interface PageParams { filters?: FilterTriple[]; limit?: number; before?: string; }
 export interface JobParams extends PageParams { state?: string; queue?: string; func?: string; }
-export interface MetricParams { resolution: string; limit: number; worker_id?: string; }
+export interface MetricParams { resolution: string; range?: number; limit?: number; start?: string; end?: string; worker_id?: string; }
 
 function queryString(params: object): string {
   const qs = new URLSearchParams();

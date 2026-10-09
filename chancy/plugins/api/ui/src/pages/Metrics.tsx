@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { RETENTION_SECONDS } from '../services/metrics';
 import { useServerConfiguration } from '../hooks/useServerConfiguration';
 import { Loading } from '../components/Loading';
 import { useMetricsOverview, useMetricDetail } from '../hooks/useMetrics';
@@ -39,7 +40,7 @@ export function MetricsList() {
     >
       <div className="container-fluid">
         <h2 className="">Available Metrics</h2>
-        <p>All raw metrics currently known, synchronized each minute across all workers.</p>
+        <p>Persisted observations, usually flushed once a minute. Missing samples are unknown, not zero.</p>
         
         {overview && overview.categories && Object.entries(overview.categories).length > 0 ? (
           Object.entries(overview.categories)
@@ -54,7 +55,7 @@ export function MetricsList() {
                     {metrics
                       .sort((a, b) => a.localeCompare(b))
                       .map(metric => {
-                        const metricKey = `${category}:${metric}`;
+                        const metricKey = metric ? `${category}:${metric}` : category;
 
                         return (
                           <Link 
@@ -62,7 +63,7 @@ export function MetricsList() {
                             to={`/metrics/${encodeURIComponent(metricKey)}`}
                             className="list-group-item list-group-item-action align-items-center"
                           >
-                            <span className="text-muted">{category}:</span>
+                            <span className="text-muted">{category}{metric ? ':' : ''}</span>
                             <strong>{metric}</strong>
                           </Link>
                         );
@@ -86,28 +87,42 @@ export function MetricDetail() {
   const { url } = useServerConfiguration();
   const { metricKey } = useParams<{ metricKey: string }>();
   const [resolution, setResolution] = useState<string>('5min');
+  const [range, setRange] = useState(86400);
 
-  const { data: metrics, isLoading } = useMetricDetail({
+  const { data: metrics, isLoading, error } = useMetricDetail({
     url,
     key: metricKey as string,
-    resolution
+    resolution, range
   });
 
   return (
     <MetricsWrapper
       isLoading={isLoading}
       data={metrics}
-      errorMessage={`No metrics data available for ${metricKey}`}
+      errorMessage={error?.message ?? `No metrics data available for ${metricKey}`}
     >
       <div className="container-fluid">
         <h2 className="mb-4 text-break">
           {metricKey}
         </h2>
         
-        <ResolutionSelector resolution={resolution} setResolution={setResolution} />
+        <div className="d-flex flex-wrap gap-3 align-items-start">
+          <label>Range <select className="form-select form-select-sm" value={range} onChange={event => {
+            const next = Number(event.target.value);
+            setRange(next);
+            if (RETENTION_SECONDS[resolution] < next || (resolution === '1day' && next < 86400))
+              setResolution(next <= 3600 ? '1min' : next <= 86400 ? '5min' : next <= 604800 ? '1hour' : '1day');
+          }}>
+            <option value={3600}>Last hour</option><option value={86400}>Last 24 hours</option>
+            <option value={604800}>Last 7 days</option><option value={2592000}>Last 30 days</option>
+          </select></label>
+          <div><div>Resolution</div><ResolutionSelector resolution={resolution} setResolution={setResolution} range={range} /></div>
+        </div>
+        {metrics && <p className="small text-secondary">{new Date(metrics.start).toLocaleString()} – {new Date(metrics.end).toLocaleString()} · Current bucket may be partial · Gaps are unobserved</p>}
+        {error && metrics && <p role="alert">Could not refresh metrics: {error.message}</p>}
 
         <div className="row">
-          {metrics && Object.entries(metrics).map(([subtype, metricData]) => {
+          {metrics && Object.entries(metrics.series).map(([subtype, metricData]) => {
             return (
               <div key={subtype} className="col-12 mb-4">
                 <div className="card">
@@ -116,9 +131,7 @@ export function MetricDetail() {
                   </div>
                   <div className="card-body">
                     <MetricChart 
-                      points={metricData.data} 
-                      metricType={metricData.type}
-                      resolution={resolution}
+                      window={metrics} metric={metricData}
                     />
                   </div>
                 </div>

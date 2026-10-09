@@ -108,13 +108,31 @@ export const PluginSchema = z.object({
 export const MetricsOverviewSchema = z.object({
   categories: z.record(z.string(), z.array(z.string())), count: z.number(),
 });
+const HistogramSummarySchema = z.object({
+  count: z.number().int().positive(), sum: z.number(), min: z.number(), max: z.number(), avg: z.number(),
+});
+const MetricValueSchema = z.union([z.number(), HistogramSummarySchema]);
 export const MetricPointSchema = z.object({
-  timestamp: z.string(), value: z.union([z.number(), z.record(z.string(), z.number())]),
+  timestamp: z.iso.datetime({ offset: true }), sampled_at: z.iso.datetime({ offset: true }), value: MetricValueSchema,
 });
 export const MetricDataSchema = z.object({
   data: z.array(MetricPointSchema), type: z.enum(['counter', 'gauge', 'histogram']),
+  unit: z.string(), aggregation: z.enum(['sum', 'last', 'summary']),
+  sampled_at: z.iso.datetime({ offset: true }).nullable(), summary: MetricValueSchema.nullable(),
+}).superRefine((metric, ctx) => {
+  const histogram = metric.type === 'histogram';
+  if (metric.aggregation !== ({counter: 'sum', gauge: 'last', histogram: 'summary'}[metric.type]) ||
+      metric.data.some(point => (typeof point.value === 'object') !== histogram) ||
+      (metric.summary !== null && (typeof metric.summary === 'object') !== histogram)) {
+    ctx.addIssue({ code: 'custom', message: 'Metric values and aggregation must match the metric type' });
+  }
 });
-export const MetricDetailSchema = z.record(z.string(), MetricDataSchema);
+export const MetricDetailSchema = z.object({
+  start: z.iso.datetime({ offset: true }), end: z.iso.datetime({ offset: true }),
+  generated_at: z.iso.datetime({ offset: true }), resolution: z.enum(['1min', '5min', '1hour', '1day']),
+  series: z.record(z.string(), MetricDataSchema),
+});
+export type MetricDetail = z.infer<typeof MetricDetailSchema>;
 
 export type JobDefinition = z.infer<typeof JobDefinitionSchema>;
 export type Job = z.infer<typeof JobSchema>;

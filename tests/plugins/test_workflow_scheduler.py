@@ -287,17 +287,17 @@ async def test_busy_event_queue_does_not_delay_polling(
     polls = 0
     polled_twice = asyncio.Event()
 
-    async def busy_batch(worker, app, cursor):
+    async def busy_batch(worker, app, cursor, **kwargs):
         nonlocal batches
-        result = await pending(worker, app, cursor)
+        result = await pending(worker, app, cursor, **kwargs)
         batches += 1
         notify(scheduler, worker, workflow_id)
         await asyncio.sleep(0.01)
         return result
 
-    async def record_poll(worker, app, cursor):
+    async def record_poll(worker, app, cursor, **kwargs):
         nonlocal polls
-        result = await poll(worker, app, cursor)
+        result = await poll(worker, app, cursor, **kwargs)
         polls += 1
         if polls == 2:
             polled_twice.set()
@@ -324,10 +324,10 @@ async def test_event_handler_does_not_wait_for_processing(
     pending = scheduler.process_pending
     ids = [chancy_uuid(), chancy_uuid()]
 
-    async def blocked_batch(worker, app, cursor):
+    async def blocked_batch(worker, app, cursor, **kwargs):
         entered.set()
         await release.wait()
-        return await pending(worker, app, cursor)
+        return await pending(worker, app, cursor, **kwargs)
 
     monkeypatch.setattr(scheduler, "process_pending", blocked_batch)
     async with run_scheduler(scheduler, chancy, worker_no_start):
@@ -514,12 +514,18 @@ async def test_scheduler_recovers_failed_transactions(
         chancy, Workflow("reconnect").add("step", sync_success)
     )
     original = getattr(scheduler, operation)
+    observations = AsyncMock()
+    monkeypatch.setattr(worker_no_start, "increment_counter", observations)
     failed = asyncio.Event()
 
-    async def fail_once(worker, app, cursor):
-        result = await original(worker, app, cursor)
+    async def fail_once(worker, app, cursor, **kwargs):
+        result = await original(worker, app, cursor, **kwargs)
         if not failed.is_set():
             failed.set()
+            assert not any(
+                call.args[0] == "workflow:reconnect:started"
+                for call in observations.await_args_list
+            )
             raise error_type("transient failure after processing")
         return result
 
@@ -531,6 +537,19 @@ async def test_scheduler_recovers_failed_transactions(
             )
         await asyncio.wait_for(failed.wait(), timeout=5)
         await wait_for_states(chancy, [workflow_id], Workflow.State.RUNNING)
+        async with asyncio.timeout(5):
+            while not any(
+                call.args[0] == "workflow:reconnect:started"
+                for call in observations.await_args_list
+            ):
+                await asyncio.sleep(0.01)
+        assert (
+            sum(
+                call.args[0] == "workflow:reconnect:started"
+                for call in observations.await_args_list
+            )
+            == 1
+        )
 
     async with chancy.pool.connection() as conn, conn.cursor() as cursor:
         await cursor.execute(

@@ -4,6 +4,19 @@ Changelog
 0.26.0
 ------
 
+🚨 This release requires that you run migrations, as it adds new columns for
+atomic job claims, improves metric collection by significantly reducing WAL
+writes, and much more. This release will *erase* existing stored metrics, as the
+format has changed significantly. Stop your workers and use `chancy.migrate()`
+or use the CLI:
+
+```bash
+chancy --app <your app> misc migrate
+```
+
+🚨 `QueuedJob.id` is now a `uuid.UUID` rather than a string. Update code that
+compares job IDs with strings or requires string values.
+
 ✨ Improvements
 
 - Reworked the dashboard, much more informative for operational insights,
@@ -21,28 +34,25 @@ Changelog
 - HTTP API now includes an unauthenticated endpoint for health checks, meant
   for docker/containers (#54).
 - Added dozens of new metrics, including metrics on workflows.
+- Added selectable metric time ranges, consistent dashboard summaries, and
+  clearer units and sample times. Charts now show gaps for missing observations.
+  Metrics API responses now include the requested range and a `series` mapping.
 - The API and dashboard can now be mounted in existing Starlette or FastAPI
   applications. Asset URLs, navigation, API requests, and WebSockets follow
   the mount automatically, including nested mounts and ASGI proxy prefixes
   (@jklaise, #64, #76). Saved authentication tokens are now scoped to each API
   URL; existing dashboard sessions will need to sign in again.
-- Workflow performance has been significantly improved and can now handle
-  many, individual workflows with thousands of jobs without issue.
+- Improved scheduling performance for large workflows, busy workers, and
+  installations retaining extensive workflow history. Apply workflow migrations
+  before restarting workers; the migration temporarily blocks workflow writes.
 - Can now be used as a django-tasks backend, albeit with less functionality
   than using Chancy directly.
 - Executors now declare their capabilities with `Executor.supports` and
   `Executor.get_capabilities()`, such as time out and memory limit support.
 - Plugins can add database work to job-update transactions through
   `on_jobs_updated_in_transaction`. Existing per-job hooks still run after commit.
-- Workflow scheduling now coalesces creation and completion notifications
-  into bounded batches, keeping database work out of the notification listener.
-  Recovery polling continues on its own deadline under sustained event traffic.
-  A new partial index keeps polling efficient when terminal workflows are
-  retained; apply the workflow plugin migration before starting updated workers.
-  Building the index blocks writes to the workflows table until the migration
-  commits, without changing existing workflow data.
-- Threaded and sub-interpreter executors now support co-operative timeouts
-  by periodically calling `QueuedJob.checkpoint()`.
+- Threaded and sub-interpreter executors now support cooperative timeouts.
+  Jobs must periodically call `QueuedJob.checkpoint()` to observe the timeout.
 - `Executor.get_function_and_kwargs()` is now a classmethod used by every
   built-in executor, so subclasses can override it to inject their own keyword
   arguments into jobs (@PaulM5406, #46).
@@ -51,11 +61,23 @@ Changelog
   defined behaviour around daylight saving time transitions that follows
   Vixie and Debian cron. UTC remains the default. This adds a cron migration,
   so run migrations after upgrading (@luca-montaigut).
+- Added `Worker.flush()` to save pending job updates without stopping the worker.
+- Workers now recover from transient database failures with configurable
+  retry backoff.
+- Added dashboard and API pagination for job and workflow histories.
+- Bulk job actions now report per-job outcomes, refresh results after
+  mutations, and keep unresolved jobs selected.
+- Improved dialog keyboard navigation, focus handling, responsive layouts,
+  form accessibility, and warnings for unsaved queue edits.
 
 🐛 Fixes
 
+- Fixed inaccurate metric averages, stale table-size readings, and incorrect
+  workflow durations. Metric retention now follows elapsed time.
+- Metrics now preserve history when worker IDs are reused and save recent
+  observations during graceful shutdown.
 - Fixed a race where an abandoned execution could overwrite a recovered
-  job's result. Stop old workers, run migrations, then start updated workers.
+  job's result.
 - Bound cron searches across rejected DST occurrences so schedules with no
   usable next run cannot keep searching indefinitely.
 - Empty workflow submissions are now rejected. Existing active empty workflows
@@ -63,9 +85,6 @@ Changelog
 - Respect CLI flags for API plugin configuration by @alfawal (#68).
 - Fixed an issue that allowed the reprioritize plugin to update the same job
   multiple times in different batches of the same run.
-- Job timeouts on the threaded and sub-interpreter executors are now
-  co-operative - non-cooperative timeouts are not reliable in CPython's model (
-  how do we cleanup a job that's holding a cross-thread lock?)
 - `wait_for_jobs()` could wait forever if a job was purged and no timeout was
   provided.
 - Fixed a very rare split-brain issue where a worker becoming the leader could
@@ -77,16 +96,28 @@ Changelog
 - The pruner could delete jobs that were waiting to be retried, since only
   pending and running jobs were excluded. It now only prunes succeeded and
   failed jobs.
-- The workflow plugin only processed 100 workflows per poll, regardless of
-  `max_workflows_per_run`, and could pick the same workflows every time.
-  Polls now honor the batch limit and advance through bounded sweeps using
-  ID-range queries, so new arrivals cannot indefinitely delay revisiting
-  older workflows and each batch avoids sorting all active workflows.
-- Terminal workflow step updates now notify the leader once per workflow in
-  each job-update batch, so steps completed on other workers can advance
-  without waiting for a poll. Notifications commit with the job updates.
+- Workflow polling now honors `max_workflows_per_run` instead of stopping at
+  100 workflows, and revisits older workflows even under sustained activity.
+- Workflows now advance promptly when steps finish on other workers, without
+  waiting for the next poll.
 - The workflow scheduler now retries transient database failures using the
   worker's backoff settings and resumes recovery polling after reconnection.
+- Fixed worker shutdown hangs during database failures and improved saving
+  pending job updates before shutdown.
+- Fixed job pagination returning duplicate results or skipping jobs.
+- Workflow progress now includes steps waiting on dependencies, preventing
+  workflows from appearing complete prematurely.
+- Queues created through the API or dashboard now match all workers by
+  default. Explicitly empty tags still leave a queue unassigned.
+- Fixed cancellation races that could overwrite cancelled results, miss
+  overlapping executions, or interrupt another job.
+- Fixed conflicts between Chancy installations sharing a database with
+  different table prefixes.
+- Fixed cross-origin dashboard connections and compatibility with current
+  Starlette releases.
+- Fixed `declare()` and `sync_declare()` returning queue states as strings
+  instead of `Queue.State` values.
+- Fixed JSON serialization of sets and frozensets.
 
 0.25.1
 ------

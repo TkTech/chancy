@@ -745,3 +745,46 @@ async def test_workflow_progress_counts_unsubmitted_steps(
         await chancy.purge_jobs([refs[0]])
         expected[f"{states[0]}_steps"] -= 1
         assert await counts() == expected
+
+
+@pytest.mark.asyncio
+async def test_metrics_range_contract(api, chancy, worker_no_start):
+    metrics = chancy.plugins["chancy.metrics"]
+    await metrics.increment_counter("custom", 2)
+    await metrics.record_histogram_value("queue:test:time", 1.5, unit="seconds")
+    await metrics.flush(chancy)
+    app = api.build_starlette_app(worker_no_start, chancy)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        login = await client.post(
+            "/api/v1/login", json={"username": "admin", "password": "password"}
+        )
+        client.headers["Authorization"] = f"Bearer {login.json()['token']}"
+        overview = await client.get("/api/v1/metrics")
+        assert overview.json()["categories"]["custom"] == [""]
+        response = await client.get(
+            "/api/v1/metrics/queue:test",
+            params={"resolution": "5min", "range": 86400},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert datetime.datetime.fromisoformat(
+            payload["end"]
+        ) - datetime.datetime.fromisoformat(
+            payload["start"]
+        ) == datetime.timedelta(days=1)
+        metric = payload["series"]["queue:test:time"]
+        assert metric["summary"]["avg"] == 1.5
+        assert metric["unit"] == "seconds"
+        assert metric["aggregation"] == "summary"
+        assert metric["data"][0]["sampled_at"] == metric["sampled_at"]
+        for params in (
+            {"range": "bad"},
+            {"resolution": "bad"},
+            {"limit": 0},
+            {"start": "2026-10-08T12:00:00"},
+        ):
+            assert (
+                await client.get("/api/v1/metrics/custom", params=params)
+            ).status_code == 422

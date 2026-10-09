@@ -258,6 +258,11 @@ class Worker:
                     f"dependencies: {plugin.get_dependencies()}"
                 )
 
+            await plugin.on_worker_started(worker=self)
+
+        for plugin in self.chancy.plugins.values():
+            if plugin.get_scope() != PluginScope.WORKER:
+                continue
             self.manager.add(
                 plugin.__class__.__name__,
                 plugin.run(self, self.chancy),
@@ -1036,6 +1041,9 @@ class Worker:
             self._drain_result = await self._drain(timeout)
 
         await self.flush()
+        for plugin in self.chancy.plugins.values():
+            if plugin.get_scope() == PluginScope.WORKER:
+                await plugin.on_worker_stopped(worker=self)
         await self.hub.emit(
             "worker.stopped"
             if self._drain_result
@@ -1125,52 +1133,62 @@ class Worker:
         """
         return self._executors
 
-    async def increment_counter(self, metric_key: str, value: float):
+    async def increment_counter(
+        self, metric_key: str, value: float, *, unit: str = "count"
+    ):
         """
         Increment a counter metric by the specified value.
 
         This method emits a metrics.counter event that metrics plugins can
         subscribe to. If no metrics plugin is active, the event is simply
-        ignored with no overhead.
+        ignored.
 
         :param metric_key: The hierarchical key for the metric (e.g.,
             "workflow:created", "queue:default:throughput")
+        :param unit: Unit shared by all observations of this metric key.
         :param value: The value to increment the counter by
         """
         await self.hub.emit(
-            "metrics.counter", {"key": metric_key, "value": value}
+            "metrics.counter", {"key": metric_key, "value": value, "unit": unit}
         )
 
-    async def record_gauge(self, metric_key: str, value: float):
+    async def record_gauge(
+        self, metric_key: str, value: float, *, unit: str = "number"
+    ):
         """
         Record a gauge metric value.
 
         This method emits a metrics.gauge event that metrics plugins can
         subscribe to. If no metrics plugin is active, the event is simply
-        ignored with no overhead.
+        ignored.
 
         :param metric_key: The hierarchical key for the metric (e.g.,
             "workflow:active_count", "queue:default:size")
+        :param unit: Unit shared by all observations of this metric key.
         :param value: The current gauge value
         """
         await self.hub.emit(
-            "metrics.gauge", {"key": metric_key, "value": value}
+            "metrics.gauge", {"key": metric_key, "value": value, "unit": unit}
         )
 
-    async def record_histogram_value(self, metric_key: str, value: float):
+    async def record_histogram_value(
+        self, metric_key: str, value: float, *, unit: str = "number"
+    ):
         """
         Record a value for a histogram metric.
 
         This method emits a metrics.histogram event that metrics plugins can
         subscribe to. If no metrics plugin is active, the event is simply
-        ignored with no overhead.
+        ignored.
 
         :param metric_key: The hierarchical key for the metric (e.g.,
             "workflow:execution_time", "job:my_function:duration")
+        :param unit: Unit shared by all observations of this metric key.
         :param value: The value to record in the histogram
         """
         await self.hub.emit(
-            "metrics.histogram", {"key": metric_key, "value": value}
+            "metrics.histogram",
+            {"key": metric_key, "value": value, "unit": unit},
         )
 
     def __repr__(self):

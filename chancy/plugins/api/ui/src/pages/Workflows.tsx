@@ -80,7 +80,7 @@ export function Workflow() {
         </div>
         <div className="col-12 col-md-6 col-xl-3">
           <MetricHistogramCard
-            title="Avg Execution Time"
+            title="Avg workflow duration"
             metricKey={`workflow:${workflow.name}:execution_time`}
             url={url!}
             resolution={resolution}
