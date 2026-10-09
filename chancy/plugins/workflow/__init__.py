@@ -372,7 +372,7 @@ class WorkflowPlugin(Plugin):
             def __init__(self):
                 super().__init__("age")
 
-            def to_sql(self) -> sql.Composable:
+            def to_sql(self, context: dict | None = None) -> sql.Composable:
                 return sql.SQL("EXTRACT(EPOCH FROM (NOW() - created_at))")
 
     def __init__(
