@@ -14,6 +14,7 @@ from typing import Any
 
 import chancy.queue
 from chancy.job import Limit, QueuedJob, Reference
+from chancy.validation import load_kwargs
 
 if typing.TYPE_CHECKING:
     from chancy.worker import Worker
@@ -191,7 +192,7 @@ class Executor(abc.ABC):
         # user has specified that the job instance should be passed as a
         # keyword argument.
         sig = inspect.signature(func)
-        kwargs = dict(job.kwargs or {})
+        kwargs: dict[str, Any] = dict(job.kwargs or {})
         for param_name, param in sig.parameters.items():
             if param.kind != param.KEYWORD_ONLY:
                 continue
@@ -219,7 +220,10 @@ class Executor(abc.ABC):
     def prepare_job_for_execution(
         cls, job: QueuedJob
     ) -> tuple[QueuedJob, Callable, dict]:
-        """Validate and prepare a job according to executor capabilities."""
+        """
+        Validate and prepare a job according to executor capabilities, and
+        load its kwargs with the worker's validators.
+        """
         capabilities = cls.get_capabilities()
         time_limit = cls.get_limit(job, Limit.Type.TIME)
 
@@ -240,6 +244,16 @@ class Executor(abc.ABC):
             cooperative_time_limit = True
 
         func, kwargs = cls.get_function_and_kwargs(job)
+        # Loaded here rather than in get_function_and_kwargs, which subclasses
+        # override, so the function never receives unvalidated kwargs. Values
+        # the executor injects aren't stored JSON, so they aren't loaded.
+        stored = job.kwargs or {}
+        kwargs |= load_kwargs(
+            job._validators,
+            job.func,
+            func,
+            {name: value for name, value in kwargs.items() if name in stored},
+        )
         has_job_context = any(value is job for value in kwargs.values())
         function_capability = (
             cls.Capability.ASYNC_JOBS

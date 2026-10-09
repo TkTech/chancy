@@ -15,8 +15,8 @@ Postgres.
 ## Key Features
 
 - **Robust Jobs** - support for priorities, retries, timeouts, scheduling,
-  global rate limits, memory limits, global uniqueness, error
-  capture, cancellation, and more
+  global rate limits, memory limits, global uniqueness, argument
+  validation with any library, error capture, cancellation, and more
 - **Minimal dependencies** - Core functionality requires only psycopg3 - which
   can be installed side-by-side with psycopg2.
 - **Minimal infrastructure** - No need to run a separate service like
