@@ -10,7 +10,6 @@ from chancy.job import ConcurrencyRule
 @job()
 def simple_job():
     """A simple job for testing"""
-    pass
 
 
 @job()
@@ -23,17 +22,16 @@ async def _count_running_jobs_for_key(
     chancy: Chancy, concurrency_key: str
 ) -> int:
     """Count running jobs for a specific concurrency key."""
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                f"""
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            f"""
                 SELECT COUNT(*) FROM {chancy.prefix}jobs
                 WHERE concurrency_key = %s AND state = 'running'
                 """,
-                (concurrency_key,),
-            )
-            result = await cursor.fetchone()
-            return result[0] if result else 0
+            (concurrency_key,),
+        )
+        result = await cursor.fetchone()
+        return result[0] if result else 0
 
 
 async def _sample_running_counts(
@@ -185,19 +183,21 @@ class TestConcurrencyIntegration:
         await chancy.push(job_with_concurrency)
 
         # Check that concurrency config was stored
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    f"SELECT * FROM {chancy.prefix}concurrency_configs WHERE concurrency_key = %s",
-                    ("test_concurrency.slow_job:user_123",),
-                )
-                result = await cursor.fetchone()
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor() as cursor,
+        ):
+            await cursor.execute(
+                f"SELECT * FROM {chancy.prefix}concurrency_configs WHERE concurrency_key = %s",
+                ("test_concurrency.slow_job:user_123",),
+            )
+            result = await cursor.fetchone()
 
-                assert result is not None
-                assert (
-                    result[0] == "test_concurrency.slow_job:user_123"
-                )  # concurrency_key (prefixed)
-                assert result[1] == 3  # concurrency_max
+            assert result is not None
+            assert (
+                result[0] == "test_concurrency.slow_job:user_123"
+            )  # concurrency_key (prefixed)
+            assert result[1] == 3  # concurrency_max
 
     async def test_basic_concurrency_limiting(
         self, chancy: Chancy, worker: Worker

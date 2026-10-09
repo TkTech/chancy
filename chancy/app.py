@@ -1553,7 +1553,7 @@ class Chancy:
     def _push_concurrency_config_sql(self):
         return sql.SQL(
             """
-            INSERT INTO {concurrency_configs} 
+            INSERT INTO {concurrency_configs}
                 (concurrency_key, concurrency_max, updated_at)
             VALUES (%s, %s, NOW())
             ON CONFLICT (concurrency_key) DO UPDATE SET

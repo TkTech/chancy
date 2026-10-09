@@ -155,6 +155,7 @@ class JobRules:
         def __init__(self):
             super().__init__("attempts")
 
+
 class ConcurrencyRules:
     """
     A collection of rules that can be used to filter the concurrency_rules table.

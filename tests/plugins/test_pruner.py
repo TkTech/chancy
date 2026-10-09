@@ -24,28 +24,29 @@ async def _add_old_concurrency_rule(
     chancy: Chancy, key: str, max_concurrency: int
 ):
     """Helper to add an old concurrency rule directly to the database."""
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                f"""
-                INSERT INTO {chancy.prefix}concurrency_configs 
-                (concurrency_key, concurrency_max, created_at, updated_at)
-                VALUES (%s, %s, NOW() - INTERVAL '8 days', NOW() - INTERVAL '8 days')
-                """,
-                (key, max_concurrency),
-            )
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor() as cursor,
+    ):
+        await cursor.execute(
+            f"""
+            INSERT INTO {chancy.prefix}concurrency_configs 
+            (concurrency_key, concurrency_max, created_at, updated_at)
+            VALUES (%s, %s, NOW() - INTERVAL '8 days', NOW() - INTERVAL '8 days')
+            """,
+            (key, max_concurrency),
+        )
         await conn.commit()
 
 
 async def _count_concurrency_rules(chancy: Chancy) -> int:
     """Helper to count concurrency rules in the database."""
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                f"SELECT COUNT(*) FROM {chancy.prefix}concurrency_configs"
-            )
-            result = await cursor.fetchone()
-            return result[0] if result else 0
+    async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+        await cursor.execute(
+            f"SELECT COUNT(*) FROM {chancy.prefix}concurrency_configs"
+        )
+        result = await cursor.fetchone()
+        return result[0] if result else 0
 
 
 @pytest.mark.parametrize(
@@ -181,9 +182,11 @@ async def test_concurrency_rule_pruning_by_age(chancy: Chancy, worker: Worker):
     assert initial_count == 1, "Concurrency rule should exist before pruning"
 
     # Run concurrency rule pruning
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            rows_removed = await p.prune_concurrency_rules(chancy, cursor)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        rows_removed = await p.prune_concurrency_rules(chancy, cursor)
 
     # Verify concurrency rule was pruned
     assert rows_removed == 1, "Should have removed 1 concurrency rule"
@@ -230,9 +233,11 @@ async def test_concurrency_rule_pruning_orphaned(
     assert initial_count == 2, "Should have 2 concurrency rules before pruning"
 
     # Run concurrency rule pruning
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            rows_removed = await p.prune_concurrency_rules(chancy, cursor)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        rows_removed = await p.prune_concurrency_rules(chancy, cursor)
 
     # Verify only orphaned concurrency rule was pruned
     assert rows_removed == 1, "Should have removed 1 orphaned concurrency rule"
@@ -272,16 +277,18 @@ async def test_concurrency_rule_pruning_combined_rules(
     await _add_old_concurrency_rule(chancy, "test.old_job:user_111", 1)
 
     # Add an orphaned config (recent but no jobs)
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute(
-                f"""
-                INSERT INTO {chancy.prefix}concurrency_configs 
-                (concurrency_key, concurrency_max, created_at, updated_at)
-                VALUES (%s, %s, NOW(), NOW())
-                """,
-                ("test.orphaned_recent:user_222", 2),
-            )
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor() as cursor,
+    ):
+        await cursor.execute(
+            f"""
+            INSERT INTO {chancy.prefix}concurrency_configs 
+            (concurrency_key, concurrency_max, created_at, updated_at)
+            VALUES (%s, %s, NOW(), NOW())
+            """,
+            ("test.orphaned_recent:user_222", 2),
+        )
         await conn.commit()
 
     # Add a fresh concurrency rule with corresponding job
@@ -297,9 +304,11 @@ async def test_concurrency_rule_pruning_combined_rules(
     assert initial_count == 3, "Should have 3 concurrency rules before pruning"
 
     # Run concurrency rule pruning
-    async with chancy.pool.connection() as conn:
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            rows_removed = await p.prune_concurrency_rules(chancy, cursor)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        rows_removed = await p.prune_concurrency_rules(chancy, cursor)
 
     # Verify old and orphaned concurrency rules were pruned, but fresh one with job remains
     assert rows_removed == 2, (

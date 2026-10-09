@@ -384,6 +384,7 @@ class QueuedJob(BaseJob):
             self,
             _time_limit_deadline=time.monotonic() + seconds,
         )
+
     #: The computed concurrency key for this specific job instance. This is
     #: derived from the job's concurrency_rule specification and job arguments.
     #: It is computed on job push.
