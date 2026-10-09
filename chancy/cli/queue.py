@@ -3,7 +3,7 @@ import json
 import click
 from click import Context
 
-from chancy import Chancy, Job, Queue
+from chancy import Chancy, Queue, SerializedJob
 from chancy.cli import run_async_command
 
 
@@ -63,7 +63,8 @@ async def push(
     Note that this method of pushing a job ignores any defaults that might be
     defined on the job using the @job() decorator, such as the queue name.
     While this can be an inconvenience, it allows pushing jobs without having
-    to import any project-specific code.
+    to import any project-specific code. The kwargs are pushed as given, in
+    their JSON form, and validated when the job runs.
     """
     chancy: Chancy = ctx.obj["app"]
 
@@ -75,7 +76,7 @@ async def push(
 
     async with chancy:
         await chancy.push(
-            Job(
+            SerializedJob(
                 func=job,
                 queue=queue,
                 priority=priority,

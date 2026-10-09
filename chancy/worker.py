@@ -749,7 +749,11 @@ class Worker:
                                     f" ({job.func!r}) for"
                                     f" queue {job.queue!r}"
                                 )
-                                await executor.push(job)
+                                await executor.push(
+                                    job._with_validators(
+                                        tuple(self.chancy.validators)
+                                    )
+                                )
                                 pending.popleft()
                             retry.reset()
                         except retry.errors as exc:

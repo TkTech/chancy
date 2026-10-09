@@ -127,6 +127,13 @@ class PendingJobs(Plugin):
   from the expired attempt are logged without making a successful retry fail.
 - Plugins can raise `chancy.retry.RetryTransaction` to retry a `ctx.database(...)`
   callback in a fresh transaction without giving up leadership.
+- Job kwargs can be validated against the annotations of the job function's
+  parameters, when the job is pushed and when it runs, with validators given
+  to Chancy's new `validators` argument that connect any validation library.
+  See "Validating Arguments" in the jobs how-to.
+- `Cron.get_schedules()` and the jobs read back from triggers and workflows
+  are now `SerializedJob` instances, so they no longer compare equal to a
+  `Job` built with the same values.
 
 🐛 Fixes
 
