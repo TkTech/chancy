@@ -192,13 +192,10 @@ For example, with pydantic:
 .. code-block:: python
 
    import sys
-   from typing import TYPE_CHECKING, Any
+   from typing import Any
 
    from chancy import Chancy, Job
    from chancy.validation import JSON, Validator
-
-   if TYPE_CHECKING:
-       from pydantic import BaseModel
 
    class PydanticValidator(Validator):
        def supports(self, annotation: object) -> bool:
@@ -218,6 +215,9 @@ For example, with pydantic:
                    f"expected {annotation.__name__}, got {type(value).__name__}"
                )
            return value.model_dump(mode="json")
+
+   # In the module that defines the job.
+   from pydantic import BaseModel
 
    class SendEmail(BaseModel):
        to: str
