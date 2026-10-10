@@ -1,13 +1,20 @@
-import pytest
+import asyncio
+import json
+from datetime import UTC
+from zoneinfo import ZoneInfo
 
-from chancy import job, Queue
+import pytest
+from psycopg import sql
+
+from chancy import Queue, job
 from chancy.plugins.cron import Cron
+
+PARIS = ZoneInfo("Europe/Paris")
 
 
 @job()
 def test_job():
     """Simple job function for testing"""
-    pass
 
 
 @pytest.mark.parametrize(
@@ -165,3 +172,220 @@ async def test_get_schedules_filtered(chancy, worker):
     assert "test_job_1" in filtered_schedules
     assert "test_job_3" in filtered_schedules
     assert "test_job_2" not in filtered_schedules
+
+
+@pytest.mark.parametrize(
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_schedule_with_timezone(chancy, worker):
+    """Test that a schedule's timezone is stored and used for next_run"""
+    await chancy.declare(Queue("default"))
+
+    j = test_job.job.with_unique_key("test_job_paris")
+    await Cron.schedule(chancy, "0 9 * * *", j, timezone=PARIS)
+
+    schedule = (await Cron.get_schedules(chancy))["test_job_paris"]
+    assert schedule["timezone"] == "Europe/Paris"
+
+    next_run = schedule["next_run"].astimezone(PARIS)
+    assert (next_run.hour, next_run.minute) == (9, 0)
+
+
+@pytest.mark.parametrize(
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_schedule_without_timezone_is_utc(chancy, worker):
+    """Test that a schedule without a timezone is evaluated in UTC"""
+    await chancy.declare(Queue("default"))
+
+    j = test_job.job.with_unique_key("test_job_utc")
+    await Cron.schedule(chancy, "0 9 * * *", j)
+
+    schedule = (await Cron.get_schedules(chancy))["test_job_utc"]
+    assert schedule["timezone"] == "Etc/UTC"
+
+    next_run = schedule["next_run"].astimezone(UTC)
+    assert (next_run.hour, next_run.minute) == (9, 0)
+
+
+@pytest.mark.parametrize(
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_update_existing_job_timezone(chancy, worker):
+    """Test that rescheduling a job updates its timezone"""
+    await chancy.declare(Queue("default"))
+
+    j = test_job.job.with_unique_key("test_job_cron")
+    await Cron.schedule(chancy, "0 9 * * *", j, timezone=PARIS)
+    await Cron.schedule(chancy, "0 9 * * *", j)
+
+    schedule = (await Cron.get_schedules(chancy))["test_job_cron"]
+    assert schedule["timezone"] == "Etc/UTC"
+
+
+@pytest.mark.parametrize(
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_existing_schedules_default_to_utc(chancy):
+    """Test that schedules created before the timezone column become UTC"""
+    plugin = chancy.plugins[Cron.get_identifier()]
+    await plugin.migrate(chancy, to_version=2)
+
+    async with chancy.pool.connection() as conn:
+        await conn.execute(
+            sql.SQL(
+                """
+                INSERT INTO {table} (unique_key, job, cron, next_run)
+                VALUES ('legacy', %s, '0 9 * * *', NOW())
+                """
+            ).format(table=sql.Identifier(f"{chancy.prefix}cron")),
+            [json.dumps(test_job.job.with_unique_key("legacy").pack())],
+        )
+
+    await plugin.migrate(chancy)
+
+    schedule = (await Cron.get_schedules(chancy))["legacy"]
+    assert schedule["timezone"] == "Etc/UTC"
+
+
+@pytest.mark.parametrize(
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_schedules_with_different_timezones_run(chancy, worker):
+    """
+    Test that the polling loop runs due schedules in different timezones and
+    reschedules each one at 09:00 in its own timezone.
+    """
+    await chancy.declare(Queue("default"))
+
+    zones = {
+        "job_utc": ZoneInfo("Etc/UTC"),
+        "job_paris": PARIS,
+        "job_tokyo": ZoneInfo("Asia/Tokyo"),
+    }
+    for key, tz in zones.items():
+        j = test_job.job.with_unique_key(key)
+        await Cron.schedule(chancy, "0 9 * * *", j, timezone=tz)
+
+    table = sql.Identifier(f"{chancy.prefix}cron")
+    async with chancy.pool.connection() as conn:
+        # Make every schedule due now.
+        await conn.execute(
+            sql.SQL(
+                "UPDATE {table} SET next_run = NOW() - INTERVAL '1 minute'"
+            ).format(table=table)
+        )
+
+    for _ in range(20):
+        schedules = await Cron.get_schedules(chancy)
+        if all(schedules[key]["last_run"] for key in zones):
+            break
+        await asyncio.sleep(0.5)
+    else:
+        pytest.fail("The cron plugin did not run every due schedule.")
+
+    async with chancy.pool.connection() as conn:
+        cursor = await conn.execute(
+            sql.SQL("SELECT unique_key FROM {jobs}").format(
+                jobs=sql.Identifier(f"{chancy.prefix}jobs")
+            )
+        )
+        pushed = {row[0] for row in await cursor.fetchall()}
+    assert pushed >= zones.keys()
+
+    for key, tz in zones.items():
+        schedule = schedules[key]
+        assert schedule["timezone"] == tz.key
+        next_run = schedule["next_run"].astimezone(tz)
+        assert (next_run.hour, next_run.minute) == (9, 0)
+        assert schedule["next_run"] > schedule["last_run"]
+
+    # 09:00 in each zone is a different instant.
+    assert len({schedules[key]["next_run"] for key in zones}) == 3
+
+
+@pytest.mark.parametrize(
+    "chancy",
+    [{"plugins": [Cron(poll_interval=1)], "no_default_plugins": True}],
+    indirect=True,
+)
+@pytest.mark.asyncio
+async def test_invalid_schedules_are_skipped(chancy, worker):
+    """
+    Test that a due schedule with an invalid timezone or expression is
+    skipped, without blocking other due schedules or stopping the plugin.
+    """
+    await chancy.declare(Queue("default"))
+
+    for key in ("good", "bad_timezone", "bad_cron", "no_occurrence"):
+        j = test_job.job.with_unique_key(key)
+        await Cron.schedule(chancy, "0 9 * * *", j)
+
+    table = sql.Identifier(f"{chancy.prefix}cron")
+    async with chancy.pool.connection() as conn:
+        await conn.execute(
+            sql.SQL(
+                "UPDATE {table} SET timezone = 'Europe/Nowhere'"
+                " WHERE unique_key = 'bad_timezone'"
+            ).format(table=table)
+        )
+        await conn.execute(
+            sql.SQL(
+                "UPDATE {table} SET cron = 'not a cron'"
+                " WHERE unique_key = 'bad_cron'"
+            ).format(table=table)
+        )
+        await conn.execute(
+            sql.SQL(
+                "UPDATE {table} SET cron = '*/15 2 * 3 L0',"
+                " timezone = 'Europe/Paris' WHERE unique_key = 'no_occurrence'"
+            ).format(table=table)
+        )
+
+    # Run every schedule twice. The valid one running again proves the plugin
+    # survived the invalid ones.
+    last_run = None
+    for _ in range(2):
+        async with chancy.pool.connection() as conn:
+            await conn.execute(
+                sql.SQL(
+                    "UPDATE {table} SET next_run = NOW() - INTERVAL '1 minute'"
+                ).format(table=table)
+            )
+
+        for _ in range(20):
+            schedules = await Cron.get_schedules(chancy)
+            if schedules["good"]["last_run"] not in (None, last_run):
+                break
+            await asyncio.sleep(0.5)
+        else:
+            pytest.fail("The cron plugin did not run the valid schedule.")
+        last_run = schedules["good"]["last_run"]
+
+    assert schedules["bad_timezone"]["last_run"] is None
+    assert schedules["bad_cron"]["last_run"] is None
+    assert schedules["no_occurrence"]["last_run"] is None
+
+    async with chancy.pool.connection() as conn:
+        cursor = await conn.execute(
+            sql.SQL("SELECT unique_key FROM {jobs}").format(
+                jobs=sql.Identifier(f"{chancy.prefix}jobs")
+            )
+        )
+        pushed = {row[0] for row in await cursor.fetchall()}
+    assert pushed == {"good"}

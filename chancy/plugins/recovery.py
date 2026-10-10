@@ -2,9 +2,9 @@ from psycopg import AsyncCursor, sql
 from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
-from chancy.worker import Worker
-from chancy.utils import timed_block
 from chancy.plugin import Plugin
+from chancy.utils import timed_block
+from chancy.worker import Worker
 
 
 class Recovery(Plugin):
@@ -32,6 +32,11 @@ class Recovery(Plugin):
     This will transition any matching jobs back to the "pending" state, and
     increment the `max_attempts` counter by 1 to allow it to be retried.
 
+    Recovery invalidates the old execution's claim and requests best-effort
+    cancellation of that execution. It does not wait for acknowledgement:
+    the old worker may be unreachable, and cancellation may be unsupported.
+    Late updates from the old claim are discarded even if it keeps running.
+
     :param poll_interval: The number of seconds between recovery poll intervals.
     """
 
@@ -50,25 +55,25 @@ class Recovery(Plugin):
     async def run(self, worker: Worker, chancy: Chancy):
         while await self.sleep(self.poll_interval):
             await self.wait_for_leader(worker)
-            async with chancy.pool.connection() as conn:
-                async with conn.cursor(row_factory=dict_row) as cursor:
-                    with timed_block() as chancy_time:
-                        rows_recovered = await self.recover(
-                            worker, chancy, cursor
-                        )
-                        chancy.log.info(
-                            f"Recovery recovered {rows_recovered} row(s) from"
-                            f" the database. Took {chancy_time.elapsed:.2f}"
-                            f" seconds."
-                        )
-                        await chancy.notify(
-                            cursor,
-                            "recovery.recovered",
-                            {
-                                "elapsed": chancy_time.elapsed,
-                                "rows_recovered": rows_recovered,
-                            },
-                        )
+            async with (
+                chancy.pool.connection() as conn,
+                conn.cursor(row_factory=dict_row) as cursor,
+            ):
+                with timed_block() as chancy_time:
+                    rows_recovered = await self.recover(worker, chancy, cursor)
+                    chancy.log.info(
+                        f"Recovery recovered {rows_recovered} row(s) from"
+                        f" the database. Took {chancy_time.elapsed:.2f}"
+                        f" seconds."
+                    )
+                    await chancy.notify(
+                        cursor,
+                        "recovery.recovered",
+                        {
+                            "elapsed": chancy_time.elapsed,
+                            "rows_recovered": rows_recovered,
+                        },
+                    )
 
     @classmethod
     async def recover(
@@ -85,25 +90,29 @@ class Recovery(Plugin):
         """
         query = sql.SQL(
             """
-            UPDATE
-                {jobs} cj
+            WITH abandoned AS (
+                SELECT cj.id, cj.claim_id
+                FROM {jobs} cj
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {workers} cw
+                    WHERE cw.worker_id = cj.taken_by
+                      AND cw.last_seen >= NOW() - INTERVAL '{interval} SECOND'
+                )
+                AND cj.state = 'running'
+                FOR UPDATE OF cj SKIP LOCKED
+            )
+            UPDATE {jobs} cj
             SET
                 state = 'pending',
                 taken_by = NULL,
+                claim_id = NULL,
                 started_at = NULL,
                 max_attempts = max_attempts + 1
-            WHERE
-               NOT EXISTS (
-                    SELECT 1
-                    FROM {workers} cw
-                    WHERE (
-                        cw.worker_id = cj.taken_by
-                        AND
-                        cw.last_seen >= NOW() - INTERVAL '{interval} SECOND'
-                    )
-              )
-              AND state = 'running';
-        """
+            FROM abandoned
+            WHERE cj.id = abandoned.id
+            RETURNING cj.id, abandoned.claim_id;
+            """
         ).format(
             jobs=sql.Identifier(f"{chancy.prefix}jobs"),
             workers=sql.Identifier(f"{chancy.prefix}workers"),
@@ -111,4 +120,16 @@ class Recovery(Plugin):
         )
 
         await cursor.execute(query)
-        return cursor.rowcount
+        recovered = await cursor.fetchall()
+        await chancy.notify_many(
+            cursor,
+            (
+                (
+                    "job.recovered",
+                    {"j": str(row["id"]), "c": str(row["claim_id"])},
+                )
+                for row in recovered
+                if row["claim_id"] is not None
+            ),
+        )
+        return len(recovered)

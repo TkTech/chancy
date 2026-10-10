@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.25.1"
+version = "0.26.0"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -8,7 +8,9 @@ authors = [
     { name = "Tyler Kennedy", email = "tk@tkte.ch" }
 ]
 dependencies = [
-    "psycopg[pool]>=3.2.1",
+    "psycopg[pool]>=3.2.1; python_version != '3.11'",
+    # See psycopg issue 1413 and CPython issue 86296
+    "psycopg[pool]>=3.3.6; python_version == '3.11'",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -27,7 +29,7 @@ Repository = "https://github.com/tktech/chancy"
 Documentation = "https://tkte.ch/chancy/"
 
 [project.optional-dependencies]
-cron = ["croniter"]
+cron = ["croniter>=6.2.0", "tzdata"]
 web = [
     "starlette",
     "uvicorn[standard]",
@@ -45,6 +47,7 @@ django = [
 
 [dependency-groups]
 dev = [
+    "httpx>=0.27.0",
     "pytest-asyncio>=0.24.0",
     "pytest>=8.2.0",
     "sphinx>=7.3.7",
@@ -56,7 +59,9 @@ dev = [
     "pytest-benchmark>=5.1.0",
     "pytest-django>=4.8.0",
     "pre-commit>=4.3.0",
-    "ruff>=0.14.2",
+    "ruff==0.16.2",
+    "pytest-xdist>=3.8.0",
+    "sphinx-copybutton>=0.5.2",
 ]
 
 [project.scripts]
@@ -68,6 +73,10 @@ artifacts = [
 ]
 
 [tool.hatch.build.targets.sdist]
+only-include = [
+    "chancy",
+    "CHANGELOG.md",
+]
 artifacts = [
     "chancy/plugins/api/dist/**"
 ]

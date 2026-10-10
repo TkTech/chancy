@@ -2,9 +2,7 @@ import asyncio
 import functools
 import multiprocessing
 import os
-import warnings
 from multiprocessing.context import BaseContext
-
 
 try:
     import resource
@@ -12,13 +10,15 @@ except ImportError:
     # Windows doesn't have the `resource` module
     resource = None
 import signal
-from asyncio import Future, CancelledError
-from concurrent.futures import ProcessPoolExecutor
-from typing import Callable, Any
+from asyncio import CancelledError
+from collections.abc import Callable
+from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
+from typing import Any
+from uuid import UUID
 
-from chancy import Reference
-from chancy.executors.base import ConcurrentExecutor
-from chancy.job import QueuedJob, Limit
+from chancy.executors.base import ConcurrentExecutor, Executor
+from chancy.job import Limit, QueuedJob
 
 
 class ProcessExecutor(ConcurrentExecutor):
@@ -56,6 +56,23 @@ class ProcessExecutor(ConcurrentExecutor):
                        safest option on all platforms.
     """
 
+    capabilities = (
+        Executor.Capability.SYNC_JOBS | Executor.Capability.ASYNC_JOBS
+    )
+    # Child-local state; cleared before returning control to the process pool.
+    _current_execution: tuple[UUID, Any] | None = None
+
+    @classmethod
+    def get_capabilities(cls) -> Executor.Capability:
+        capabilities = cls.capabilities
+        if hasattr(signal, "SIGUSR1"):
+            capabilities |= Executor.Capability.CANCELLATION
+        if hasattr(signal, "SIGALRM"):
+            capabilities |= Executor.Capability.AUTOMATIC_TIME_LIMITS
+        if resource is not None and hasattr(resource, "RLIMIT_AS"):
+            capabilities |= Executor.Capability.MEMORY_LIMITS
+        return capabilities
+
     def __init__(
         self,
         worker,
@@ -70,15 +87,23 @@ class ProcessExecutor(ConcurrentExecutor):
         # We're using `spawn` explicitly to get ahead of the curve, however
         # this is slower than `fork`.
         ctx = mp_context or multiprocessing.get_context("spawn")
+        self._mp_context = ctx
+        self._maximum_jobs_per_worker = maximum_jobs_per_worker
 
         self.manager = ctx.Manager()
         self.pids_for_job = self.manager.dict()
-        self.timeouts: dict[str, asyncio.Task] = {}
-        self.pool = ProcessPoolExecutor(
-            max_workers=queue.concurrency,
-            max_tasks_per_child=maximum_jobs_per_worker,
+        # Execution-specific cancellation requests. SIGUSR1 only wakes the
+        # child; this marker determines whether its current job is cancelled.
+        self.pending_cancellations = self.manager.dict()
+        self.timeouts: dict[UUID, asyncio.Task] = {}
+        self.pool = self._create_pool()
+
+    def _create_pool(self) -> ProcessPoolExecutor:
+        return ProcessPoolExecutor(
+            max_workers=self.queue.concurrency,
+            max_tasks_per_child=self._maximum_jobs_per_worker,
             initializer=self.on_initialize_worker,
-            mp_context=ctx,
+            mp_context=self._mp_context,
         )
 
     @classmethod
@@ -89,7 +114,7 @@ class ProcessExecutor(ConcurrentExecutor):
         NLTK datasets or calling ``django.setup()``.
 
         This isn't called once per job but once per worker process until
-        :attr:`~ProcessExecutor.maximum_jobs_per_worker` is reached (if
+        ``maximum_jobs_per_worker`` is reached (if
         set). After that, the worker process is replaced with a new one.
 
         .. note::
@@ -114,41 +139,59 @@ class ProcessExecutor(ConcurrentExecutor):
     async def push(self, job: QueuedJob) -> Future:
         job = await self.on_job_starting(job)
 
-        future: Future = self.pool.submit(
-            self.job_wrapper, job, self.pids_for_job
-        )
+        args = (job, self.pids_for_job, self.pending_cancellations)
+        try:
+            future = self.pool.submit(self.job_wrapper, *args)
+        except BrokenProcessPool:
+            # Only this rejected submission is safe to resubmit. Accepted
+            # jobs fail through their futures and Chancy's normal retry policy.
+            old_pool = self.pool
+            self.pool = self._create_pool()
+            old_pool.shutdown(wait=False)
+            self.worker.chancy.log.warning(
+                "Replaced broken process pool for queue %s.", self.queue.name
+            )
+            try:
+                future = self.pool.submit(self.job_wrapper, *args)
+            except BrokenProcessPool as exc:
+                # Bound recovery even if the replacement immediately breaks.
+                # Use the same completion path as an accepted failed job.
+                future = Future()
+                future.set_exception(exc)
+
+        self.jobs[future] = job
+        time_limit = self.get_limit(job, Limit.Type.TIME)
+        if time_limit is not None and self.supports(
+            Executor.Capability.AUTOMATIC_TIME_LIMITS
+        ):
+            execution_id = job.claim_id or job.id
+            self.timeouts[execution_id] = asyncio.create_task(
+                self._handle_timeout(execution_id, time_limit)
+            )
+
+        # A completed future runs its callback immediately, so register all
+        # execution state before attaching it.
         future.add_done_callback(
             functools.partial(
                 self._on_job_completed, loop=asyncio.get_running_loop()
             )
         )
-        self.jobs[future] = job
-        time_limit = next(
-            (
-                limit.value
-                for limit in job.limits
-                if limit.type_ == Limit.Type.TIME
-            ),
-            None,
-        )
-        if time_limit is not None:
-            self.timeouts[job.id] = asyncio.create_task(
-                self._handle_timeout(job.id, time_limit)
-            )
 
         return future
 
-    async def _handle_timeout(self, job_id: str, time_limit: int):
+    async def _handle_timeout(self, execution_id: UUID, time_limit: int):
         try:
             await asyncio.sleep(time_limit)
-            pid = self.pids_for_job.get(job_id)
+            pid = self.pids_for_job.get(execution_id)
             if pid is not None:
                 os.kill(pid, signal.SIGALRM)
         except asyncio.CancelledError:
             pass
 
     @classmethod
-    def job_wrapper(cls, job: QueuedJob, pids_for_job) -> tuple[QueuedJob, Any]:
+    def job_wrapper(
+        cls, job: QueuedJob, pids_for_job, pending_cancellations
+    ) -> tuple[QueuedJob, Any]:
         """
         This is the function that is actually started by the process pool
         executor. It's responsible for setting up necessary signals and limits,
@@ -164,51 +207,44 @@ class ProcessExecutor(ConcurrentExecutor):
             resources as the main process.
         """
         cleanup: list[Callable] = []
+        execution_id = job.claim_id or job.id
         try:
-            pids_for_job[job.id] = os.getpid()
-            func, kwargs = cls.get_function_and_kwargs(job)
+            pids_for_job[execution_id] = os.getpid()
+            cls._current_execution = (execution_id, pending_cancellations)
+            # Also honor requests received before PID registration.
+            if hasattr(signal, "SIGUSR1"):
+                cls.job_signal_handler(signal.SIGUSR1, None)
+            job, func, kwargs = cls.prepare_job_for_execution(job)
 
-            if job.limits and resource is None:
-                warnings.warn(
-                    f"Resource limits are not supported on this,"
-                    f" platform ignoring limits for job {job.id}.",
-                    RuntimeWarning,
-                )
-            else:
-                for limit in job.limits:
-                    match limit.type_:
-                        case Limit.Type.MEMORY:
-                            previous_soft, _ = resource.getrlimit(
-                                resource.RLIMIT_AS
-                            )
-                            resource.setrlimit(
-                                resource.RLIMIT_AS, (limit.value, -1)
-                            )
-                            cleanup.append(
-                                lambda: resource.setrlimit(
+            for limit in job.limits:
+                match limit.type_:
+                    case Limit.Type.MEMORY:
+                        previous_soft, _ = resource.getrlimit(
+                            resource.RLIMIT_AS
+                        )
+                        resource.setrlimit(
+                            resource.RLIMIT_AS, (limit.value, -1)
+                        )
+                        cleanup.append(
+                            lambda previous_soft=previous_soft: (
+                                resource.setrlimit(
                                     resource.RLIMIT_AS, (previous_soft, -1)
                                 )
                             )
+                        )
 
-            if asyncio.iscoroutinefunction(func):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    result = loop.run_until_complete(func(**kwargs))
-                finally:
-                    loop.run_until_complete(loop.shutdown_asyncgens())
-                    loop.close()
-            else:
-                result = func(**kwargs)
+            result = cls.run_function(func, kwargs)
         finally:
-            pids_for_job.pop(job.id)
+            cls._current_execution = None
+            pids_for_job.pop(execution_id)
+            pending_cancellations.pop(execution_id, None)
             for clean in cleanup:
                 clean()
 
         return job, result
 
-    @staticmethod
-    def job_signal_handler(signum: int, frame):
+    @classmethod
+    def job_signal_handler(cls, signum: int, frame):
         """
         Handles signals sent to a running job process.
 
@@ -221,38 +257,75 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        if hasattr(signal, "SIGALRM") and signum == signal.SIGALRM:
-            raise TimeoutError("Job timed out.")
-        if hasattr(signal, "SIGUSR1") and signum == signal.SIGUSR1:
-            raise CancelledError("Job was cancelled.")
+        if getattr(signal, "SIGUSR1", None) == signum:
+            if cls._current_execution is None:
+                return
+            execution_id, pending_cancellations = cls._current_execution
+            # A second signal must not interrupt the manager proxy's RPC.
+            previous_mask = signal.pthread_sigmask(
+                signal.SIG_BLOCK, {signal.SIGUSR1}
+            )
+            try:
+                if pending_cancellations.pop(execution_id, None) is not None:
+                    cls._current_execution = None
+                    raise CancelledError("Job was cancelled.")
+            finally:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+        if getattr(signal, "SIGALRM", None) == signum:
+            raise TimeoutError("Job timeout out.")
 
-    def _on_job_completed(
-        self, future: Future, loop: asyncio.AbstractEventLoop
+    async def _complete_job(
+        self,
+        future: Future,
+        job: QueuedJob,
+        exc: BaseException | None,
+        result: Any,
     ):
-        job = self.jobs.pop(future)
-
-        timeout_task = self.timeouts.pop(job.id, None)
+        # Run on the event loop, where timeout tasks and cancellations live.
+        # A crashed child cannot execute job_wrapper's finally block.
+        execution_id = job.claim_id or job.id
+        timeout_task = self.timeouts.pop(execution_id, None)
         if timeout_task is not None:
             timeout_task.cancel()
+        try:
+            self.pids_for_job.pop(execution_id, None)
+            self.pending_cancellations.pop(execution_id, None)
+        except Exception:
+            # The manager may have exited during shutdown. Cleanup must not
+            # discard the job's result or prevent its slot from being freed.
+            self.worker.chancy.log.exception(
+                "Failed to clean up process state for job %s (claim %s).",
+                job.id,
+                job.claim_id,
+            )
+        await super()._complete_job(future, job, exc, result)
 
-        result = None
-        exc = future.exception()
-        if exc is None:
-            job, result = future.result()
-
-        asyncio.run_coroutine_threadsafe(
-            self.on_job_completed(job=job, exc=exc, result=result),
-            loop,
-        )
+    def _shutdown_blocking(self):
+        super()._shutdown_blocking()
+        self.manager.shutdown()
 
     async def stop(self):
         for task in self.timeouts.values():
             task.cancel()
 
-        self.pool.shutdown(cancel_futures=True)
-        self.manager.shutdown()
+        await super().stop()
 
-    async def cancel(self, ref: Reference):
+    async def _stop_on_cancel(self):
+        for task in self.timeouts.values():
+            task.cancel()
+
+        if hasattr(signal, "SIGUSR1"):
+            for execution_id, pid in list(self.pids_for_job.items()):
+                self.pending_cancellations[execution_id] = True
+                try:
+                    os.kill(pid, signal.SIGUSR1)
+                except (ProcessLookupError, PermissionError):
+                    pass
+
+        await super()._stop_on_cancel()
+        await asyncio.to_thread(self.manager.shutdown)
+
+    async def cancel_execution(self, job: QueuedJob):
         """
         Make an attempt to cancel a running job.
 
@@ -261,12 +334,33 @@ class ProcessExecutor(ConcurrentExecutor):
         example if the job is running a long computation in a C extension,
         it may not be possible to interrupt it until it returns.
 
-        :param ref: The reference to the job to cancel.
+        :param job: The specific execution to cancel.
         """
-        await super().cancel(ref)
-        pid = self.pids_for_job.get(ref.identifier)
+        future = next(
+            (
+                f
+                for f, j in self.jobs.items()
+                if j.id == job.id and j.claim_id == job.claim_id
+            ),
+            None,
+        )
+        if future is None or future.done():
+            return
+
+        if future.cancel() or not self.supports(
+            Executor.Capability.CANCELLATION
+        ):
+            return
+
+        execution_id = job.claim_id or job.id
+        self.pending_cancellations[execution_id] = True
+        pid = self.pids_for_job.get(execution_id)
         if pid is not None:
-            os.kill(pid, signal.SIGUSR1)
+            try:
+                os.kill(pid, signal.SIGUSR1)
+            except OSError:
+                # The process may have exited or become inaccessible.
+                pass
 
     def get_default_concurrency(self) -> int:
         """

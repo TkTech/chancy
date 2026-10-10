@@ -3,8 +3,8 @@ from typing import Any
 import sentry_sdk
 
 from chancy.job import QueuedJob
-from chancy.worker import Worker
 from chancy.plugin import Plugin
+from chancy.worker import Worker
 
 
 class SentryPlugin(Plugin):

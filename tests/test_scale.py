@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from psycopg import sql
@@ -60,8 +60,8 @@ async def test_busy_chancy(chancy: Chancy, worker_no_start: Worker):
                             "dummy_job",
                             "{}",
                             "{}",
-                            datetime.now(timezone.utc),
-                            datetime.now(timezone.utc),
+                            datetime.now(UTC),
+                            datetime.now(UTC),
                         )
                     )
 
@@ -76,17 +76,21 @@ async def test_busy_chancy(chancy: Chancy, worker_no_start: Worker):
                             j.func,
                             "{}",
                             "{}",
-                            datetime.now(timezone.utc),
-                            datetime.now(timezone.utc),
+                            datetime.now(UTC),
+                            datetime.now(UTC),
                         )
                     )
 
             await conn.commit()
 
+        # In reality this is typically sub-0.1. However, we get occasional
+        # spikes in CI, especially on OS X, that make this very noisy for test
+        # failures, so we set a more generous limit to just catch egregious
+        # performance regressions.
         with timed_block() as timer:
             await worker_no_start.fetch_jobs(queue, conn, up_to=1)
-        assert timer.elapsed < 0.1
+        assert timer.elapsed < 0.5
 
         with timed_block() as timer:
             await worker_no_start.fetch_jobs(queue, conn, up_to=100)
-        assert timer.elapsed < 0.1
+        assert timer.elapsed < 0.5

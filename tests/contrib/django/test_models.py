@@ -1,10 +1,22 @@
 """
 Tests for the Django models integration.
+
+Note: These tests cannot run in parallel (pytest-xdist) because Django ORM
+models have table names set at import time, not runtime.
 """
+
+import os
 
 import pytest
 
 from chancy import job
+
+# Skip these tests when running with pytest-xdist since Django model
+# table names are set at import time and can't be made worker-specific
+pytestmark = pytest.mark.skipif(
+    os.environ.get("PYTEST_XDIST_WORKER") is not None,
+    reason="Django ORM models have static table names incompatible with parallel tests",
+)
 
 
 @job()
@@ -57,3 +69,32 @@ async def test_chancy_queue_django_query(chancy, worker):
     assert orm_queue.state == "active"
     assert orm_queue.concurrency is None
     assert len(orm_queue.tags) == 1
+
+
+@pytest.mark.parametrize(
+    "timezone, valid",
+    [
+        ("Europe/Paris", True),
+        ("Etc/UTC", True),
+        ("Europe/Nowhere", False),
+        ("localtime", False),
+    ],
+)
+def test_cron_timezone_must_be_an_iana_name(timezone, valid):
+    """
+    Test that the Django model only accepts IANA timezone names, since an
+    invalid one would stop the cron plugin when it evaluates the schedule.
+    """
+    from django.core.exceptions import ValidationError
+
+    from chancy.plugins.cron.django.models import Cron
+
+    cron = Cron(timezone=timezone)
+    fields = [f.name for f in Cron._meta.fields if f.name != "timezone"]
+
+    if valid:
+        cron.clean_fields(exclude=fields)
+    else:
+        with pytest.raises(ValidationError) as e:
+            cron.clean_fields(exclude=fields)
+        assert "timezone" in e.value.message_dict

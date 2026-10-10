@@ -5,3 +5,6 @@ chancy.worker module
    :members:
    :undoc-members:
    :show-inheritance:
+
+.. autoclass:: chancy.retry.DatabaseRetry
+   :members:

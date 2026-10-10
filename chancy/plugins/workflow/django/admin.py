@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.contrib import admin
 
 from chancy.plugins.workflow.django.models import Workflow, WorkflowStep
@@ -22,7 +24,7 @@ class WorkflowAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "state", "created_at", "updated_at")
     search_fields = ("id", "name", "state")
     readonly_fields = ("id", "created_at", "updated_at")
-    inlines = [WorkflowStepInline]
+    inlines: ClassVar[list[type[WorkflowStepInline]]] = [WorkflowStepInline]
 
 
 @admin.register(WorkflowStep)

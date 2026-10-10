@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, QueuedJob, job
+from chancy import Chancy, Queue, QueuedJob, Worker, job
 from chancy.plugin import Plugin
 
 

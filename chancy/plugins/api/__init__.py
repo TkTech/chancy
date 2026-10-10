@@ -1,21 +1,27 @@
 __all__ = ("Api", "AuthBackend", "SimpleAuthBackend")
 import os
 import secrets
-from pathlib import Path
 from functools import partial
-from typing import Type
+from pathlib import Path
+from urllib.parse import quote
 
 import uvicorn
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import HTMLResponse, Response
+from starlette.routing import BaseRoute, Mount, Route, WebSocketRoute
 from starlette.staticfiles import StaticFiles
+from starlette.types import Scope
 
-from chancy import Worker, Chancy
+from chancy import Chancy, Worker
 from chancy.plugin import Plugin
-from chancy.plugins.api.auth import AuthBackend, SimpleAuthBackend
+from chancy.plugins.api.auth import (
+    AuthBackend,
+    SimpleAuthBackend,
+    TokenAuthBackend,
+)
 from chancy.plugins.api.core import CoreApiPlugin
 from chancy.plugins.api.plugin import ApiPlugin
 from chancy.utils import import_string
@@ -27,11 +33,44 @@ class _SPAStaticFiles(StaticFiles):
     doesn't match an existing file.
     """
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._index_path, _ = super().lookup_path("index.html")
+        self._index_html = Path(self._index_path).read_text(encoding="utf-8")
+
     def lookup_path(self, path: str) -> tuple[str, os.stat_result | None]:
         full_path, stat_result = super().lookup_path(path)
         if stat_result is None:
             return super().lookup_path("./index.html")
         return full_path, stat_result
+
+    def file_response(
+        self,
+        full_path: str | os.PathLike,
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        if full_path != self._index_path:
+            return super().file_response(
+                full_path, stat_result, scope, status_code
+            )
+
+        # The outer ASGI mounts (and any configured proxy root_path) determine
+        # the public URL. Set the base before the browser loads any assets.
+        root_path = "/" + scope.get("root_path", "").strip("/")
+        base_href = quote(root_path.rstrip("/") + "/", safe="/")
+        response = HTMLResponse(
+            self._index_html.replace(
+                '<base href="/">', f'<base href="{base_href}">', 1
+            ),
+            status_code=status_code,
+            # The HTML varies by mount and must not reuse static-file ETags.
+            headers={"Cache-Control": "no-store"},
+        )
+        if scope["method"] == "HEAD":
+            response.body = b""
+        return response
 
 
 class Api(Plugin):
@@ -116,9 +155,8 @@ class Api(Plugin):
         self.port = port
         self.host = host
         self.debug = debug
-        self.root = Path(__file__).parent
         self.allow_origins = allow_origins or []
-        self.plugins: set[Type[ApiPlugin]] = {CoreApiPlugin}
+        self.plugins: set[type[ApiPlugin]] = {CoreApiPlugin}
         self.authentication_backend = authentication_backend
         self.secret_key = secret_key or secrets.token_urlsafe(32)
 
@@ -126,10 +164,11 @@ class Api(Plugin):
     def get_identifier() -> str:
         return "chancy.api"
 
-    async def run(self, worker: Worker, chancy: Chancy):
+    def build_starlette_app(self, worker: Worker, chancy: Chancy) -> Starlette:
         """
-        Start the web server.
+        Build an ASGI app containing the API and dashboard.
         """
+        plugins = self.plugins.copy()
         for plug in chancy.plugins.values():
             api_plugin = plug.api_plugin()
             if api_plugin is None:
@@ -139,61 +178,75 @@ class Api(Plugin):
             if not issubclass(api_plugin, ApiPlugin):
                 continue
 
-            self.plugins.add(api_plugin)
+            plugins.add(api_plugin)
 
         def _r(f):
             return partial(f, chancy=chancy, worker=worker)
 
-        app = Starlette(
-            debug=self.debug,
-            middleware=[
-                Middleware(
-                    CORSMiddleware,
-                    allow_origins=self.allow_origins,
-                ),
-                Middleware(SessionMiddleware, secret_key=self.secret_key),
-                Middleware(
-                    AuthenticationMiddleware,
-                    backend=self.authentication_backend,
-                ),
-            ],
-        )
-
-        web_plugins = []
         # Look through all the enabled plugins for any that implement the
         # ApiPlugin interface. If they do, we merge them into our Starlette
         # app.
-        for api_plugin in self.plugins:
+        routes: list[BaseRoute] = []
+        for api_plugin in plugins:
             wp = api_plugin(self)
-            web_plugins.append(wp)
             chancy.log.info(f"Loading API sub-plugin {wp.name()}")
 
             for route in wp.routes():
                 if route.get("is_websocket"):
-                    app.add_websocket_route(
-                        route["path"],
-                        _r(route["endpoint"]),
-                        name=route["name"],
+                    routes.append(
+                        WebSocketRoute(
+                            route["path"],
+                            _r(route["endpoint"]),
+                            name=route["name"],
+                        )
                     )
                 else:
-                    app.add_route(
-                        route["path"],
-                        _r(route["endpoint"]),
-                        methods=route["methods"],
-                        name=route["name"],
+                    routes.append(
+                        Route(
+                            route["path"],
+                            _r(route["endpoint"]),
+                            methods=route["methods"],
+                            name=route["name"],
+                        )
                     )
 
         # Add the wildcard route to the end of the list so that it doesn't
         # override any other routes and serves anything that should be handled
         # by the UI SPA.
-        app.mount(
-            "/",
-            _SPAStaticFiles(
-                packages=[("chancy.plugins.api", "dist")],
-                html=True,
+        routes.append(
+            Mount(
+                "/",
+                app=_SPAStaticFiles(
+                    packages=[("chancy.plugins.api", "dist")],
+                    html=True,
+                ),
+                name="ui",
             ),
-            name="ui",
         )
+
+        return Starlette(
+            debug=self.debug,
+            routes=routes,
+            middleware=[
+                Middleware(
+                    CORSMiddleware,
+                    allow_origins=self.allow_origins,
+                    allow_credentials=False,
+                    allow_headers=["*"],
+                    allow_methods=["*"],
+                ),
+                Middleware(
+                    AuthenticationMiddleware,
+                    backend=TokenAuthBackend(self.secret_key),
+                ),
+            ],
+        )
+
+    async def run(self, worker: Worker, chancy: Chancy):
+        """
+        Start the standalone web server.
+        """
+        app = self.build_starlette_app(worker, chancy)
 
         server = uvicorn.Server(
             config=uvicorn.Config(

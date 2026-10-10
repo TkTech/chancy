@@ -1,33 +1,9 @@
-import {useQuery} from '@tanstack/react-query';
+import {keepPreviousData, useQuery} from '@tanstack/react-query';
+import { ChancyApi, type FilterTriple } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 
-export interface Step {
-  step_id: string;
-  state: string;
-  job_id: string;
-  dependencies: string[];
-  job: {
-    func: string,
-    queue: string,
-    kwargs: unknown,
-    priority: number,
-    max_attempts: number,
-    limits: {
-      key: string,
-      value: number
-    }[]
-  }
-}
-
-export interface Workflow {
-  id: string,
-  name: string,
-  state: string,
-  created_at: string,
-  updated_at: string,
-  steps : {
-    [key: string]: Step
-  }
-}
+export type { Workflow, WorkflowSummary, WorkflowPage, Step } from '../services/schemas';
+export type { FilterTriple } from '../services/chancy';
 
 export function useWorkflow ({
   url,
@@ -40,28 +16,32 @@ export function useWorkflow ({
     refetchInterval?: number,
   }
 }) {
-  return useQuery<Workflow>({
-    queryKey: ['workflow', url, workflow_id],
-    queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/workflows/${workflow_id}`);
-      return await response.json();
-    },
+  return useQuery({
+    queryKey: queryKeys.workflow(url, workflow_id),
+    queryFn: ({ signal }) => ChancyApi(url!).getWorkflow(workflow_id!, signal),
     enabled: url !== null && workflow_id !== undefined,
     ...options
   });
 }
 
 export function useWorkflows ({
-  url
+  url,
+  filters,
+  before,
 }: {
-  url: string | null
+  url: string | null,
+  filters?: FilterTriple[],
+  before?: string,
 }) {
-  return useQuery<Workflow[]>({
-    queryKey: ['workflows', url],
-    queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/workflows`);
-      return await response.json();
-    },
-    enabled: url !== null
+  const params = { filters, before };
+  return useQuery({
+    queryKey: queryKeys.workflows(url, params),
+    queryFn: ({ signal }) => ChancyApi(url!).listWorkflows(params, signal),
+    enabled: url !== null,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: !before,
+    staleTime: 0,
+    refetchInterval: !before ? 5000 : false,
+    placeholderData: keepPreviousData,
   });
 }
