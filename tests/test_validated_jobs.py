@@ -2,6 +2,7 @@ import asyncio
 import dataclasses
 import sys
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -19,6 +20,7 @@ from chancy import (
     SerializedJob,
     Worker,
 )
+from chancy.executors.thread import ThreadedExecutor
 from chancy.plugins.cron import Cron
 from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.trigger import Trigger
@@ -432,6 +434,33 @@ async def test_invalid_kwargs_inserted_elsewhere_fail_the_job(
     assert j.state == j.State.FAILED
     assert "greeting" not in j.meta
     assert "times must be at most 3" in j.errors[-1]["traceback"]
+
+
+INJECTED_GREETING = Greeting(user_id=uuid.uuid4(), name="Injected")
+
+
+class GreetingInjectingExecutor(ThreadedExecutor):
+    @classmethod
+    def get_function_and_kwargs(cls, job):
+        func, kwargs = super().get_function_and_kwargs(job)
+        return func, {**kwargs, "greeting": INJECTED_GREETING}
+
+
+def test_value_injected_over_a_stored_kwarg_is_not_loaded():
+    """
+    A value an executor injects in place of a stored kwarg reaches the
+    function as it is, instead of being replaced by the loaded stored value.
+    """
+    job = QueuedJob(
+        func=greet_job.func,
+        id=uuid.uuid4(),
+        created_at=datetime.now(tz=UTC),
+        kwargs={"greeting": {"user_id": str(uuid.uuid4()), "name": "Ada"}},
+    )._with_validators((GreetingValidator(max_times=3),))
+
+    _, _, kwargs = GreetingInjectingExecutor.prepare_job_for_execution(job)
+
+    assert kwargs["greeting"] is INJECTED_GREETING
 
 
 @with_greeting_validator()

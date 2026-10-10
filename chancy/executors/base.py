@@ -246,13 +246,18 @@ class Executor(abc.ABC):
         func, kwargs = cls.get_function_and_kwargs(job)
         # Loaded here rather than in get_function_and_kwargs, which subclasses
         # override, so the function never receives unvalidated kwargs. Values
-        # the executor injects aren't stored JSON, so they aren't loaded.
+        # the executor injects or overrides aren't stored JSON, so they aren't
+        # loaded.
         stored = job.kwargs or {}
         kwargs |= load_kwargs(
             job._validators,
             job.func,
             func,
-            {name: value for name, value in kwargs.items() if name in stored},
+            {
+                name: value
+                for name, value in kwargs.items()
+                if name in stored and value == stored[name]
+            },
         )
         has_job_context = any(value is job for value in kwargs.values())
         function_capability = (
