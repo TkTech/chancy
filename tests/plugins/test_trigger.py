@@ -76,9 +76,7 @@ async def test_table(chancy, test_suffix):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_creates_job_on_change(
-    chancy: Chancy, worker, test_table
-):
+async def test_trigger_creates_job_on_change(chancy: Chancy, test_table):
     """Test that database changes create jobs"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -114,8 +112,10 @@ async def test_trigger_creates_job_on_change(
         assert len(jobs) == 1, "Trigger should create exactly one job"
 
         ref = Reference(jobs[0][0])
-        j = await chancy.wait_for_job(ref)
-        assert j, "Job did not complete successfully"
+        j = await chancy.get_job(ref)
+        assert j.meta["trigger"]["operation"] == "INSERT"
+        assert j.meta["trigger"]["table_name"] == test_table
+        assert j.meta["trigger"]["schema_name"] == "public"
 
     # Now let us disable the trigger and ensure no new jobs are created
     await Trigger.disable_trigger(chancy, trigger_id)
@@ -139,7 +139,9 @@ async def test_trigger_creates_job_on_change(
         )
 
         jobs = await cursor.fetchall()
-        assert len(jobs) == 0, "Trigger should not create jobs when disabled"
+        assert jobs == [(ref.identifier,)], (
+            "Disabling the trigger must add no jobs"
+        )
 
 
 @pytest.mark.parametrize(
@@ -148,7 +150,7 @@ async def test_trigger_creates_job_on_change(
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_update_operation(chancy: Chancy, worker, test_table):
+async def test_trigger_update_operation(chancy: Chancy, test_table):
     """Test that UPDATE operations create jobs"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -193,8 +195,8 @@ async def test_trigger_update_operation(chancy: Chancy, worker, test_table):
         assert len(jobs) == 1, "UPDATE trigger should create exactly one job"
 
         ref = Reference(jobs[0][0])
-        j = await chancy.wait_for_job(ref)
-        assert j, "Job did not complete successfully"
+        j = await chancy.get_job(ref)
+        assert j.meta["trigger"]["operation"] == "UPDATE"
 
 
 @pytest.mark.parametrize(
@@ -203,7 +205,7 @@ async def test_trigger_update_operation(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_delete_operation(chancy: Chancy, worker, test_table):
+async def test_trigger_delete_operation(chancy: Chancy, test_table):
     """Test that DELETE operations create jobs"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -247,8 +249,8 @@ async def test_trigger_delete_operation(chancy: Chancy, worker, test_table):
         assert len(jobs) == 1, "DELETE trigger should create exactly one job"
 
         ref = Reference(jobs[0][0])
-        j = await chancy.wait_for_job(ref)
-        assert j, "Job did not complete successfully"
+        j = await chancy.get_job(ref)
+        assert j.meta["trigger"]["operation"] == "DELETE"
 
 
 @pytest.mark.parametrize(
@@ -316,8 +318,8 @@ async def test_trigger_multiple_operations(chancy: Chancy, worker, test_table):
         # Wait for all jobs to complete
         for job_row in jobs:
             ref = Reference(job_row[0])
-            j = await chancy.wait_for_job(ref)
-            assert j, "Job did not complete successfully"
+            j = await chancy.wait_for_job(ref, timeout=30)
+            assert j.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.parametrize(
@@ -326,7 +328,7 @@ async def test_trigger_multiple_operations(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_unregister_trigger(chancy: Chancy, worker, test_table):
+async def test_unregister_trigger(chancy: Chancy, test_table):
     """Test that unregistering a trigger removes it completely"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -380,7 +382,7 @@ async def test_unregister_trigger(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_enable_trigger(chancy: Chancy, worker, test_table):
+async def test_enable_trigger(chancy: Chancy, test_table):
     """Test re-enabling a disabled trigger"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -452,7 +454,7 @@ async def test_enable_trigger(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_get_triggers(chancy: Chancy, worker, test_table):
+async def test_get_triggers(chancy: Chancy, test_table):
     """Test retrieving trigger information"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -498,7 +500,7 @@ async def test_get_triggers(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_invalid_operation(chancy: Chancy, worker, test_table):
+async def test_trigger_invalid_operation(chancy: Chancy, test_table):
     """Test that invalid operations raise ValueError"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -517,9 +519,7 @@ async def test_trigger_invalid_operation(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_unregister_nonexistent_trigger(
-    chancy: Chancy, worker, test_table
-):
+async def test_unregister_nonexistent_trigger(chancy: Chancy, test_table):
     """Test that unregistering a non-existent trigger raises ValueError"""
     nonexistent_id = str(uuid.uuid4())
     with pytest.raises(ValueError, match="Trigger .* not found"):
@@ -532,7 +532,7 @@ async def test_unregister_nonexistent_trigger(
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_enable_nonexistent_trigger(chancy: Chancy, worker, test_table):
+async def test_enable_nonexistent_trigger(chancy: Chancy, test_table):
     """Test that enabling a non-existent trigger raises ValueError"""
     nonexistent_id = str(uuid.uuid4())
     with pytest.raises(ValueError, match="Trigger .* not found"):
@@ -545,7 +545,7 @@ async def test_enable_nonexistent_trigger(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_disable_nonexistent_trigger(chancy: Chancy, worker, test_table):
+async def test_disable_nonexistent_trigger(chancy: Chancy, test_table):
     """Test that disabling a non-existent trigger raises ValueError"""
     nonexistent_id = str(uuid.uuid4())
     with pytest.raises(ValueError, match="Trigger .* not found"):
@@ -558,7 +558,7 @@ async def test_disable_nonexistent_trigger(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_bulk_operations(chancy: Chancy, worker, test_table):
+async def test_trigger_bulk_operations(chancy: Chancy, test_table):
     """Test that statement-level triggers fire once per statement, not per row"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -607,7 +607,7 @@ async def test_trigger_bulk_operations(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_with_job_parameters(chancy: Chancy, worker, test_table):
+async def test_trigger_with_job_parameters(chancy: Chancy, test_table):
     """Test trigger with job template that has priority and other parameters"""
     await chancy.declare(Queue("trigger_events"))
 
@@ -648,9 +648,7 @@ async def test_trigger_with_job_parameters(chancy: Chancy, worker, test_table):
     indirect=True,
 )
 @pytest.mark.asyncio
-async def test_trigger_disabled_at_registration(
-    chancy: Chancy, worker, test_table
-):
+async def test_trigger_disabled_at_registration(chancy: Chancy, test_table):
     """Test registering a trigger with enabled=False"""
     await chancy.declare(Queue("trigger_events"))
 
