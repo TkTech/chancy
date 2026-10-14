@@ -122,17 +122,17 @@ class Api(Plugin):
     Screenshots
     -----------
 
-    .. image:: ../misc/ux_jobs.png
+    .. image:: _static/screenshots/ux_jobs.png
         :alt: Jobs page
 
-    .. image:: ../misc/ux_job_failed.png
+    .. image:: _static/screenshots/ux_job_failed.png
         :alt: Failed job page
 
-    .. image:: ../misc/ux_queue.png
+    .. image:: _static/screenshots/ux_queue.png
         :alt: Queue page
 
-    .. image:: ../misc/ux_workflow.png
-        :alt: Worker page
+    .. image:: _static/screenshots/ux_workflow.png
+        :alt: Workflow page
 
 
     :param port: The port to listen on.
