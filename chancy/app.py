@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import datetime
 import enum
 import functools
@@ -12,7 +13,7 @@ from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Json
 from psycopg_pool import AsyncConnectionPool, ConnectionPool
 
-from chancy.job import IsAJob, Job, QueuedJob, Reference
+from chancy.job import IsAJob, Job, QueuedJob, Reference, SerializedJob
 from chancy.migrate import Migrator
 from chancy.plugin import Plugin
 from chancy.queue import Queue
@@ -24,6 +25,7 @@ from chancy.utils import (
     json_dumps,
     lock_order_key,
 )
+from chancy.validation import Validator, dump_kwargs
 
 
 @cache
@@ -188,6 +190,7 @@ class Chancy:
         dsn: str | DatabaseConnection,
         *,
         plugins: list[Plugin] | None = None,
+        validators: list[Validator] | None = None,
         prefix: str = "chancy_",
         min_connection_pool_size: int = 1,
         max_connection_pool_size: int = 10,
@@ -200,6 +203,9 @@ class Chancy:
         self.dsn = dsn if isinstance(dsn, str) else get_database_dsn(dsn)
         #: The plugins to use with the application.
         self.plugins = {}
+        #: The validators of job kwargs, in the order they are tried. See
+        #: :class:`~chancy.validation.Validator`.
+        self.validators = list(validators or [])
         #: A prefix appended to all table names, which can be used to
         #: namespace the tables for multiple applications or tenants.
         self.prefix = prefix
@@ -692,15 +698,16 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
+        # Every job is validated before any is inserted, so an invalid job
+        # leaves the transaction untouched.
+        params = [self._get_job_params(self.serialize(job)) for job in jobs]
+
         # Jobs are inserted in unique_key order so that concurrent pushes and
         # the worker's batched job updates (which sort the same way) always
         # acquire row locks in the same order and cannot deadlock (#89).
         references: list[Reference | None] = [None] * len(jobs)
-        for index, job in self._in_lock_order(jobs):
-            await cursor.execute(
-                self._push_job_sql(),
-                self._get_job_params(job),
-            )
+        for index, _ in self._in_lock_order(jobs):
+            await cursor.execute(self._push_job_sql(), params[index])
             record = await cursor.fetchone()
             references[index] = Reference(record["id"])
 
@@ -731,13 +738,12 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
-        # See push_many_ex for why jobs are inserted in unique_key order.
+        # See push_many_ex for why jobs are validated first and inserted in
+        # unique_key order.
+        params = [self._get_job_params(self.serialize(job)) for job in jobs]
         references: list[Reference | None] = [None] * len(jobs)
-        for index, job in self._in_lock_order(jobs):
-            cursor.execute(
-                self._push_job_sql(),
-                self._get_job_params(job),
-            )
+        for index, _ in self._in_lock_order(jobs):
+            cursor.execute(self._push_job_sql(), params[index])
             record = cursor.fetchone()
             references[index] = Reference(record["id"])
 
@@ -1529,6 +1535,30 @@ class Chancy:
             queues=sql.Identifier(f"{self.prefix}queues"),
             action=action,
         )
+
+    def serialize(self, job: Job | IsAJob[..., Any]) -> Job:
+        """
+        Dump a job's kwargs with the configured validators and return it as a
+        :class:`~chancy.job.SerializedJob`, ready to be stored. Every push
+        calls this. A job is returned unchanged without validators, or when
+        it is already a :class:`~chancy.job.SerializedJob` or a
+        :class:`~chancy.job.QueuedJob`. When its function can't be found, a
+        :class:`~chancy.validation.ValidationSkippedWarning` is emitted.
+
+        :param job: The job to serialize.
+        :raises JobValidationError: If a validator rejects a kwarg, or the
+            function fails to import.
+        :return: The job, ready to be stored.
+        """
+        job = job if isinstance(job, Job) else job.job
+        if not self.validators or isinstance(job, (SerializedJob, QueuedJob)):
+            return job
+
+        fields = {f.name: getattr(job, f.name) for f in dataclasses.fields(Job)}
+        fields["kwargs"] = dump_kwargs(
+            self.validators, job.func, job.kwargs or {}
+        )
+        return SerializedJob(**fields)
 
     @staticmethod
     def _in_lock_order(

@@ -69,6 +69,13 @@ compares job IDs with strings or requires string values.
   mutations, and keep unresolved jobs selected.
 - Improved dialog keyboard navigation, focus handling, responsive layouts,
   form accessibility, and warnings for unsaved queue edits.
+- Job kwargs can be validated against the annotations of the job function's
+  parameters, when the job is pushed and when it runs, with validators given
+  to Chancy's new `validators` argument that connect any validation library.
+  See "Validating Arguments" in the jobs how-to (@luca-montaigut, #53).
+- `Cron.get_schedules()` and the jobs read back from triggers and workflows
+  are now `SerializedJob` instances, so they no longer compare equal to a
+  `Job` built with the same values.
 
 🐛 Fixes
 
