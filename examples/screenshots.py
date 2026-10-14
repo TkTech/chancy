@@ -41,7 +41,7 @@ SCREENSHOTS = {
         "Jobs",
         1100,
     ),
-    "ux_job_failed.png": ("/jobs/{job}", "Job - {job}", 1600),
+    "ux_job_failed.png": ("/jobs/{job}", "Job", 1600),
     "ux_queue.png": ("/queues/orders", "Queue - orders", 1300),
     "ux_worker.png": ("/workers/{worker}", "Worker - {worker}", 1400),
     "ux_workflow.png": ("/workflows/{workflow}", "Workflow - {workflow}", 1700),

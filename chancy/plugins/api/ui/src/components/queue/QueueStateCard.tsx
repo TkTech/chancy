@@ -1,8 +1,8 @@
 import { useId, useState } from 'react';
+import { Dialog } from '../common/Dialog';
 
 interface QueueStateCardProps {
   state: string;
-  resumeAt: string | null | undefined;
   onPause: (resumeAt?: string) => void;
   onResume: () => void;
   isPending: boolean;
@@ -16,6 +16,13 @@ export function QueueStateCard({ state, onPause, onResume, isPending }: QueueSta
   const [relativeMinutes, setRelativeMinutes] = useState('30');
 
   const isActive = state === 'active';
+
+  const closePauseOptions = () => {
+    setShowPauseOptions(false);
+    setResumeType('manual');
+    setAbsoluteTime('');
+    setRelativeMinutes('30');
+  };
 
   const handlePause = () => {
     let resumeAtIso: string | undefined;
@@ -34,130 +41,116 @@ export function QueueStateCard({ state, onPause, onResume, isPending }: QueueSta
     }
 
     onPause(resumeAtIso);
-    setShowPauseOptions(false);
-    setAbsoluteTime('');
-    setRelativeMinutes('30');
+    closePauseOptions();
   };
 
   return (
     <>
-      {!showPauseOptions ? (
-        <>
-          {isActive ? (
+      {isActive ? (
+        <button
+          className="btn btn-sm btn-warning"
+          onClick={() => setShowPauseOptions(true)}
+          disabled={isPending}
+        >
+          Pause
+        </button>
+      ) : (
+        <button
+          className="btn btn-sm btn-success"
+          onClick={onResume}
+          disabled={isPending}
+        >
+          Resume
+        </button>
+      )}
+      {showPauseOptions && (
+        <Dialog title="Pause Options" onClose={closePauseOptions} dismissible={!isPending}>
+          <div className="mb-3">
+            <div className="form-check">
+              <input
+                className="form-check-input"
+                type="radio"
+                name={`${id}-resumeType`}
+                id={`${id}-resumeManual`}
+                checked={resumeType === 'manual'}
+                onChange={() => setResumeType('manual')}
+              />
+              <label className="form-check-label" htmlFor={`${id}-resumeManual`}>
+                Manual resume (pause indefinitely)
+              </label>
+            </div>
+            <div className="form-check">
+              <input
+                className="form-check-input"
+                type="radio"
+                name={`${id}-resumeType`}
+                id={`${id}-resumeRelative`}
+                checked={resumeType === 'relative'}
+                onChange={() => setResumeType('relative')}
+              />
+              <label className="form-check-label" htmlFor={`${id}-resumeRelative`}>
+                Resume after
+              </label>
+            </div>
+            {resumeType === 'relative' && (
+              <div className="ms-4 mt-2">
+                <div className="input-group input-group-sm pause-input-sm">
+                  <input
+                    type="number"
+                    aria-label="Resume after (minutes)"
+                    className="form-control"
+                    value={relativeMinutes}
+                    onChange={e => setRelativeMinutes(e.target.value)}
+                    min="1"
+                    step="1"
+                  />
+                  <span className="input-group-text">minutes</span>
+                </div>
+              </div>
+            )}
+            <div className="form-check">
+              <input
+                className="form-check-input"
+                type="radio"
+                name={`${id}-resumeType`}
+                id={`${id}-resumeAbsolute`}
+                checked={resumeType === 'absolute'}
+                onChange={() => setResumeType('absolute')}
+              />
+              <label className="form-check-label" htmlFor={`${id}-resumeAbsolute`}>
+                Resume at specific time
+              </label>
+            </div>
+            {resumeType === 'absolute' && (
+              <div className="ms-4 mt-2">
+                <input
+                  type="datetime-local"
+                  aria-label="Resume at specific time"
+                  className="form-control form-control-sm pause-input-datetime"
+                  value={absoluteTime}
+                  onChange={e => setAbsoluteTime(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="d-flex gap-2">
             <button
               className="btn btn-sm btn-warning"
-              onClick={() => setShowPauseOptions(true)}
+              onClick={handlePause}
               disabled={isPending}
             >
-              Pause
+              {isPending ? 'Pausing...' : 'Pause'}
             </button>
-          ) : (
             <button
-              className="btn btn-sm btn-success"
-              onClick={onResume}
+              className="btn btn-sm btn-secondary"
+              onClick={closePauseOptions}
               disabled={isPending}
             >
-              Resume
+              Cancel
             </button>
-          )}
-        </>
-      ) : (
-        <div className="position-relative">
-          <div className="dropdown-menu show position-static p-3 pause-dropdown">
-            <h6 className="mb-3">Pause Options</h6>
-
-            <div className="mb-3">
-              <div className="form-check">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name={`${id}-resumeType`}
-                  id={`${id}-resumeManual`}
-                  checked={resumeType === 'manual'}
-                  onChange={() => setResumeType('manual')}
-                />
-                <label className="form-check-label" htmlFor={`${id}-resumeManual`}>
-                  Manual resume (pause indefinitely)
-                </label>
-              </div>
-              <div className="form-check">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name={`${id}-resumeType`}
-                  id={`${id}-resumeRelative`}
-                  checked={resumeType === 'relative'}
-                  onChange={() => setResumeType('relative')}
-                />
-                <label className="form-check-label" htmlFor={`${id}-resumeRelative`}>
-                  Resume after
-                </label>
-              </div>
-              {resumeType === 'relative' && (
-                <div className="ms-4 mt-2">
-                  <div className="input-group input-group-sm pause-input-sm">
-                    <input
-                      type="number"
-                      aria-label="Resume after (minutes)"
-                      className="form-control"
-                      value={relativeMinutes}
-                      onChange={e => setRelativeMinutes(e.target.value)}
-                      min="1"
-                      step="1"
-                    />
-                    <span className="input-group-text">minutes</span>
-                  </div>
-                </div>
-              )}
-              <div className="form-check">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name={`${id}-resumeType`}
-                  id={`${id}-resumeAbsolute`}
-                  checked={resumeType === 'absolute'}
-                  onChange={() => setResumeType('absolute')}
-                />
-                <label className="form-check-label" htmlFor={`${id}-resumeAbsolute`}>
-                  Resume at specific time
-                </label>
-              </div>
-              {resumeType === 'absolute' && (
-                <div className="ms-4 mt-2">
-                  <input
-                    type="datetime-local"
-                    aria-label="Resume at specific time"
-                    className="form-control form-control-sm pause-input-datetime"
-                    value={absoluteTime}
-                    onChange={e => setAbsoluteTime(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm btn-warning"
-                onClick={handlePause}
-                disabled={isPending}
-              >
-                {isPending ? 'Pausing...' : 'Pause'}
-              </button>
-              <button
-                className="btn btn-sm btn-secondary"
-                onClick={() => {
-                  setShowPauseOptions(false);
-                  setResumeType('manual');
-                  setAbsoluteTime('');
-                  setRelativeMinutes('30');
-                }}
-                disabled={isPending}
-              >
-                Cancel
-              </button>
-            </div>
           </div>
-        </div>
+        </Dialog>
       )}
     </>
   );
