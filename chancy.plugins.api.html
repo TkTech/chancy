@@ -1,0 +1,922 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Cron" href="chancy.plugins.cron.html"><link rel="prev" title="Plugins" href="chancy.plugins.html">
+        <link rel="prefetch" href="_static/logo.png" as="image">
+
+    <!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>API/Dashboard - Chancy</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=4c969af8" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Chancy</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="_static/logo.png" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">Chancy</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 has-children"><a class="reference internal" href="howto/index.html">How To…</a><input aria-label="Toggle navigation of How To…" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="howto/jobs.html">Make Jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/celery.html">Compare to Celery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/django.html">Use with Django</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/fastapi.html">Use with Fastapi</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/retry.html">Use Advanced Retries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/context.html">Get The Job Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/log.html">Customize Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="chancy.html">Chancy API</a><input aria-label="Toggle navigation of Chancy API" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 has-children"><a class="reference internal" href="chancy.executors.html">Executors</a><input aria-label="Toggle navigation of Executors" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.base.html">Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.process.html">ProcessExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.asyncex.html">AsyncExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.thread.html">ThreadedExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.sub.html">SubInterpreterExecutor</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="chancy.plugins.html">Plugins</a><input aria-label="Toggle navigation of Plugins" checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">API/Dashboard</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.cron.html">Cron</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.leadership.html">Leadership</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.metrics.html">Metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.pruner.html">Pruner</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.recovery.html">Recovery</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.reprioritize.html">Reprioritization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.retry.html">Retry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.sentry.html">Sentry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.trigger.html">Triggers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.workflow.html">Workflows</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.app.html">chancy.app module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.job.html">chancy.job module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.queue.html">chancy.queue module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.worker.html">chancy.worker module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugin.html">chancy.plugin module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.migrate.html">chancy.migrate module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.hub.html">chancy.hub module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.rule.html">chancy.plugins.rule module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.utils.html">chancy.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.errors.html">chancy.errors module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="design.html">Design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="similar.html">Similar Projects</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/chancy.plugins.api.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="module-chancy.plugins.api">
+<span id="api-dashboard"></span><h1>API/Dashboard<a class="headerlink" href="#module-chancy.plugins.api" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.plugins.api.Api">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.api.</span></span><span class="sig-name descname"><span class="pre">Api</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">host</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'127.0.0.1'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_origins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">secret_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">authentication_backend</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.Api" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="chancy.plugin.html#chancy.plugin.Plugin" title="chancy.plugin.Plugin"><code class="xref py py-class docutils literal notranslate"><span class="pre">Plugin</span></code></a></p>
+<p>Provides an API and a dashboard for viewing the state of the Chancy cluster.</p>
+<p>Running this plugin requires a few additional dependencies, you can install
+them with:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>chancy<span class="o">[</span>web<span class="o">]</span>
+</pre></div>
+</div>
+<p>To have the API run permanently on each Worker, you can add it to the
+plugins list when creating the Chancy instance:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">chancy.plugins.api</span><span class="w"> </span><span class="kn">import</span> <span class="n">Api</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">chancy.plugins.api.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleAuthBackend</span>
+
+<span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">plugins</span><span class="o">=</span><span class="p">[</span>
+    <span class="n">Api</span><span class="p">(</span>
+        <span class="n">authentication_backend</span><span class="o">=</span><span class="n">SimpleAuthBackend</span><span class="p">({</span><span class="s2">"admin"</span><span class="p">:</span> <span class="s2">"password"</span><span class="p">}),</span>
+        <span class="n">secret_key</span><span class="o">=</span><span class="s2">"&lt;a strong, random secret key&gt;"</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">])</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The API is still mostly undocumented, as its development is driven by
+the needs of the dashboard and may change significantly before it
+becomes stable.</p>
+</div>
+<p>Since it’s very common to only want the dashboard temporarily, you can
+start it with the CLI. This can also be used to connect to a remote Chancy
+instance:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>chancy<span class="o">[</span>cli,web<span class="o">]</span>
+chancy<span class="w"> </span>--app<span class="w"> </span>worker.chancy<span class="w"> </span>worker<span class="w"> </span>web
+</pre></div>
+</div>
+<p>This will run the API and dashboard on port 8000 by default (you can change
+this with the <code class="docutils literal notranslate"><span class="pre">--port</span></code> and <code class="docutils literal notranslate"><span class="pre">--host</span></code> flags), and generate a temporary
+random password for the admin user.</p>
+<section id="screenshots">
+<h2>Screenshots<a class="headerlink" href="#screenshots" title="Link to this heading">¶</a></h2>
+<img alt="Jobs page" src="_images/ux_jobs.png" />
+<img alt="Failed job page" src="_images/ux_job_failed.png" />
+<img alt="Queue page" src="_images/ux_queue.png" />
+<img alt="Workflow page" src="_images/ux_workflow.png" />
+<dl class="field-list simple">
+<dt class="field-odd">param port<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The port to listen on.</p>
+</dd>
+<dt class="field-even">param host<span class="colon">:</span></dt>
+<dd class="field-even"><p>The host to listen on.</p>
+</dd>
+<dt class="field-odd">param debug<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Whether to run the server in debug mode.</p>
+</dd>
+<dt class="field-even">param allow_origins<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of origins that are allowed to access the API.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.Api.build_starlette_app">
+<span class="sig-name descname"><span class="pre">build_starlette_app</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">worker</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.Api.build_starlette_app" title="Link to this definition">¶</a></dt>
+<dd><p>Build an ASGI app containing the API and dashboard.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>worker</strong> (<a class="reference internal" href="chancy.worker.html#chancy.worker.Worker" title="chancy.worker.Worker"><em>Worker</em></a>)</p></li>
+<li><p><strong>chancy</strong> (<a class="reference internal" href="chancy.app.html#chancy.app.Chancy" title="chancy.app.Chancy"><em>Chancy</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Starlette</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.Api.get_identifier">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_identifier</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.Api.get_identifier" title="Link to this definition">¶</a></dt>
+<dd><p>Returns a unique identifier for this plugin.</p>
+<p>This identifier should be unique across all active plugins. If a
+custom plugin provides compatible functionality to a built-in plugin,
+it may use the same identifier as the built-in plugin.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.Api.run">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">worker</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.Api.run" title="Link to this definition">¶</a></dt>
+<dd><p>Start the standalone web server.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>worker</strong> (<a class="reference internal" href="chancy.worker.html#chancy.worker.Worker" title="chancy.worker.Worker"><em>Worker</em></a>)</p></li>
+<li><p><strong>chancy</strong> (<a class="reference internal" href="chancy.app.html#chancy.app.Chancy" title="chancy.app.Chancy"><em>Chancy</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>port</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#int" title="(in Python v3.13)"><em>int</em></a>)</p></li>
+<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>)</p></li>
+<li><p><strong>debug</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a>)</p></li>
+<li><p><strong>allow_origins</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>secret_key</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>authentication_backend</strong> (<a class="reference internal" href="#chancy.plugins.api.AuthBackend" title="chancy.plugins.api.auth.AuthBackend"><em>AuthBackend</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.plugins.api.AuthBackend">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.api.</span></span><span class="sig-name descname"><span class="pre">AuthBackend</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.AuthBackend" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AuthenticationBackend</span></code>, <a class="reference external" href="https://docs.python.org/3.13/library/abc.html#abc.ABC" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.AuthBackend.login">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">login</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">username</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.AuthBackend.login" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>username</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>)</p></li>
+<li><p><strong>password</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#bool" title="(in Python v3.13)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.AuthBackend.logout">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">logout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.AuthBackend.logout" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.plugins.api.SimpleAuthBackend">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.api.</span></span><span class="sig-name descname"><span class="pre">SimpleAuthBackend</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">users</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.SimpleAuthBackend" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#chancy.plugins.api.AuthBackend" title="chancy.plugins.api.auth.AuthBackend"><code class="xref py py-class docutils literal notranslate"><span class="pre">AuthBackend</span></code></a></p>
+<p>A simple authentication backend that uses a dictionary of users and
+passwords.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>users</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>]</em>) – A dictionary of users and their passwords.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.SimpleAuthBackend.authenticate">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">authenticate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">conn</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.SimpleAuthBackend.authenticate" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>conn</strong> (<em>HTTPConnection</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#tuple" title="(in Python v3.13)">tuple</a>[<em>AuthCredentials</em>, <em>BaseUser</em>] | None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.SimpleAuthBackend.login">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">login</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">username</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.SimpleAuthBackend.login" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>request</strong> (<em>Request</em>)</p></li>
+<li><p><strong>username</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>)</p></li>
+<li><p><strong>password</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#bool" title="(in Python v3.13)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.SimpleAuthBackend.logout">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">logout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.SimpleAuthBackend.logout" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-chancy.plugins.api.plugin">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.ApiPlugin">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.api.plugin.</span></span><span class="sig-name descname"><span class="pre">ApiPlugin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">api</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.ApiPlugin" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.13/library/abc.html#abc.ABC" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
+<p>A plugin that provides additional API endpoints.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.ApiPlugin.name">
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.ApiPlugin.name" title="Link to this definition">¶</a></dt>
+<dd><p>Get the name of the plugin.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.ApiPlugin.routes">
+<span class="sig-name descname"><span class="pre">routes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.ApiPlugin.routes" title="Link to this definition">¶</a></dt>
+<dd><p>Get a list of routes to add to the API.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#list" title="(in Python v3.13)">list</a>[<a class="reference internal" href="#chancy.plugins.api.plugin.RouteT" title="chancy.plugins.api.plugin.RouteT"><em>RouteT</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.RouteT">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.api.plugin.</span></span><span class="sig-name descname"><span class="pre">RouteT</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.RouteT" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.13/library/typing.html#typing.TypedDict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code></a></p>
+<p>A type hint for a route.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.RouteT.endpoint">
+<span class="sig-name descname"><span class="pre">endpoint</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.RouteT.endpoint" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.RouteT.is_websocket">
+<span class="sig-name descname"><span class="pre">is_websocket</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.RouteT.is_websocket" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.RouteT.methods">
+<span class="sig-name descname"><span class="pre">methods</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#list" title="(in Python v3.13)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.RouteT.methods" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.RouteT.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.RouteT.name" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chancy.plugins.api.plugin.RouteT.path">
+<span class="sig-name descname"><span class="pre">path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/plugin.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.plugin.RouteT.path" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class" id="module-chancy.plugins.api.core">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.api.core.</span></span><span class="sig-name descname"><span class="pre">CoreApiPlugin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">api</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#chancy.plugins.api.plugin.ApiPlugin" title="chancy.plugins.api.plugin.ApiPlugin"><code class="xref py py-class docutils literal notranslate"><span class="pre">ApiPlugin</span></code></a></p>
+<p>Core API plugin which implements the endpoints for jobs, queues, workers,
+etc…</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.cancel_job">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cancel_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.cancel_job" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.get_configuration">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_configuration</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.get_configuration" title="Link to this definition">¶</a></dt>
+<dd><p>Get the configuration of the Chancy instance.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.get_workers">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_workers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.get_workers" title="Link to this definition">¶</a></dt>
+<dd><p>Get a list of all the workers.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.health">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">health</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.health" title="Link to this definition">¶</a></dt>
+<dd><p>Health check endpoint - returns 200 if the worker is healthy.
+Does not require authentication.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.job">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.job" title="Link to this definition">¶</a></dt>
+<dd><p>GET: Get a single job by ID.
+DELETE: Purge a job by ID.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.jobs">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">jobs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.jobs" title="Link to this definition">¶</a></dt>
+<dd><p>GET: Get a list of jobs with filters and pagination.
+POST: Batch job actions (retry, purge, cancel).</p>
+<p>POST accepts <code class="docutils literal notranslate"><span class="pre">{&quot;action&quot;:</span> <span class="pre">&quot;retry&quot;,</span> <span class="pre">&quot;ids&quot;:</span> <span class="pre">[&quot;job-uuid&quot;,</span> <span class="pre">...]}</span></code>.
+Each distinct ID is processed independently, in request order. The
+response contains <code class="docutils literal notranslate"><span class="pre">results</span></code> with an <code class="docutils literal notranslate"><span class="pre">id</span></code>, a <code class="docutils literal notranslate"><span class="pre">status</span></code> of
+<code class="docutils literal notranslate"><span class="pre">completed</span></code>, <code class="docutils literal notranslate"><span class="pre">skipped</span></code>, or <code class="docutils literal notranslate"><span class="pre">failed</span></code>, and a <code class="docutils literal notranslate"><span class="pre">message</span></code> for skipped
+or failed items. <code class="docutils literal notranslate"><span class="pre">ok</span></code> is true only if every item completed. Earlier
+successes are not rolled back when a later item fails.</p>
+<p>Missing jobs are skipped. Retry skips running jobs; cancel accepts
+pending, running, and retrying jobs and skips finished jobs. Purge
+deletes any existing job without cancelling its execution.</p>
+<p>GET returns jobs in descending ID order. Pass the last returned ID as
+<code class="docutils literal notranslate"><span class="pre">before</span></code> to fetch the next page of lower IDs with the same filters.
+Completion and scheduling times do not affect this order. Pages are
+live results, not a snapshot: jobs may be removed or stop matching
+filters between requests.</p>
+<p>Set <code class="docutils literal notranslate"><span class="pre">pagination=true</span></code> to receive an object with <code class="docutils literal notranslate"><span class="pre">items</span></code>,
+<code class="docutils literal notranslate"><span class="pre">has_more</span></code>, and <code class="docutils literal notranslate"><span class="pre">next_cursor</span></code> (an ID to pass as <code class="docutils literal notranslate"><span class="pre">before</span></code>, or
+null on the last page). Otherwise the response remains a job array.
+<code class="docutils literal notranslate"><span class="pre">limit</span></code> must be positive and is capped at 100.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.jobs_functions">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">jobs_functions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.jobs_functions" title="Link to this definition">¶</a></dt>
+<dd><p>GET: Get a list of distinct function names from jobs.
+Uses in-memory caching to avoid expensive DISTINCT queries.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.login">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">login</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.login" title="Link to this definition">¶</a></dt>
+<dd><p>Login endpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.logout">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">logout</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.logout" title="Link to this definition">¶</a></dt>
+<dd><p>Logout endpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.name">
+<span class="sig-name descname"><span class="pre">name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.name" title="Link to this definition">¶</a></dt>
+<dd><p>Get the name of the plugin.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.pause_queue">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">pause_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.pause_queue" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.plugins">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">plugins</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.plugins" title="Link to this definition">¶</a></dt>
+<dd><p>Get detailed information about all registered plugins.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.queue">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.queue" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.queues">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">queues</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.queues" title="Link to this definition">¶</a></dt>
+<dd><p>GET: Get a list of all queues.
+POST: Create a queue.</p>
+<p>Omitted fields use <a class="reference internal" href="chancy.queue.html#chancy.queue.Queue" title="chancy.queue.Queue"><code class="xref py py-class docutils literal notranslate"><span class="pre">Queue</span></code></a> defaults. Omitted tags
+match all workers; an explicit empty tag list leaves the queue
+unassigned, so no worker will process its jobs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.resume_queue">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">resume_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.resume_queue" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.retry_job">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">retry_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.retry_job" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.routes">
+<span class="sig-name descname"><span class="pre">routes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.routes" title="Link to this definition">¶</a></dt>
+<dd><p>Get a list of routes to add to the API.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.system_info">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">system_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.system_info" title="Link to this definition">¶</a></dt>
+<dd><p>Get system information including version, plugins, and database status.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>request</strong> (<em>Request</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.CoreApiPlugin.ws_events">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ws_events</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">websocket</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.CoreApiPlugin.ws_events" title="Link to this definition">¶</a></dt>
+<dd><p>WebSocket stream of core system events.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>websocket</strong> (<em>WebSocket</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="chancy.plugins.api.core.parse_filters">
+<span class="sig-prename descclassname"><span class="pre">chancy.plugins.api.core.</span></span><span class="sig-name descname"><span class="pre">parse_filters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filters_param</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">field_config</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/api/core.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.api.core.parse_filters" title="Link to this definition">¶</a></dt>
+<dd><p>Parse filter triples and build a rule from them.</p>
+<dl class="simple">
+<dt>Args:</dt><dd><p>filters_param: JSON string of filter triples [[key, op, value], …]
+field_config: Dict mapping field keys to (Rule, [allowed_operators])</p>
+</dd>
+<dt>Returns:</dt><dd><p>tuple: (rule, error_response)
+- rule: Combined Rule object or None
+- error_response: Response object if error, None if success</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="chancy.plugins.cron.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Cron</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="chancy.plugins.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Plugins</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, Tyler Kennedy
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">API/Dashboard</a><ul>
+<li><a class="reference internal" href="#chancy.plugins.api.Api"><code class="docutils literal notranslate"><span class="pre">Api</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.api.Api.build_starlette_app"><code class="docutils literal notranslate"><span class="pre">Api.build_starlette_app()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.Api.get_identifier"><code class="docutils literal notranslate"><span class="pre">Api.get_identifier()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.Api.run"><code class="docutils literal notranslate"><span class="pre">Api.run()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.api.AuthBackend"><code class="docutils literal notranslate"><span class="pre">AuthBackend</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.api.AuthBackend.login"><code class="docutils literal notranslate"><span class="pre">AuthBackend.login()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.AuthBackend.logout"><code class="docutils literal notranslate"><span class="pre">AuthBackend.logout()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.api.SimpleAuthBackend"><code class="docutils literal notranslate"><span class="pre">SimpleAuthBackend</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.api.SimpleAuthBackend.authenticate"><code class="docutils literal notranslate"><span class="pre">SimpleAuthBackend.authenticate()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.SimpleAuthBackend.login"><code class="docutils literal notranslate"><span class="pre">SimpleAuthBackend.login()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.SimpleAuthBackend.logout"><code class="docutils literal notranslate"><span class="pre">SimpleAuthBackend.logout()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.ApiPlugin"><code class="docutils literal notranslate"><span class="pre">ApiPlugin</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.ApiPlugin.name"><code class="docutils literal notranslate"><span class="pre">ApiPlugin.name()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.ApiPlugin.routes"><code class="docutils literal notranslate"><span class="pre">ApiPlugin.routes()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.RouteT"><code class="docutils literal notranslate"><span class="pre">RouteT</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.RouteT.endpoint"><code class="docutils literal notranslate"><span class="pre">RouteT.endpoint</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.RouteT.is_websocket"><code class="docutils literal notranslate"><span class="pre">RouteT.is_websocket</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.RouteT.methods"><code class="docutils literal notranslate"><span class="pre">RouteT.methods</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.RouteT.name"><code class="docutils literal notranslate"><span class="pre">RouteT.name</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.plugin.RouteT.path"><code class="docutils literal notranslate"><span class="pre">RouteT.path</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.cancel_job"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.cancel_job()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.get_configuration"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.get_configuration()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.get_workers"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.get_workers()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.health"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.health()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.job"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.job()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.jobs"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.jobs()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.jobs_functions"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.jobs_functions()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.login"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.login()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.logout"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.logout()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.name"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.name()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.pause_queue"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.pause_queue()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.plugins"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.plugins()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.queue"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.queue()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.queues"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.queues()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.resume_queue"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.resume_queue()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.retry_job"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.retry_job()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.routes"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.routes()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.system_info"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.system_info()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.CoreApiPlugin.ws_events"><code class="docutils literal notranslate"><span class="pre">CoreApiPlugin.ws_events()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.api.core.parse_filters"><code class="docutils literal notranslate"><span class="pre">parse_filters()</span></code></a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/tabs.js?v=3ee01567"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=fd10adb8"></script>
+    <script data-website-id="06fdfd37-2088-44f8-885d-3a2519a2266b" defer="defer" src="https://cloud.umami.is/script.js"></script>
+    </body>
+</html>

@@ -1,0 +1,903 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Pruner" href="chancy.plugins.pruner.html"><link rel="prev" title="Leadership" href="chancy.plugins.leadership.html">
+        <link rel="prefetch" href="_static/logo.png" as="image">
+
+    <!-- Generated with Sphinx 9.0.4 and Furo 2025.12.19 -->
+        <title>Metrics - Chancy</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="_static/tabs.css?v=4c969af8" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Chancy</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="_static/logo.png" alt="Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">Chancy</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 has-children"><a class="reference internal" href="howto/index.html">How To…</a><input aria-label="Toggle navigation of How To…" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="howto/jobs.html">Make Jobs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/celery.html">Compare to Celery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/django.html">Use with Django</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/fastapi.html">Use with Fastapi</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/retry.html">Use Advanced Retries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/context.html">Get The Job Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="howto/log.html">Customize Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current has-children"><a class="reference internal" href="chancy.html">Chancy API</a><input aria-label="Toggle navigation of Chancy API" checked="" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 has-children"><a class="reference internal" href="chancy.executors.html">Executors</a><input aria-label="Toggle navigation of Executors" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.base.html">Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.process.html">ProcessExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.asyncex.html">AsyncExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.thread.html">ThreadedExecutor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.executors.sub.html">SubInterpreterExecutor</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current has-children"><a class="reference internal" href="chancy.plugins.html">Plugins</a><input aria-label="Toggle navigation of Plugins" checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.api.html">API/Dashboard</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.cron.html">Cron</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.leadership.html">Leadership</a></li>
+<li class="toctree-l3 current current-page"><a class="current reference internal" href="#">Metrics</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.pruner.html">Pruner</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.recovery.html">Recovery</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.reprioritize.html">Reprioritization</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.retry.html">Retry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.sentry.html">Sentry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.trigger.html">Triggers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="chancy.plugins.workflow.html">Workflows</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.app.html">chancy.app module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.job.html">chancy.job module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.queue.html">chancy.queue module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.worker.html">chancy.worker module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.plugin.html">chancy.plugin module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.migrate.html">chancy.migrate module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.hub.html">chancy.hub module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.rule.html">chancy.plugins.rule module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.utils.html">chancy.utils module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chancy.errors.html">chancy.errors module</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="design.html">Design</a></li>
+<li class="toctree-l1"><a class="reference internal" href="faq.html">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="similar.html">Similar Projects</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/chancy.plugins.metrics.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="metrics">
+<h1>Metrics<a class="headerlink" href="#metrics" title="Link to this heading">¶</a></h1>
+<p>Metrics describe observations, not an authoritative count of jobs in a queue.
+They are buffered in memory, flushed every 60 seconds by default, and read from
+PostgreSQL. An abrupt worker exit can lose observations that have not been
+flushed. Graceful shutdown flushes metrics after final job updates.</p>
+<section id="meaning-and-units">
+<h2>Meaning and units<a class="headerlink" href="#meaning-and-units" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Counters sum observed increments within the requested window.</p></li>
+<li><p>Gauges select the most recently sampled value, including across workers.</p></li>
+<li><p>Histograms summarize count, sum, minimum and maximum; averages are weighted by
+observation count. These summaries do not support percentiles.</p></li>
+<li><p>Job state and throughput counters count accepted, committed job update events,
+including retries. They do not measure queue occupancy, unique jobs, or every
+state transition: claiming, manual cancellation and recovery use other paths.</p></li>
+<li><p>Job and queue execution times are in seconds and measure the final attempt for
+updates containing both start and completion timestamps.</p></li>
+<li><p>Workflow counters describe committed scheduler transitions. Workflow duration
+is the elapsed time from creation to the scheduler’s terminal update, including
+dependency waits and scheduler delay. Producer submissions are not counted.</p></li>
+<li><p>Table sizes are gauges in bytes, sampled by the leader only.</p></li>
+</ul>
+<p>Custom observations can specify <code class="docutils literal notranslate"><span class="pre">unit</span></code> on
+<a class="reference internal" href="chancy.worker.html#chancy.worker.Worker.increment_counter" title="chancy.worker.Worker.increment_counter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">increment_counter()</span></code></a>,
+<a class="reference internal" href="chancy.worker.html#chancy.worker.Worker.record_gauge" title="chancy.worker.Worker.record_gauge"><code class="xref py py-meth docutils literal notranslate"><span class="pre">record_gauge()</span></code></a> and
+<a class="reference internal" href="chancy.worker.html#chancy.worker.Worker.record_histogram_value" title="chancy.worker.Worker.record_histogram_value"><code class="xref py py-meth docutils literal notranslate"><span class="pre">record_histogram_value()</span></code></a>. A key’s type and unit must
+remain consistent. Keys may contain up to 1,024 UTF-8 bytes; values must be finite
+numbers. Invalid observations are dropped with a rate-limited warning.</p>
+</section>
+<section id="ranges-gaps-and-freshness">
+<h2>Ranges, gaps and freshness<a class="headerlink" href="#ranges-gaps-and-freshness" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/api/v1/metrics/{prefix}</span></code> accepts a <code class="docutils literal notranslate"><span class="pre">resolution</span></code> and a separate <code class="docutils literal notranslate"><span class="pre">range</span></code>
+in seconds. For example, <code class="docutils literal notranslate"><span class="pre">?resolution=5min&amp;range=86400</span></code> requests 24 hours at
+five-minute resolution. <code class="docutils literal notranslate"><span class="pre">worker_id</span></code> optionally limits the observations to one
+worker. A prefix matches the exact key and descendants separated by <code class="docutils literal notranslate"><span class="pre">:</span></code>.</p>
+<p>The response contains <code class="docutils literal notranslate"><span class="pre">start</span></code>, <code class="docutils literal notranslate"><span class="pre">end</span></code>, <code class="docutils literal notranslate"><span class="pre">resolution</span></code>, <code class="docutils literal notranslate"><span class="pre">generated_at</span></code> and a
+<code class="docutils literal notranslate"><span class="pre">series</span></code> mapping. Each series contains <code class="docutils literal notranslate"><span class="pre">type</span></code>, <code class="docutils literal notranslate"><span class="pre">unit</span></code>, <code class="docutils literal notranslate"><span class="pre">aggregation</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sampled_at</span></code>, <code class="docutils literal notranslate"><span class="pre">summary</span></code> and chronological <code class="docutils literal notranslate"><span class="pre">data</span></code> points. Each point contains
+its bucket <code class="docutils literal notranslate"><span class="pre">timestamp</span></code>, last observation’s <code class="docutils literal notranslate"><span class="pre">sampled_at</span></code>, and <code class="docutils literal notranslate"><span class="pre">value</span></code>.
+<code class="docutils literal notranslate"><span class="pre">summary</span></code> uses the same reducer as the metric type over the returned points.
+An empty series has a null summary and null sample time.</p>
+<p>Windows are UTC-aligned and half-open: <code class="docutils literal notranslate"><span class="pre">[start,</span> <span class="pre">end)</span></code>. The default includes the
+current, potentially incomplete bucket. Alternatively, pass timezone-aware ISO
+<code class="docutils literal notranslate"><span class="pre">start</span></code> and <code class="docutils literal notranslate"><span class="pre">end</span></code> timestamps aligned to the chosen resolution. <code class="docutils literal notranslate"><span class="pre">limit</span></code> is
+also supported as a number of time buckets, not a number of populated samples;
+it cannot be combined with <code class="docutils literal notranslate"><span class="pre">start</span></code> or <code class="docutils literal notranslate"><span class="pre">range</span></code>. Invalid windows return HTTP 422.
+Requests are limited to 1,000 buckets and 100 matching series. Read results may
+be cached for ten seconds.</p>
+<p>Missing buckets mean no observation, not zero. Histograms and totals cover only
+observed samples; sample timestamps show how recently a metric was observed.
+The dashboard leaves gaps in charts and displays an unavailable value where no
+summary exists. A success rate requires observations for both outcomes; an
+absent failure series is not evidence of zero failures.</p>
+</section>
+<section id="retention-and-resource-use">
+<h2>Retention and resource use<a class="headerlink" href="#retention-and-resource-use" title="Link to this heading">¶</a></h2>
+<p>Default retention is elapsed time, rather than a count of populated samples:</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Resolution</p></th>
+<th class="head"><p>Retention</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1 minute</p></td>
+<td><p>1 hour</p></td>
+</tr>
+<tr class="row-odd"><td><p>5 minutes</p></td>
+<td><p>24 hours</p></td>
+</tr>
+<tr class="row-even"><td><p>1 hour</p></td>
+<td><p>7 days</p></td>
+</tr>
+<tr class="row-odd"><td><p>1 day</p></td>
+<td><p>90 days</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Expired samples are excluded from reads even before the Pruner removes them.
+Storage groups at most 12 buckets into a chunk; pruning removes fully expired
+chunks, so a boundary chunk can temporarily contain older samples. Each pass
+removes at most 10,000 chunks. Unreferenced metric definitions are also pruned.</p>
+<p>Workers retain current chunks and pending writes instead of reading all workers’
+history. Only changed chunks are written; retries replace the same worker-session
+snapshot without counting it again. Reusing a worker ID preserves previous
+sessions. More frequent worker restarts create additional chunks.</p>
+<p>The in-memory buffer defaults to 10,000 bucket snapshots. If persistence is
+unavailable, dirty observations are retried with backoff, within retention and
+this memory bound. New buckets exceeding the bound are dropped with a warning.
+The API bounds its local read cache to 32 windows and 50,000 points.</p>
+</section>
+<section id="upgrading">
+<h2>Upgrading<a class="headerlink" href="#upgrading" title="Link to this heading">¶</a></h2>
+<p>Metrics migration 2 clears existing metric history and replaces its storage
+layout. Previous timestamps, gauges and sparse retention cannot be translated
+reliably into the new contract. Jobs, queues and workflows are unaffected.
+Stop workers and API processes before migrating, then restart them together;
+the old collector and API are incompatible with the new schema. Downgrading
+also clears metric history.</p>
+</section>
+<section id="module-chancy.plugins.metrics">
+<span id="reference"></span><h2>Reference<a class="headerlink" href="#module-chancy.plugins.metrics" title="Link to this heading">¶</a></h2>
+<p>Metrics plugin for collecting and aggregating job and queue metrics.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.metrics.</span></span><span class="sig-name descname"><span class="pre">Metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_points_per_resolution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maximum_metric_age</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7776000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">collection_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">30</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_buffered_points</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10000</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="chancy.plugin.html#chancy.plugin.Plugin" title="chancy.plugin.Plugin"><code class="xref py py-class docutils literal notranslate"><span class="pre">Plugin</span></code></a></p>
+<p>A plugin that collects and aggregates various metrics from jobs and queues.</p>
+<p>The plugin maintains time-series data for various metrics, with automatic
+aggregation and pruning to provide useful historical data.</p>
+<p>Metrics from all workers can be queried together or filtered by worker.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This plugin is enabled by default, you only need to provide it in the
+list of plugins to customize its arguments or if <code class="docutils literal notranslate"><span class="pre">no_default_plugins</span></code>
+is set to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+</div>
+<p>Enable the plugin by adding it to the list of plugins in the Chancy
+constructor:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">chancy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Chancy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">chancy.plugins.metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">Metrics</span>
+
+<span class="k">async</span> <span class="k">with</span> <span class="n">Chancy</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">plugins</span><span class="o">=</span><span class="p">[</span><span class="n">Metrics</span><span class="p">()])</span> <span class="k">as</span> <span class="n">chancy</span><span class="p">:</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>Data points are aggregated at different resolutions (1 minute, 5 minutes,
+1 hour, 1 day). Counters total observed increments, gauges show the latest
+value, and histograms summarize observations with a weighted average.</p>
+<p>Retention is based on elapsed time, including periods with no observations.
+Missing observations are not treated as zero.</p>
+<p><strong>Default Retention Policy:</strong></p>
+<div class="table-wrapper colwidths-given docutils container">
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 28.6%" />
+<col style="width: 28.6%" />
+<col style="width: 42.9%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Resolution</p></th>
+<th class="head"><p>Time Buckets</p></th>
+<th class="head"><p>Total Time Period</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1 minute</p></td>
+<td><p>60</p></td>
+<td><p>1 hour</p></td>
+</tr>
+<tr class="row-odd"><td><p>5 minutes</p></td>
+<td><p>288</p></td>
+<td><p>1 day (24 hours)</p></td>
+</tr>
+<tr class="row-even"><td><p>1 hour</p></td>
+<td><p>168</p></td>
+<td><p>1 week (7 days)</p></td>
+</tr>
+<tr class="row-odd"><td><p>1 day</p></td>
+<td><p>90</p></td>
+<td><p>90 days (3 months)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Job counters count saved job updates, including retries, rather than the
+number of jobs currently in a queue. Job execution times are in seconds
+and measure the final attempt. Metrics become available after the next
+flush, every 60 seconds by default; an abrupt worker exit can lose recent
+observations that have not yet been saved.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>While you can use this plugin to record your own arbitrary metrics,
+it’s not designed as a general-purpose monitoring solution. For more
+advanced monitoring and visualization, consider using a dedicated
+monitoring tool like Prometheus or Grafana.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sync_interval</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#int" title="(in Python v3.13)"><em>int</em></a>)</p></li>
+<li><p><strong>max_points_per_resolution</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3.13/library/typing.html#typing.Literal" title="(in Python v3.13)"><em>Literal</em></a><em>[</em><em>'1min'</em><em>, </em><em>'5min'</em><em>, </em><em>'1hour'</em><em>, </em><em>'1day'</em><em>]</em><em>, </em><em>int</em><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>maximum_metric_age</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#int" title="(in Python v3.13)"><em>int</em></a>)</p></li>
+<li><p><strong>collection_interval</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#int" title="(in Python v3.13)"><em>int</em></a>)</p></li>
+<li><p><strong>max_buffered_points</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#int" title="(in Python v3.13)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.api_plugin">
+<span class="sig-name descname"><span class="pre">api_plugin</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.api_plugin" title="Link to this definition">¶</a></dt>
+<dd><p>If this plugin has an associated API component, returns the import
+string for the plugin.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.cleanup">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">cleanup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.cleanup" title="Link to this definition">¶</a></dt>
+<dd><p>Clean up old metrics data.</p>
+<p>Called automatically by the Pruner plugin, or may be manually invoked.</p>
+<p>Expired data is excluded from queries even before cleanup runs.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.flush">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">flush</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.flush" title="Link to this definition">¶</a></dt>
+<dd><p>Save recorded metrics so they can be queried.</p>
+<p>Workers call this periodically and during graceful shutdown. Call it
+explicitly when you need pending observations saved sooner. If saving
+fails, pending observations are kept so this method can be retried.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>chancy</strong> – The Chancy application instance.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.get_identifier">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_identifier</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.get_identifier" title="Link to this definition">¶</a></dt>
+<dd><p>Returns a unique identifier for this plugin.</p>
+<p>This identifier should be unique across all active plugins. If a
+custom plugin provides compatible functionality to a built-in plugin,
+it may use the same identifier as the built-in plugin.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.get_metrics">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_prefix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">resolution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'5min'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">range_seconds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.get_metrics" title="Link to this definition">¶</a></dt>
+<dd><p>Get metrics matching the given prefix and time range.</p>
+<p>Metrics from all workers are combined unless <code class="docutils literal notranslate"><span class="pre">worker_id</span></code> is provided.
+Counters sum observed increments, gauges return the most recent value,
+and histogram averages are weighted by the number of observations.
+Missing data points are omitted rather than filled with zeros.</p>
+<p>For example, to get the default queue’s metrics for the last 24 hours:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">metrics</span><span class="o">.</span><span class="n">get_metrics</span><span class="p">(</span>
+    <span class="n">chancy</span><span class="p">,</span>
+    <span class="n">metric_prefix</span><span class="o">=</span><span class="s2">"queue:default"</span><span class="p">,</span>
+    <span class="n">resolution</span><span class="o">=</span><span class="s2">"5min"</span><span class="p">,</span>
+    <span class="n">range_seconds</span><span class="o">=</span><span class="mi">86400</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">metric</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">"series"</span><span class="p">]</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">metric</span><span class="o">.</span><span class="n">summary</span><span class="p">,</span> <span class="n">metric</span><span class="o">.</span><span class="n">unit</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>chancy</strong> – The Chancy application instance.</p></li>
+<li><p><strong>metric_prefix</strong> – Optional metric key or prefix. <code class="docutils literal notranslate"><span class="pre">queue:default</span></code>
+matches that key and its <code class="docutils literal notranslate"><span class="pre">:</span></code>-separated descendants.</p></li>
+<li><p><strong>worker_id</strong> – Optional worker ID to filter by.</p></li>
+<li><p><strong>resolution</strong> – Size of each time bucket: <code class="docutils literal notranslate"><span class="pre">1min</span></code>, <code class="docutils literal notranslate"><span class="pre">5min</span></code>, <code class="docutils literal notranslate"><span class="pre">1hour</span></code>
+or <code class="docutils literal notranslate"><span class="pre">1day</span></code>. Defaults to <code class="docutils literal notranslate"><span class="pre">5min</span></code>.</p></li>
+<li><p><strong>start</strong> – Optional inclusive start time, with a timezone and aligned
+to the chosen resolution. Cannot be combined with
+<code class="docutils literal notranslate"><span class="pre">range_seconds</span></code> or <code class="docutils literal notranslate"><span class="pre">limit</span></code>.</p></li>
+<li><p><strong>end</strong> – Optional exclusive end time, with a timezone and aligned to
+the chosen resolution. Defaults to the end of the current,
+potentially incomplete bucket.</p></li>
+<li><p><strong>range_seconds</strong> – Length of the requested time range, in seconds.
+Must be a multiple of the resolution and within
+retention. Defaults to 24 hours or the retention
+period, whichever is shorter.</p></li>
+<li><p><strong>limit</strong> – Alternative way to specify the range as a number of time
+buckets, including buckets with no observations. Cannot be
+combined with <code class="docutils literal notranslate"><span class="pre">start</span></code> or <code class="docutils literal notranslate"><span class="pre">range_seconds</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dictionary containing <code class="docutils literal notranslate"><span class="pre">start</span></code>, <code class="docutils literal notranslate"><span class="pre">end</span></code>, <code class="docutils literal notranslate"><span class="pre">resolution</span></code>,
+<code class="docutils literal notranslate"><span class="pre">generated_at</span></code> and a <code class="docutils literal notranslate"><span class="pre">series</span></code> mapping of keys to metrics.
+Only saved observations are returned; results may be up to ten
+seconds behind newly saved data.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the window is invalid, exceeds retention or 1,000
+time buckets, or matches more than 100 metric keys.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.get_tables">
+<span class="sig-name descname"><span class="pre">get_tables</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.get_tables" title="Link to this definition">¶</a></dt>
+<dd><p>Get the names of all tables this plugin is responsible for.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.increment_counter">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">increment_counter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric_key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">unit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'count'</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.increment_counter" title="Link to this definition">¶</a></dt>
+<dd><p>Increment a counter metric.</p>
+<p>Counter metrics accumulate values over time periods.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metric_key</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The unique key for the metric</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The value to increment the counter by</p></li>
+<li><p><strong>unit</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Unit of the increments. Defaults to <code class="docutils literal notranslate"><span class="pre">count</span></code>; use the same
+unit for every observation of this metric key.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.list_metrics">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_metrics</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.list_metrics" title="Link to this definition">¶</a></dt>
+<dd><p>Get the keys of all available metrics, in alphabetical order.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>chancy</strong> – The Chancy application instance.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of metric keys.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.migrate_key">
+<span class="sig-name descname"><span class="pre">migrate_key</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.migrate_key" title="Link to this definition">¶</a></dt>
+<dd><p>Get the unique identifier for this plugin’s migrations.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.migrate_package">
+<span class="sig-name descname"><span class="pre">migrate_package</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.migrate_package" title="Link to this definition">¶</a></dt>
+<dd><p>Get the package that contains the migrations for the metrics plugin.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.on_job_updated">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">on_job_updated</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.on_job_updated" title="Link to this definition">¶</a></dt>
+<dd><p>Called for each accepted job update after its transaction commits.</p>
+<p>This method cannot modify the saved update. Updates rejected because
+their claims no longer match or their jobs no longer exist do not
+invoke this hook. Accepted updates retain their original batch order,
+including repeated updates to the same job.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>worker</strong> – The worker saving the update.</p></li>
+<li><p><strong>job</strong> (<a class="reference internal" href="chancy.job.html#chancy.job.QueuedJob" title="chancy.job.QueuedJob"><em>QueuedJob</em></a>) – The accepted update that was committed.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.on_worker_started">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">on_worker_started</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.on_worker_started" title="Link to this definition">¶</a></dt>
+<dd><p>Called when a worker starts, before plugin tasks begin running.</p>
+<p>Use this hook to register event handlers or prepare resources needed
+by other plugins. It is called for plugins with worker scope.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>worker</strong> – The worker being started.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.on_worker_stopped">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">on_worker_stopped</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">worker</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.on_worker_stopped" title="Link to this definition">¶</a></dt>
+<dd><p>Called during shutdown, after the worker saves its final job updates.</p>
+<p>Use this hook to save remaining plugin data and release resources.
+Background tasks have already stopped. If shutdown fails and is retried,
+this hook may be called again, so repeated calls must be safe.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>worker</strong> – The worker being stopped.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.record_gauge">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">record_gauge</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric_key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">unit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'number'</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.record_gauge" title="Link to this definition">¶</a></dt>
+<dd><p>Record a gauge metric which represents a point-in-time value.</p>
+<p>Gauge metrics record the most recent value in each time bucket.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metric_key</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The unique key for the metric</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The value to record</p></li>
+<li><p><strong>unit</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Unit of the value. Defaults to <code class="docutils literal notranslate"><span class="pre">number</span></code>; use the same
+unit for every observation of this metric key.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.record_histogram_value">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">record_histogram_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metric_key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">unit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'number'</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.record_histogram_value" title="Link to this definition">¶</a></dt>
+<dd><p>Record a value to a histogram metric.</p>
+<p>Histogram metrics track statistics (min, max, avg, count) for values
+over time periods.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metric_key</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – The unique key for the metric</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – The value to record</p></li>
+<li><p><strong>unit</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Unit of the observations, such as <code class="docutils literal notranslate"><span class="pre">seconds</span></code>. Defaults to
+<code class="docutils literal notranslate"><span class="pre">number</span></code>; use the same unit for this metric key.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.retention">
+<span class="sig-name descname"><span class="pre">retention</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">resolution</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.retention" title="Link to this definition">¶</a></dt>
+<dd><p>Get the retention period for a resolution, in seconds.</p>
+<p>The configured bucket count and <code class="docutils literal notranslate"><span class="pre">maximum_metric_age</span></code> both limit how
+long observations remain available.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.run">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">worker</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chancy</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.run" title="Link to this definition">¶</a></dt>
+<dd><p>Run the metrics plugin.</p>
+<p>Periodically save recorded metrics and collect database table sizes.
+Workers start this automatically when the plugin is enabled.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.Metrics.window">
+<span class="sig-name descname"><span class="pre">window</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">resolution</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'5min'</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">range_seconds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.Metrics.window" title="Link to this definition">¶</a></dt>
+<dd><p>Get the start and end times for a metric query.</p>
+<p>Times must include a timezone and align to the chosen resolution. The
+start is inclusive and the end is exclusive. By default the range ends
+at the end of the current, potentially incomplete bucket.</p>
+<p>Accepts the same window options as <a class="reference internal" href="#chancy.plugins.metrics.Metrics.get_metrics" title="chancy.plugins.metrics.Metrics.get_metrics"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_metrics()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A <code class="docutils literal notranslate"><span class="pre">(start,</span> <span class="pre">end)</span></code> pair.</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.13/builtins/exceptions.html#ValueError" title="(in Python v3.13)"><strong>ValueError</strong></a> – If the requested window is invalid.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.metrics.Metric">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.metrics.metrics.</span></span><span class="sig-name descname"><span class="pre">Metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.metrics.Metric" title="Link to this definition">¶</a></dt>
+<dd><p>A metric’s observations and summary for a requested time range.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>type</strong> (<a class="reference external" href="https://docs.python.org/3.13/library/typing.html#typing.Literal" title="(in Python v3.13)"><em>Literal</em></a><em>[</em><em>'counter'</em><em>, </em><em>'gauge'</em><em>, </em><em>'histogram'</em><em>]</em>) – <code class="docutils literal notranslate"><span class="pre">counter</span></code>, <code class="docutils literal notranslate"><span class="pre">gauge</span></code> or <code class="docutils literal notranslate"><span class="pre">histogram</span></code>.</p></li>
+<li><p><strong>unit</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a>) – Unit of the recorded values, such as <code class="docutils literal notranslate"><span class="pre">count</span></code> or <code class="docutils literal notranslate"><span class="pre">seconds</span></code>.</p></li>
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#list" title="(in Python v3.13)"><em>list</em></a><em>[</em><a class="reference internal" href="#chancy.plugins.metrics.metrics.MetricPoint" title="chancy.plugins.metrics.metrics.MetricPoint"><em>MetricPoint</em></a><em>]</em>) – Observed data points in chronological order.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.metrics.Metric.aggregation">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">aggregation</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.metrics.Metric.aggregation" title="Link to this definition">¶</a></dt>
+<dd><p>How values are summarized: <code class="docutils literal notranslate"><span class="pre">sum</span></code>, <code class="docutils literal notranslate"><span class="pre">last</span></code> or <code class="docutils literal notranslate"><span class="pre">summary</span></code>.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.metrics.Metric.sampled_at">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">sampled_at</span></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.metrics.Metric.sampled_at" title="Link to this definition">¶</a></dt>
+<dd><p>Time of the latest observation, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if no data is available.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.metrics.Metric.summary">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">summary</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#dict" title="(in Python v3.13)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.13/builtins/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.metrics.Metric.summary" title="Link to this definition">¶</a></dt>
+<dd><p>Summarize observations in this metric’s time range.</p>
+<p>Returns the counter total, most recent gauge value, or histogram
+statistics (<code class="docutils literal notranslate"><span class="pre">count</span></code>, <code class="docutils literal notranslate"><span class="pre">sum</span></code>, <code class="docutils literal notranslate"><span class="pre">avg</span></code>, <code class="docutils literal notranslate"><span class="pre">min</span></code> and <code class="docutils literal notranslate"><span class="pre">max</span></code>).
+Returns <code class="docutils literal notranslate"><span class="pre">None</span></code> when there are no observations.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chancy.plugins.metrics.metrics.MetricPoint">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">chancy.plugins.metrics.metrics.</span></span><span class="sig-name descname"><span class="pre">MetricPoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timestamp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampled_at</span></span></em><span class="sig-paren">)</span><a class="reference external" href="https://github.com/tktech/chancy/blob/main/chancy/plugins/metrics/metrics.py"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#chancy.plugins.metrics.metrics.MetricPoint" title="Link to this definition">¶</a></dt>
+<dd><p>An observed value for one time bucket.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>timestamp</strong> (<a class="reference external" href="https://docs.python.org/3.13/library/datetime.html#datetime.datetime" title="(in Python v3.13)"><em>datetime</em></a>) – Start of the time bucket.</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#dict" title="(in Python v3.13)"><em>dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3.13/builtins/stdtypes.html#str" title="(in Python v3.13)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3.13/builtins/functions.html#int" title="(in Python v3.13)"><em>int</em></a><em>]</em>) – A counter total, gauge value, or histogram statistics.</p></li>
+<li><p><strong>sampled_at</strong> (<a class="reference external" href="https://docs.python.org/3.13/library/datetime.html#datetime.datetime" title="(in Python v3.13)"><em>datetime</em></a>) – Time of the most recent observation in this bucket.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="chancy.plugins.pruner.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Pruner</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="chancy.plugins.leadership.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Leadership</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024, Tyler Kennedy
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Metrics</a><ul>
+<li><a class="reference internal" href="#meaning-and-units">Meaning and units</a></li>
+<li><a class="reference internal" href="#ranges-gaps-and-freshness">Ranges, gaps and freshness</a></li>
+<li><a class="reference internal" href="#retention-and-resource-use">Retention and resource use</a></li>
+<li><a class="reference internal" href="#upgrading">Upgrading</a></li>
+<li><a class="reference internal" href="#module-chancy.plugins.metrics">Reference</a><ul>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics"><code class="docutils literal notranslate"><span class="pre">Metrics</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.api_plugin"><code class="docutils literal notranslate"><span class="pre">Metrics.api_plugin()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.cleanup"><code class="docutils literal notranslate"><span class="pre">Metrics.cleanup()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.flush"><code class="docutils literal notranslate"><span class="pre">Metrics.flush()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.get_identifier"><code class="docutils literal notranslate"><span class="pre">Metrics.get_identifier()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.get_metrics"><code class="docutils literal notranslate"><span class="pre">Metrics.get_metrics()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.get_tables"><code class="docutils literal notranslate"><span class="pre">Metrics.get_tables()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.increment_counter"><code class="docutils literal notranslate"><span class="pre">Metrics.increment_counter()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.list_metrics"><code class="docutils literal notranslate"><span class="pre">Metrics.list_metrics()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.migrate_key"><code class="docutils literal notranslate"><span class="pre">Metrics.migrate_key()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.migrate_package"><code class="docutils literal notranslate"><span class="pre">Metrics.migrate_package()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.on_job_updated"><code class="docutils literal notranslate"><span class="pre">Metrics.on_job_updated()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.on_worker_started"><code class="docutils literal notranslate"><span class="pre">Metrics.on_worker_started()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.on_worker_stopped"><code class="docutils literal notranslate"><span class="pre">Metrics.on_worker_stopped()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.record_gauge"><code class="docutils literal notranslate"><span class="pre">Metrics.record_gauge()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.record_histogram_value"><code class="docutils literal notranslate"><span class="pre">Metrics.record_histogram_value()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.retention"><code class="docutils literal notranslate"><span class="pre">Metrics.retention()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.run"><code class="docutils literal notranslate"><span class="pre">Metrics.run()</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.Metrics.window"><code class="docutils literal notranslate"><span class="pre">Metrics.window()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.metrics.Metric"><code class="docutils literal notranslate"><span class="pre">Metric</span></code></a><ul>
+<li><a class="reference internal" href="#chancy.plugins.metrics.metrics.Metric.aggregation"><code class="docutils literal notranslate"><span class="pre">Metric.aggregation</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.metrics.Metric.sampled_at"><code class="docutils literal notranslate"><span class="pre">Metric.sampled_at</span></code></a></li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.metrics.Metric.summary"><code class="docutils literal notranslate"><span class="pre">Metric.summary</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#chancy.plugins.metrics.metrics.MetricPoint"><code class="docutils literal notranslate"><span class="pre">MetricPoint</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/tabs.js?v=3ee01567"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=fd10adb8"></script>
+    <script data-website-id="06fdfd37-2088-44f8-885d-3a2519a2266b" defer="defer" src="https://cloud.umami.is/script.js"></script>
+    </body>
+</html>
