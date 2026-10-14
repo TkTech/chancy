@@ -692,6 +692,15 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
+        # Concurrency configs are upserted in concurrency_key order for the
+        # same reason jobs are inserted in unique_key order below.
+        concurrency_params = self._concurrency_params(jobs)
+        if concurrency_params:
+            await cursor.executemany(
+                self._push_concurrency_config_sql(),
+                concurrency_params,
+            )
+
         # Jobs are inserted in unique_key order so that concurrent pushes and
         # the worker's batched job updates (which sort the same way) always
         # acquire row locks in the same order and cannot deadlock (#89).
@@ -714,7 +723,7 @@ class Chancy:
         return references
 
     def sync_push_many_ex(
-        self, cursor: Cursor, jobs: list[Job]
+        self, cursor: Cursor, jobs: list[Job | IsAJob[..., Any]]
     ) -> list[Reference]:
         """
         Synchronously push multiple jobs onto the queue using a specific cursor.
@@ -731,6 +740,13 @@ class Chancy:
         :param jobs: The jobs to push onto the queue.
         :return: A list of references to the jobs in the queue.
         """
+        concurrency_params = self._concurrency_params(jobs)
+        if concurrency_params:
+            cursor.executemany(
+                self._push_concurrency_config_sql(),
+                concurrency_params,
+            )
+
         # See push_many_ex for why jobs are inserted in unique_key order.
         references: list[Reference | None] = [None] * len(jobs)
         for index, job in self._in_lock_order(jobs):
@@ -741,7 +757,9 @@ class Chancy:
             record = cursor.fetchone()
             references[index] = Reference(record["id"])
 
-        for queue in {job.queue for job in jobs}:
+        for queue in {
+            job.queue if isinstance(job, Job) else job.job.queue for job in jobs
+        }:
             self.sync_notify(cursor, "queue.pushed", {"q": queue})
 
         return references
@@ -1411,7 +1429,8 @@ class Chancy:
                     priority,
                     max_attempts,
                     scheduled_at,
-                    unique_key
+                    unique_key,
+                    concurrency_key
                 )
             VALUES (
                 %(id)s,
@@ -1423,7 +1442,8 @@ class Chancy:
                 %(priority)s,
                 %(max_attempts)s,
                 %(scheduled_at)s,
-                %(unique_key)s
+                %(unique_key)s,
+                %(concurrency_key)s
             )
             ON CONFLICT (unique_key)
             WHERE
@@ -1530,6 +1550,40 @@ class Chancy:
             action=action,
         )
 
+    def _push_concurrency_config_sql(self):
+        return sql.SQL(
+            """
+            INSERT INTO {concurrency_configs}
+                (concurrency_key, concurrency_max, updated_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (concurrency_key) DO UPDATE SET
+                concurrency_max = EXCLUDED.concurrency_max,
+                updated_at = NOW()
+            """
+        ).format(
+            concurrency_configs=sql.Identifier(
+                f"{self.prefix}concurrency_configs"
+            )
+        )
+
+    @staticmethod
+    def _concurrency_params(
+        jobs: list[Job | IsAJob[..., Any]],
+    ) -> list[tuple[str, int]]:
+        """
+        Collect the concurrency configurations of the given jobs, deduplicated
+        by concurrency key and sorted by it, which is the order in which their
+        row locks must be acquired.
+        """
+        configs = {}
+        for job in jobs:
+            if callable(job):
+                job = job.job
+            if job.concurrency_rule:
+                key = job.evaluate_concurrency_key()
+                configs[key] = (key, job.concurrency_rule.max)
+        return [configs[key] for key in sorted(configs)]
+
     @staticmethod
     def _in_lock_order(
         jobs: list[Job | IsAJob[..., Any]],
@@ -1572,6 +1626,7 @@ class Chancy:
             "max_attempts": job.max_attempts,
             "scheduled_at": job.scheduled_at,
             "unique_key": job.unique_key,
+            "concurrency_key": job.evaluate_concurrency_key(),
         }
 
 

@@ -1,5 +1,6 @@
 __all__ = (
     "Chancy",
+    "ConcurrencyRule",
     "Job",
     "Limit",
     "Queue",
@@ -10,6 +11,6 @@ __all__ = (
 )
 
 from chancy.app import Chancy
-from chancy.job import Job, Limit, QueuedJob, Reference, job
+from chancy.job import ConcurrencyRule, Job, Limit, QueuedJob, Reference, job
 from chancy.queue import Queue
 from chancy.worker import Worker
