@@ -65,13 +65,3 @@ Keep these checks deterministic and independent of a running database. Examples
 requiring PostgreSQL belong in integration tests. Plain `code-block` blocks and
 unmarked `>>>` examples remain illustrative. CI runs doctests before building
 the HTML documentation, and a failing example fails the docs job.
-
-## Screenshots
-
-Chancy comes with an optional dashboard that provides a basic
-look into the status of your queues:
-
-![Workflows](misc/ux_workflow.png)
-![Queue Details](misc/ux_queue.png)
-![Jobs](misc/ux_jobs.png)
-![Job](misc/ux_job_failed.png)
