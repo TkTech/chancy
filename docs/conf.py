@@ -15,11 +15,52 @@ author = "Tyler Kennedy"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
+    "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
     "sphinx.ext.graphviz",
     "sphinx.ext.linkcode",
     "sphinx_inline_tabs",
+    "sphinx_copybutton",
 ]
+
+# Execute explicitly marked examples; existing bare >>> snippets may contain
+# placeholders or require a running database.
+doctest_test_doctest_blocks = ""
+
+nitpicky = True
+autodoc_typehints = "description"
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3.13", None),
+    "psycopg": ("https://www.psycopg.org/psycopg3/docs", None),
+}
+
+nitpick_ignore = [
+    # Generic parameters, rather than documented classes.
+    ("py:obj", "chancy.job.P"),
+    ("py:obj", "chancy.job.R"),
+    ("py:class", "~P"),
+    ("py:class", "chancy.job.R"),
+    # Implementation names exposed by annotations but absent from Python's
+    # inventory, which documents their public aliases instead.
+    ("py:class", "_asyncio.Future"),
+    ("py:class", "_asyncio.Task"),
+    ("py:class", "asyncio.queues.Queue"),
+    ("py:class", "asyncio.locks.Event"),
+    ("py:class", "concurrent.futures._base.Future"),
+    ("py:class", "multiprocessing.context.BaseContext"),
+    # Starlette types have no targets in the configured inventories.
+    ("py:class", "starlette.applications.Starlette"),
+    ("py:class", "starlette.authentication.AuthenticationBackend"),
+    ("py:class", "starlette.authentication.AuthCredentials"),
+    ("py:class", "starlette.authentication.BaseUser"),
+    ("py:class", "starlette.requests.Request"),
+    ("py:class", "starlette.requests.HTTPConnection"),
+    ("py:class", "starlette.websockets.WebSocket"),
+]
+
+copybutton_prompt_text = r">>> |\.\.\. |\$ "
+copybutton_prompt_is_regexp = True
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
@@ -36,9 +77,12 @@ html_title = "Chancy"
 
 html_js_files = [
     (
-        "https://plausible.io/js/script.js",
-        {"data-domain": "tkte.ch", "defer": "defer"},
-    ),
+        "https://cloud.umami.is/script.js",
+        {
+            "data-website-id": "06fdfd37-2088-44f8-885d-3a2519a2266b",
+            "defer": "defer",
+        },
+    )
 ]
 
 # -- Options for todo extension ----------------------------------------------

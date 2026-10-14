@@ -1,38 +1,42 @@
 import asyncio
 import enum
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
-from typing import List, Dict, TextIO, Self
-from psycopg import sql, AsyncCursor
-from psycopg.rows import dict_row, DictRow
+from itertools import islice
+from typing import Self, TextIO
+from uuid import UUID
 
-from chancy.hub import Event
-from chancy.plugin import Plugin
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow, dict_row
+
 from chancy.app import Chancy
+from chancy.hub import Event
+from chancy.job import IsAJob, Job, QueuedJob
+from chancy.plugin import Plugin
+from chancy.rule import Rule, SQLAble
+from chancy.utils import chancy_uuid, json_dumps
 from chancy.worker import Worker
-from chancy.job import Job, QueuedJob, IsAJob
-from chancy.utils import json_dumps, chancy_uuid
-from chancy.rule import Rule
 
 
 class CircularDependencyError(ValueError):
     """Raised when a circular dependency is detected in a workflow."""
 
-    pass
-
 
 class InvalidDependencyError(ValueError):
     """Raised when a dependency references a non-existent step."""
 
-    pass
+
+class EmptyWorkflowError(ValueError):
+    """Raised when a workflow has no steps."""
 
 
 def _dfs_detect_cycle(
     step_id: str,
-    steps: Dict[str, "WorkflowStep"],
-    color: Dict[str, int],
-    path: List[str],
+    steps: dict[str, "WorkflowStep"],
+    color: dict[str, int],
+    path: list[str],
 ) -> None:
     """
     DFS helper to detect cycles in workflow dependency graph.
@@ -68,7 +72,7 @@ class WorkflowStep:
     #: The unique ID of the step.
     step_id: str
     #: A list of step IDs that this step depends on.
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     #: The current state of the step.
     state: QueuedJob.State | None = QueuedJob.State.PENDING
     #: The unique ID of a running Job which is associated with this step.
@@ -77,6 +81,17 @@ class WorkflowStep:
 
 @dataclass
 class Workflow:
+    """
+    A collection of jobs with dependencies between steps.
+
+    Define steps using :meth:`add` or :meth:`add_group`, then submit the
+    workflow using :meth:`WorkflowPlugin.push`. Each step is queued once all
+    of its dependencies have succeeded. Steps without dependencies can run
+    in parallel.
+
+    For jobs that should run one after another, use :class:`Sequence`.
+    """
+
     class State(enum.Enum):
         PENDING = "pending"
         RUNNING = "running"
@@ -86,7 +101,7 @@ class Workflow:
     # A descriptive name for the workflow.
     name: str
     #: A dictionary of steps in the workflow, keyed by step ID.
-    steps: Dict[str, WorkflowStep] = field(default_factory=dict)
+    steps: dict[str, WorkflowStep] = field(default_factory=dict)
     #: The current state of the workflow.
     state: State = State.PENDING
 
@@ -98,7 +113,10 @@ class Workflow:
     updated_at: datetime | None = None
 
     def add(
-        self, step_id: str, job: Job | IsAJob, dependencies: List[str] = None
+        self,
+        step_id: str,
+        job: Job | IsAJob,
+        dependencies: list[str] | None = None,
     ) -> "Workflow":
         """
         Add a step to the workflow.
@@ -121,8 +139,8 @@ class Workflow:
 
     def add_group(
         self,
-        jobs: List[tuple[str, Job | IsAJob]],
-        dependencies: List[str] = None,
+        jobs: list[tuple[str, Job | IsAJob]],
+        dependencies: list[str] | None = None,
     ) -> "Workflow":
         """
         Add a group of steps to the workflow.
@@ -153,7 +171,7 @@ class Workflow:
     def __len__(self) -> int:
         return len(self.steps)
 
-    def __iadd__(self, other: WorkflowStep) -> "Workflow":
+    def __iadd__(self, other: WorkflowStep) -> Self:
         self.steps[other.step_id] = other
         return self
 
@@ -179,12 +197,19 @@ class Workflow:
         Validate the workflow's dependency graph.
 
         This method checks for:
+        - Empty workflows (no steps)
         - Circular dependencies (cycles in the dependency graph)
         - Invalid dependencies (references to non-existent steps)
 
+        :raises EmptyWorkflowError: If the workflow has no steps.
         :raises CircularDependencyError: If a circular dependency is detected.
         :raises InvalidDependencyError: If a dependency references a non-existent step.
         """
+        if not self.steps:
+            raise EmptyWorkflowError(
+                "A workflow must contain at least one step"
+            )
+
         # First, check that all dependencies reference existing steps
         for step_id, step in self.steps.items():
             for dep_id in step.dependencies:
@@ -196,7 +221,7 @@ class Workflow:
         # Detect cycles using DFS with three-color marking
         # WHITE (0) = unvisited, GRAY (1) = in recursion stack, BLACK (2) = processed
         color = {step_id: 0 for step_id in self.steps}
-        path: List[str] = []
+        path: list[str] = []
 
         # Run DFS from all unvisited nodes
         for step_id in self.steps:
@@ -204,7 +229,7 @@ class Workflow:
                 _dfs_detect_cycle(step_id, self.steps, color, path)
 
     @property
-    def steps_by_state(self) -> Dict[QueuedJob.State, List[WorkflowStep]]:
+    def steps_by_state(self) -> dict[QueuedJob.State, list[WorkflowStep]]:
         steps_by_state = {}
         for step in self.steps.values():
             steps_by_state.setdefault(step.state, []).append(step)
@@ -331,9 +356,15 @@ class WorkflowPlugin(Plugin):
         )
 
 
-    :param polling_interval: The interval at which to poll for new workflows.
+    :param polling_interval: The interval between recovery polls. Notification
+                             traffic does not reset this interval.
     :param max_workflows_per_run: The maximum number of workflows to process
-                                  in a single run of the plugin.
+                                  in one polling or notification batch.
+                                  Recovery polls continue where the previous
+                                  batch left off.
+    :param max_pending_workflows: The maximum number of distinct workflows
+                                 awaiting event-driven processing. Further
+                                 notifications rely on periodic polling.
     """
 
     class Rules:
@@ -349,119 +380,336 @@ class WorkflowPlugin(Plugin):
         *,
         polling_interval: int = 30,
         max_workflows_per_run: int = 1000,
-        pruning_rule: Rule = Rules.Age() > 60 * 60 * 24,
+        pruning_rule: SQLAble | None = None,
+        max_pending_workflows: int = 10000,
     ):
         super().__init__()
         self.polling_interval = polling_interval
         self.max_workflows_per_run = max_workflows_per_run
-        self.pruning_rule = pruning_rule
+        self.max_pending_workflows = max_pending_workflows
+        self.pruning_rule = (
+            pruning_rule
+            if pruning_rule is not None
+            else self.Rules.Age() > 60 * 60 * 24
+        )
+        # Progress and a fixed upper bound for the current polling sweep.
+        self._last_polled_id: UUID | None = None
+        self._poll_until_id: UUID | None = None
+        # An insertion-ordered set: repeated events retain their place in line.
+        self._pending_workflows: dict[UUID, None] = {}
 
     async def run(self, worker: Worker, chancy: Chancy):
-        worker.hub.on(
-            "workflow.created",
-            lambda *args, **kwargs: self.wake_up(),
-        )
-        worker.hub.on(
-            "workflow.step_completed",
-            partial(
-                self._on_single_step_completed, chancy=chancy, worker=worker
-            ),
-        )
+        handler = partial(self._on_workflow_event, worker=worker)
+        events = ("workflow.created", "workflow.step_completed")
+        for event in events:
+            worker.hub.on(event, handler)
 
-        while await self.sleep(self.polling_interval):
-            await self.wait_for_leader(worker)
+        loop = asyncio.get_running_loop()
+        next_poll = loop.time() + self.polling_interval
+        retry = worker.database_retry("workflow scheduler")
+        try:
+            while True:
+                await self.wait_for_leader(worker)
+                self.wakeup_signal.clear()
 
-            async with chancy.pool.connection() as conn:
-                async with conn.cursor(row_factory=dict_row) as cursor:
-                    # Grab the workflow IDs of workflows that are pending or
-                    # running and lock them with FOR UPDATE.
-                    await cursor.execute(
-                        sql.SQL(
-                            """
-                            SELECT id
-                            FROM {workflows} w
-                            WHERE w.state IN ('pending', 'running')
-                            FOR UPDATE SKIP LOCKED
-                            LIMIT %(limit)s
-                            """
-                        ).format(
-                            workflows=sql.Identifier(
-                                f"{chancy.prefix}workflows"
-                            ),
-                        ),
-                        {
-                            "limit": self.max_workflows_per_run,
-                        },
-                    )
+                try:
+                    # Event traffic never moves this deadline. Check it between
+                    # batches so notifications cannot starve recovery polling.
+                    if loop.time() >= next_poll:
+                        await worker.increment_counter("workflows:poll_runs", 1)
+                        changes = []
+                        async with (
+                            chancy.pool.connection() as conn,
+                            conn.cursor(row_factory=dict_row) as cursor,
+                        ):
+                            await self.poll(
+                                worker, chancy, cursor, changes=changes
+                            )
+                        await self._record_transitions(worker, changes)
+                        retry.reset()
+                        next_poll = loop.time() + self.polling_interval
 
-                    results = await cursor.fetchall()
-                    if not results:
+                    if not worker.is_leader.is_set():
                         continue
 
-                    workflows = await self.fetch_workflows_ex(
-                        cursor,
-                        chancy,
-                        ids=[row["id"] for row in results],
-                    )
-                    for workflow in workflows:
-                        if await self.process_workflow(
-                            cursor, chancy, workflow
+                    if (
+                        self._pending_workflows
+                        and self.max_workflows_per_run > 0
+                    ):
+                        changes = []
+                        async with (
+                            chancy.pool.connection() as conn,
+                            conn.cursor(row_factory=dict_row) as cursor,
                         ):
-                            await self.push_ex(cursor, chancy, workflow)
+                            await self.process_pending(
+                                worker, chancy, cursor, changes=changes
+                            )
+                        await self._record_transitions(worker, changes)
+                        retry.reset()
+                        if self._pending_workflows:
+                            continue
+                except retry.errors as exc:
+                    # Hints may have been consumed and the transaction's commit
+                    # may be uncertain. Recover from a fresh sweep after backoff.
+                    self._last_polled_id = self._poll_until_id = None
+                    next_poll = 0
+                    await retry.wait(exc)
+                    continue
 
-    async def _on_single_step_completed(
-        self, event: Event, chancy: Chancy, worker: Worker
-    ):
-        """
-        Called whenever a single step in a workflow is completed.
+                await self.sleep(max(0, next_poll - loop.time()))
+        finally:
+            for event in events:
+                worker.hub.remove(event, handler)
 
-        Used to immediately process the workflow and check if it can be
-        progressed to the next step without waiting for the next polling
-        interval.
-        """
+    def _on_workflow_event(self, event: Event, worker: Worker):
+        """Queue a hint without doing database work in the event listener."""
         if not worker.is_leader.is_set():
             return
+        workflow_id = event.body.get("workflow_id", event.body.get("id"))
+        try:
+            workflow_id = UUID(str(workflow_id))
+        except ValueError:
+            return
+        if len(self._pending_workflows) < self.max_pending_workflows:
+            self._pending_workflows.setdefault(workflow_id, None)
+            self.wake_up()
 
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
+    async def process_pending(
+        self,
+        worker: Worker,
+        chancy: Chancy,
+        cursor: AsyncCursor[DictRow],
+        *,
+        changes: list | None = None,
+    ) -> int:
+        """
+        Process one batch of notified workflows using the caller's transaction.
+
+        Duplicate notifications are coalesced until their batch starts. Locked
+        workflows and dropped hints are recovered by periodic polling.
+
+        :return: The number of workflows processed.
+        """
+        ids = list(islice(self._pending_workflows, self.max_workflows_per_run))
+        if not ids:
+            return 0
+        # Remove hints before the first await. A completion arriving while a
+        # batch is in flight must be retained for the next batch.
+        for workflow_id in ids:
+            del self._pending_workflows[workflow_id]
+
+        await cursor.execute(
+            sql.SQL(
+                """
+                SELECT id FROM {workflows}
+                WHERE id = ANY(%(ids)s::uuid[])
+                    AND state IN ('pending', 'running')
+                ORDER BY id
+                FOR UPDATE SKIP LOCKED
+                """
+            ).format(workflows=sql.Identifier(f"{chancy.prefix}workflows")),
+            {"ids": ids},
+        )
+        results = await cursor.fetchall()
+        return await self._process_workflows(
+            cursor,
+            chancy,
+            worker,
+            [row["id"] for row in results],
+            changes=changes,
+        )
+
+    async def _process_workflows(
+        self,
+        cursor: AsyncCursor[DictRow],
+        chancy: Chancy,
+        worker: Worker,
+        ids: list[UUID],
+        *,
+        changes: list | None = None,
+    ) -> int:
+        """Load and advance workflows already locked by the caller."""
+        if not ids:
+            return 0
+        workflows = await self.fetch_workflows_ex(
+            cursor, chancy, ids=ids, limit=len(ids)
+        )
+        for workflow in workflows:
+            previous = workflow.state
+            queued_before = sum(
+                step.job_id is not None for step in workflow.steps.values()
+            )
+            if await self.process_workflow(cursor, chancy, workflow, worker):
+                if workflow.steps:
+                    await self.push_ex(cursor, chancy, workflow, worker)
+                else:
+                    # Persist the failure of a legacy empty workflow without
+                    # allowing empty definitions through submission validation.
+                    await self._persist_workflow(
+                        cursor, chancy, workflow, worker
+                    )
+                if changes is not None:
+                    queued = (
+                        sum(
+                            step.job_id is not None
+                            for step in workflow.steps.values()
+                        )
+                        - queued_before
+                    )
+                    changes.append((previous, workflow, queued))
+        return len(workflows)
+
+    @staticmethod
+    async def _record_transitions(worker: Worker, changes: list):
+        """Publish scheduler observations only after the batch commits."""
+        for previous, workflow, queued in changes:
+            if queued:
+                await worker.increment_counter("workflows:steps:queued", queued)
+            if previous == workflow.state:
+                continue
+            state = workflow.state.value
+            await worker.increment_counter(f"workflows:state:{state}", 1)
+            label = (
+                "started" if workflow.state == Workflow.State.RUNNING else state
+            )
+            await worker.increment_counter(
+                f"workflow:{workflow.name}:{label}", 1
+            )
+            if (
+                workflow.state
+                in (Workflow.State.COMPLETED, Workflow.State.FAILED)
+                and workflow.created_at
+                and workflow.updated_at
+            ):
+                duration = (
+                    workflow.updated_at - workflow.created_at
+                ).total_seconds()
+                for key in (
+                    "workflows:execution_time",
+                    f"workflow:{workflow.name}:execution_time",
+                ):
+                    await worker.record_histogram_value(
+                        key, duration, unit="seconds"
+                    )
+
+    async def poll(
+        self,
+        worker: Worker,
+        chancy: Chancy,
+        cursor: AsyncCursor[DictRow],
+        *,
+        changes: list | None = None,
+    ) -> int:
+        """
+        Process the next batch of up to ``max_workflows_per_run`` pending or
+        running workflows.
+
+        Workflows are taken in ID order within a sweep whose upper bound is
+        fixed at its start. Newer workflows join the next sweep, so arrivals
+        cannot indefinitely postpone revisiting older workflows. A batch
+        stops at the end of its sweep even if it has room for more workflows.
+
+        :param worker: The worker processing the workflows.
+        :param chancy: The Chancy application.
+        :param cursor: The cursor to use for the query.
+        :return: The number of workflows processed.
+        """
+        table = sql.Identifier(f"{chancy.prefix}workflows")
+        after = self._last_polled_id
+        until = self._poll_until_id
+        # If the tail of a sweep has finished or is locked, try a fresh sweep
+        # in this poll. Two attempts suffice, including when no work exists.
+        for _ in range(2):
+            if until is None:
+                # The partial index supplies the sweep boundary without
+                # scanning retained terminal workflows.
                 await cursor.execute(
                     sql.SQL(
                         """
-                        SELECT w.id
-                        FROM {workflows} w
-                        WHERE w.id = %(workflow_id)s
-                        FOR UPDATE SKIP LOCKED
+                        SELECT id FROM {workflows}
+                        WHERE state IN ('pending', 'running')
+                        ORDER BY id DESC LIMIT 1
                         """
-                    ).format(
-                        workflows=sql.Identifier(f"{chancy.prefix}workflows"),
-                        workflow_steps=sql.Identifier(
-                            f"{chancy.prefix}workflow_steps"
-                        ),
+                    ).format(workflows=table)
+                )
+                last = await cursor.fetchone()
+                if last is None:
+                    self._last_polled_id = self._poll_until_id = None
+                    return 0
+                until = last["id"]
+
+            await cursor.execute(
+                sql.SQL(
+                    """
+                    SELECT id
+                    FROM {workflows} w
+                    WHERE w.state IN ('pending', 'running')
+                        AND w.id <= %(until)s::uuid
+                        {after_filter}
+                    ORDER BY w.id
+                    LIMIT %(limit)s
+                    FOR UPDATE SKIP LOCKED
+                    """
+                ).format(
+                    workflows=table,
+                    after_filter=(
+                        sql.SQL("AND w.id > %(after)s::uuid")
+                        if after is not None
+                        else sql.SQL("")
                     ),
-                    {"workflow_id": event.body["workflow_id"]},
-                )
-                # Already locked by someone else.
-                if not await cursor.fetchone():
-                    return
+                ),
+                {
+                    "after": after,
+                    "until": until,
+                    "limit": self.max_workflows_per_run,
+                },
+            )
+            results = await cursor.fetchall()
+            if results:
+                break
+            if after is None:
+                self._last_polled_id = self._poll_until_id = None
+                return 0
+            after = until = None
 
-                workflow = await self.fetch_workflow_ex(
-                    cursor, chancy, event.body["workflow_id"]
-                )
-                if workflow is not None:
-                    if await self.process_workflow(cursor, chancy, workflow):
-                        await self.push_ex(cursor, chancy, workflow)
+        processed = await self._process_workflows(
+            cursor,
+            chancy,
+            worker,
+            [row["id"] for row in results],
+            changes=changes,
+        )
 
-    async def on_job_updated(
+        if (
+            len(results) < self.max_workflows_per_run
+            or results[-1]["id"] == until
+        ):
+            self._last_polled_id = self._poll_until_id = None
+        else:
+            self._last_polled_id = results[-1]["id"]
+            self._poll_until_id = until
+
+        return processed
+
+    async def on_jobs_updated_in_transaction(
         self,
         *,
         worker: "Worker",
-        job: QueuedJob,
+        jobs: Sequence[QueuedJob],
+        cursor: AsyncCursor[DictRow],
     ):
-        if not job.meta.get("workflow_id"):
-            return
-
-        await worker.hub.emit(
-            "workflow.step_completed", {"workflow_id": job.meta["workflow_id"]}
+        workflow_ids = dict.fromkeys(
+            job.meta["workflow_id"]
+            for job in jobs
+            if job.state in (QueuedJob.State.SUCCEEDED, QueuedJob.State.FAILED)
+            and job.meta.get("workflow_id")
+        )
+        await worker.chancy.notify_many(
+            cursor,
+            (
+                ("workflow.step_completed", {"workflow_id": workflow_id})
+                for workflow_id in workflow_ids
+            ),
         )
 
     @classmethod
@@ -502,7 +750,7 @@ class WorkflowPlugin(Plugin):
         states: list[str] | None = None,
         ids: list[str] | None = None,
         limit: int = 100,
-    ) -> List[Workflow]:
+    ) -> list[Workflow]:
         """
         Fetch workflows from the database, optionally matching the given
         conditions.
@@ -513,15 +761,17 @@ class WorkflowPlugin(Plugin):
         :param limit: The maximum number of workflows to fetch.
         :return: A list of workflows.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                return await cls.fetch_workflows_ex(
-                    cursor,
-                    chancy,
-                    states=states,
-                    ids=ids,
-                    limit=limit,
-                )
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            return await cls.fetch_workflows_ex(
+                cursor,
+                chancy,
+                states=states,
+                ids=ids,
+                limit=limit,
+            )
 
     @staticmethod
     async def fetch_workflows_ex(
@@ -531,7 +781,7 @@ class WorkflowPlugin(Plugin):
         states: list[str] | None = None,
         ids: list[str] | None = None,
         limit: int = 100,
-    ) -> List[Workflow]:
+    ) -> list[Workflow]:
         """
         Fetch workflows from the database, optionally matching the given
         conditions.
@@ -563,7 +813,7 @@ class WorkflowPlugin(Plugin):
                             'state', j.state,
                             'job_id', ws.job_id
                         ) order by ws.step_id
-                    ), '[]'::json) as steps
+                    ) FILTER (WHERE ws.step_id IS NOT NULL), '[]'::json) as steps
                 FROM {workflows} w
                 LEFT JOIN {workflow_steps} ws ON w.id = ws.workflow_id
                 LEFT JOIN {jobs} j ON ws.job_id = j.id
@@ -617,7 +867,10 @@ class WorkflowPlugin(Plugin):
 
     @staticmethod
     async def process_workflow(
-        cursor: AsyncCursor, chancy: Chancy, workflow: Workflow
+        cursor: AsyncCursor,
+        chancy: Chancy,
+        workflow: Workflow,
+        worker: "Worker",
     ) -> bool:
         """
         Process a single iteration of the given workflow, progressing the
@@ -626,6 +879,7 @@ class WorkflowPlugin(Plugin):
         :param cursor: The cursor to use for the query.
         :param chancy: The Chancy application.
         :param workflow: The workflow to process.
+        :param worker: The worker processing the workflow.
         :return: True if the workflow was updated, False otherwise.
         """
         # If the workflow is already in a terminal state, there's no further
@@ -643,7 +897,7 @@ class WorkflowPlugin(Plugin):
         #    - If it has an associated job, and if so, what's the state of it?
         #    - If it has any dependencies, and if so, are they all completed?
         # If all dependencies are met, we can execute the job.
-        for step_id, step in workflow.steps.items():
+        for step in workflow.steps.values():
             # If the step is already in a terminal state, we can skip it.
             if step.state in [
                 QueuedJob.State.SUCCEEDED,
@@ -652,29 +906,40 @@ class WorkflowPlugin(Plugin):
                 continue
 
             dependencies = [workflow.steps[dep] for dep in step.dependencies]
-            if all(
-                dep.state == QueuedJob.State.SUCCEEDED for dep in dependencies
+            if (
+                all(
+                    dep.state == QueuedJob.State.SUCCEEDED
+                    for dep in dependencies
+                )
+                and step.job_id is None
             ):
-                if step.job_id is None:
-                    step.job_id = (
-                        await chancy.push_ex(
-                            cursor,
-                            step.job.with_meta(
-                                {
-                                    **step.job.meta,
-                                    "workflow_id": str(workflow.id),
-                                }
-                            ),
-                        )
-                    ).identifier
-                    has_change = True
+                step.job_id = (
+                    await chancy.push_ex(
+                        cursor,
+                        step.job.with_meta(
+                            {
+                                **step.job.meta,
+                                "workflow_id": str(workflow.id),
+                            }
+                        ),
+                    )
+                ).identifier
+                has_change = True
+
+        # Transition from PENDING to RUNNING once any step has been queued
+        if workflow.state == Workflow.State.PENDING and any(
+            step.job_id is not None for step in workflow.steps.values()
+        ):
+            workflow.state = Workflow.State.RUNNING
 
         # Are all jobs complete, or any jobs failed? If so, we can mark the
         # workflow as completed or failed.
         states = workflow.steps_by_state
-        if len(states.get(QueuedJob.State.SUCCEEDED, [])) == len(workflow):
+        if workflow.steps and len(
+            states.get(QueuedJob.State.SUCCEEDED, [])
+        ) == len(workflow):
             workflow.state = Workflow.State.COMPLETED
-        elif states.get(QueuedJob.State.FAILED):
+        elif not workflow.steps or states.get(QueuedJob.State.FAILED):
             workflow.state = Workflow.State.FAILED
 
         return starting_state != workflow.state or has_change
@@ -691,14 +956,20 @@ class WorkflowPlugin(Plugin):
         :param workflow: The workflow to push.
         :return: The UUID of the newly created workflow.
         """
-        async with chancy.pool.connection() as conn:
-            async with conn.transaction():
-                async with conn.cursor(row_factory=dict_row) as cursor:
-                    return await cls.push_ex(cursor, chancy, workflow)
+        async with (
+            chancy.pool.connection() as conn,
+            conn.transaction(),
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            return await cls.push_ex(cursor, chancy, workflow)
 
-    @staticmethod
+    @classmethod
     async def push_ex(
-        cursor: AsyncCursor[DictRow], chancy: Chancy, workflow: Workflow
+        cls,
+        cursor: AsyncCursor[DictRow],
+        chancy: Chancy,
+        workflow: Workflow,
+        worker: "Worker" = None,
     ) -> str:
         """
         Push new workflow to the database.
@@ -712,12 +983,23 @@ class WorkflowPlugin(Plugin):
         :param cursor: The cursor to use for the query.
         :param chancy: The Chancy application.
         :param workflow: The workflow to push.
+        :param worker: Associated worker. The scheduler emits metrics after commit.
         :return: The UUID of the newly created workflow.
+        :raises EmptyWorkflowError: If the workflow has no steps.
         :raises CircularDependencyError: If a circular dependency is detected.
         :raises InvalidDependencyError: If a dependency references a non-existent step.
         """
         workflow.validate()
+        return await cls._persist_workflow(cursor, chancy, workflow, worker)
 
+    @staticmethod
+    async def _persist_workflow(
+        cursor: AsyncCursor[DictRow],
+        chancy: Chancy,
+        workflow: Workflow,
+        worker: "Worker" = None,
+    ) -> str:
+        """Persist a validated submission or a scheduler state transition."""
         await cursor.execute(
             sql.SQL(
                 """
@@ -825,8 +1107,9 @@ class WorkflowPlugin(Plugin):
 
         # Add edges (dependencies)
         for step_id, step in workflow.steps.items():
-            for dep in step.dependencies:
-                output.write(f'  "{dep}" -> "{step_id}";\n')
+            output.writelines(
+                f'  "{dep}" -> "{step_id}";\n' for dep in step.dependencies
+            )
 
         # Add workflow info
         output.write('  labelloc="t";\n')
@@ -838,21 +1121,20 @@ class WorkflowPlugin(Plugin):
         output.write("}\n")
 
     async def cleanup(self, chancy: Chancy) -> int | None:
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    sql.SQL(
-                        """
+        async with chancy.pool.connection() as conn, conn.cursor() as cursor:
+            await cursor.execute(
+                sql.SQL(
+                    """
                         DELETE FROM {workflows}
                         WHERE state NOT IN ('pending', 'running')
                         AND ({rule})
                         """
-                    ).format(
-                        workflows=sql.Identifier(f"{chancy.prefix}workflows"),
-                        rule=self.pruning_rule.to_sql(),
-                    )
+                ).format(
+                    workflows=sql.Identifier(f"{chancy.prefix}workflows"),
+                    rule=self.pruning_rule.to_sql(),
                 )
-                return cursor.rowcount
+            )
+            return cursor.rowcount
 
     @classmethod
     async def wait_for_workflow(
@@ -861,7 +1143,7 @@ class WorkflowPlugin(Plugin):
         workflow_id: str,
         *,
         interval: int = 1,
-        timeout: float | int | None = None,
+        timeout: float | None = None,
     ) -> Workflow:
         """
         Wait for a workflow to complete.
@@ -972,7 +1254,7 @@ class Sequence:
             asyncio.run(main())
     """
 
-    def __init__(self, name: str, jobs: List[Job | IsAJob] = None):
+    def __init__(self, name: str, jobs: list[Job | IsAJob] | None = None):
         self.name = name
         self.jobs = jobs or []
 

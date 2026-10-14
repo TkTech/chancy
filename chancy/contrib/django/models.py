@@ -5,11 +5,11 @@ Makes the assumption that the Django default database is the same as the Chancy
 database.
 """
 
-__all__ = ("Job", "Worker", "Queue")
+__all__ = ("Job", "Queue", "Worker")
 
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
-from django.conf import settings
 
 from chancy.utils import chancy_uuid
 
@@ -28,6 +28,7 @@ class Job(models.Model):
     attempts = models.IntegerField(default=0)
     max_attempts = models.IntegerField(default=1)
     taken_by = models.TextField(null=True)
+    claim_id = models.UUIDField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True)
     completed_at = models.DateTimeField(null=True)

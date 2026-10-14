@@ -6,8 +6,8 @@ PostgreSQL database without any dependencies on the rest of the Chancy
 project.
 """
 
-import re
 import importlib.resources
+import re
 
 from psycopg import AsyncConnection, AsyncCursor, sql
 from psycopg.rows import DictRow, dict_row
@@ -114,29 +114,29 @@ class Migrator:
         migrations = self.discover_all_migrations()
         to_version = len(migrations) if to_version is None else to_version
 
-        async with conn.cursor(row_factory=dict_row) as cursor:
-            async with conn.transaction():
-                current_version = await self.get_current_version(cursor)
+        async with (
+            conn.cursor(row_factory=dict_row) as cursor,
+            conn.transaction(),
+        ):
+            current_version = await self.get_current_version(cursor)
 
-                if current_version == to_version:
-                    return False
+            if current_version == to_version:
+                return False
 
-                if to_version > len(migrations):
-                    raise MigrationError(
-                        f"Migration {to_version} does not exist for {self.key}"
-                    )
+            if to_version > len(migrations):
+                raise MigrationError(
+                    f"Migration {to_version} does not exist for {self.key}"
+                )
 
-                while current_version != to_version:
-                    if current_version < to_version:
-                        current_version += 1
-                        await migrations[current_version - 1].up(self, cursor)
-                        await self.set_current_version(cursor, current_version)
-                    else:
-                        await migrations[current_version - 1].down(self, cursor)
-                        await self.set_current_version(
-                            cursor, current_version - 1
-                        )
-                        current_version -= 1
+            while current_version != to_version:
+                if current_version < to_version:
+                    current_version += 1
+                    await migrations[current_version - 1].up(self, cursor)
+                    await self.set_current_version(cursor, current_version)
+                else:
+                    await migrations[current_version - 1].down(self, cursor)
+                    await self.set_current_version(cursor, current_version - 1)
+                    current_version -= 1
 
         return True
 

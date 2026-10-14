@@ -12,7 +12,6 @@ def queue_group():
     """
     Queue management commands.
     """
-    pass
 
 
 @queue_group.command()

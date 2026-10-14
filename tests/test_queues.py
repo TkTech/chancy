@@ -1,8 +1,8 @@
-import pytest
 import datetime
 
-from chancy import Worker, Chancy, Queue, QueuedJob, job
+import pytest
 
+from chancy import Chancy, Queue, QueuedJob, Worker, job
 
 low = Queue("low", concurrency=1)
 high = Queue("high", concurrency=1)
@@ -72,51 +72,22 @@ async def test_get_single_queue(chancy: Chancy):
 
 
 @pytest.mark.asyncio
-async def test_default_concurrency_sync(
-    chancy: Chancy, worker: Worker, sync_executor
+async def test_default_concurrency(
+    chancy: Chancy, worker: Worker, async_job_executor
 ):
     """
-    Ensure that queues with default concurrency (None) can run jobs with sync executors.
+    Ensure each executor can run jobs with its default concurrency.
 
     When concurrency is None, the executor's get_default_concurrency() method
     should determine the actual concurrency level.
     """
-    queue = Queue("default_concurrency_sync", executor=sync_executor)
+    queue = Queue("default_concurrency", executor=async_job_executor)
     await chancy.declare(queue)
 
     job_refs = []
     for _ in range(5):
         ref = await chancy.push(
-            job_to_run.job.with_queue("default_concurrency_sync")
-        )
-        job_refs.append(ref)
-
-    jobs = []
-    for ref in job_refs:
-        j = await chancy.wait_for_job(ref)
-        jobs.append(j)
-
-    for j in jobs:
-        assert j.state == QueuedJob.State.SUCCEEDED
-
-
-@pytest.mark.asyncio
-async def test_default_concurrency_async(
-    chancy: Chancy, worker: Worker, async_executor
-):
-    """
-    Ensure that queues with default concurrency (None) can run jobs with async executors.
-
-    When concurrency is None, the executor's get_default_concurrency() method
-    should determine the actual concurrency level.
-    """
-    queue = Queue("default_concurrency_async", executor=async_executor)
-    await chancy.declare(queue)
-
-    job_refs = []
-    for _ in range(5):
-        ref = await chancy.push(
-            async_job_to_run.job.with_queue("default_concurrency_async")
+            async_job_to_run.job.with_queue("default_concurrency")
         )
         job_refs.append(ref)
 
@@ -135,7 +106,7 @@ async def test_queue_resume_time_tracking(chancy: Chancy):
     Ensure that paused queues with resume_at set correctly track the time
     when they should automatically resume.
     """
-    resume_time = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    resume_time = datetime.datetime.min.replace(tzinfo=datetime.UTC)
     paused_queue = Queue(
         "tracking_queue",
         concurrency=1,
@@ -176,7 +147,7 @@ async def test_queue_auto_resume(chancy: Chancy, worker: Worker):
     await chancy.pause_queue(
         "auto_resume_queue",
         resume_at=(
-            datetime.datetime.now(tz=datetime.timezone.utc)
+            datetime.datetime.now(tz=datetime.UTC)
             + datetime.timedelta(seconds=10)
         ),
     )

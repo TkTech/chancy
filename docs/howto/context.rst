@@ -40,3 +40,20 @@ use to store arbitrary data about the job:
         context.meta["attempts"] = context.meta.get("attempts", 0) + 1
 
 
+Cooperative Time Limits
+-----------------------
+
+Time limits in the threaded and sub-interpreter executors are cooperative.
+Both synchronous and coroutine jobs must accept the job context and call
+:meth:`~chancy.job.QueuedJob.checkpoint` at points where execution can be
+safely interrupted.
+
+.. code-block:: python
+
+    from chancy import Limit, QueuedJob, job
+
+    @job(limits=[Limit(Limit.Type.TIME, 60)])
+    def process_items(*, context: QueuedJob):
+        for item in get_items():
+            process(item)
+            context.checkpoint()

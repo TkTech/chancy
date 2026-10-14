@@ -73,6 +73,8 @@ class Queue:
     #: core count, unless overridden by a plugin.
     concurrency: int | None = None
     #: The tags that determine which workers will process this queue.
+    #: Defaults to {".*"}, matching all workers. An empty set leaves the queue
+    #: unassigned: no worker will process its jobs until matching tags are set.
     tags: set[str] = dataclasses.field(default_factory=lambda: {r".*"})
     #: The state of the queue.
     state: State = State.ACTIVE

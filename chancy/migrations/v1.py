@@ -60,10 +60,15 @@ class V1Migration(Migration):
                     expires_at TIMESTAMPTZ NOT NULL
                 );
                 ALTER TABLE {leader}
-                    ADD CONSTRAINT leader_worker_id_unique UNIQUE
+                    ADD CONSTRAINT {leader_worker_id_unique} UNIQUE
                         (worker_id);
                 """
-            ).format(leader=sql.Identifier(f"{migrator.prefix}leader"))
+            ).format(
+                leader=sql.Identifier(f"{migrator.prefix}leader"),
+                leader_worker_id_unique=sql.Identifier(
+                    f"{migrator.prefix}leader_worker_id_unique"
+                ),
+            )
         )
 
         await cursor.execute(

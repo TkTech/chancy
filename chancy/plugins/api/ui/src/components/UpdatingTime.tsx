@@ -22,36 +22,26 @@ export function UpdatingTime ({ date }: { date: string }) {
   return time;
 }
 
-export function CountdownTimer({ date, className }: { date: string | undefined, className?: string }) {
-  const [timeString, setTimeString] = useState('');
+export function CountdownTimer({ date, className }: { date: string | null | undefined, className?: string }) {
+  const [now, setNow] = useState(Date.now);
 
   useEffect(() => {
-    if (!date) {
-      setTimeString('-');
-      return;
-    }
-
-    const updateTimer = () => {
-      const now = new Date().getTime();
-      const target = new Date(date).getTime();
-      const diff = Math.abs(target - now);
-      
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      
-      setTimeString(
-        (now < target ? "+" : "-") +
-        `${hours.toString().padStart(2, '0')}h` +
-        `${minutes.toString().padStart(2, '0')}m` +
-        `${seconds.toString().padStart(2, '0')}s`
-      );
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [date]);
+  }, []);
+
+  let timeString = '-';
+  if (date) {
+    const target = new Date(date).getTime();
+    const diff = Math.abs(target - now);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    timeString = (now < target ? '+' : '-') +
+      `${hours.toString().padStart(2, '0')}h` +
+      `${minutes.toString().padStart(2, '0')}m` +
+      `${seconds.toString().padStart(2, '0')}s`;
+  }
 
   return <span className={className}>{timeString}</span>;
 }

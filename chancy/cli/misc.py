@@ -5,7 +5,7 @@ import click
 from psycopg import AsyncCursor
 from psycopg.rows import DictRow, dict_row
 
-from chancy import Chancy, Worker, Job, QueuedJob, Limit, Reference, Queue
+from chancy import Chancy, Job, Limit, Queue, QueuedJob, Reference, Worker
 from chancy.cli import run_async_command
 from chancy.migrate import Migrator
 
@@ -15,7 +15,6 @@ def misc_group():
     """
     Miscellaneous commands.
     """
-    pass
 
 
 @misc_group.command()
@@ -98,18 +97,20 @@ async def check_migrations(ctx: click.Context):
 
     async with chancy:
         migrator = Migrator("chancy", "chancy.migrations", prefix=chancy.prefix)
-        async with chancy.pool.connection() as conn:
-            async with conn.cursor(row_factory=dict_row) as cursor:
-                click.echo("Chancy Core")
+        async with (
+            chancy.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cursor,
+        ):
+            click.echo("Chancy Core")
+            await _check_migrations(migrator, cursor)
+
+            for plugin in chancy.plugins.values():
+                migrator = plugin.migrator(chancy)
+                if migrator is None:
+                    continue
+
+                click.echo(f"|-{plugin.__class__.__name__} Plugin")
                 await _check_migrations(migrator, cursor)
-
-                for plugin in chancy.plugins.values():
-                    migrator = plugin.migrator(chancy)
-                    if migrator is None:
-                        continue
-
-                    click.echo(f"|-{plugin.__class__.__name__} Plugin")
-                    await _check_migrations(migrator, cursor)
 
 
 @misc_group.command()

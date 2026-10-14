@@ -1,25 +1,14 @@
 import {useQuery} from '@tanstack/react-query';
+import { ChancyApi } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
 
-interface Queue {
-  name: string;
-  concurrency: number;
-  tags: string[];
-  state: string;
-  executor: string;
-  executor_options: Record<string, unknown>;
-  polling_interval: number;
-  rate_limit: number | null;
-  rate_limit_window: number | null;
-  resume_at: string | null;
-}
+export type { Queue } from '../services/schemas';
 
 export function useQueues(url: string | null) {
-  return useQuery<Queue[]>({
-    queryKey: ['queues', url],
-    queryFn: async () => {
-      const response = await fetch(`${url}/api/v1/queues`);
-      return await response.json();
-    },
-    enabled: url !== null
+  return useQuery({
+    queryKey: queryKeys.queues(url),
+    queryFn: ({ signal }) => ChancyApi(url!).listQueues(signal),
+    enabled: url !== null,
+    refetchInterval: 10000
   });
 }

@@ -44,10 +44,14 @@ updating the job status in the database as it progresses.
       async with Worker(chancy) as worker:
           await worker.wait_for_shutdown()
 
-The worker will use Postgres' ``SELECT...FOR UPDATE SKIP LOCKED`` to guarantee
-that only one worker is running a given job at a time. If the worker happens
-to crash while running a job, the :class:`~chancy.plugins.recovery.Recovery`
-plugin will periodically restore them.
+The worker uses Postgres' ``SELECT...FOR UPDATE SKIP LOCKED`` to prevent
+simultaneous claims of a job. Each execution receives a new claim ID. If a
+worker loses its heartbeat, the :class:`~chancy.plugins.recovery.Recovery`
+plugin invalidates its claim and requeues the job, requesting best-effort
+cancellation of the abandoned execution. A late completion from that execution
+cannot update the job or invoke database-update hooks. Execution can still
+overlap if cancellation is unavailable or delayed, so jobs must remain
+idempotent with respect to external side effects.
 
 Each worker also listens for realtime events using Postgres' ``LISTEN/NOTIFY``
 mechanism. This allows the worker to be notified of new jobs being pushed to

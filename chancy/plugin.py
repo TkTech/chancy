@@ -1,8 +1,12 @@
 import abc
-import enum
 import asyncio
+import enum
 import typing
+from collections.abc import Sequence
 from typing import Any
+
+from psycopg import AsyncCursor
+from psycopg.rows import DictRow
 
 from chancy import utils
 from chancy.job import QueuedJob
@@ -171,6 +175,51 @@ class Plugin(abc.ABC):
         """
         raise NotImplementedError()
 
+    async def on_jobs_updated_in_transaction(
+        self,
+        *,
+        worker: "Worker",
+        jobs: Sequence[QueuedJob],
+        cursor: AsyncCursor[DictRow],
+    ):
+        """
+        Called after a batch's SQL updates, before its transaction commits.
+
+        Use the supplied cursor for database work that must commit atomically
+        with the job updates. Raising an exception rolls back the batch. This
+        hook may run again on retry; avoid external or in-memory side effects.
+        Use :meth:`~chancy.plugin.Plugin.on_job_updated` for work that requires
+        committed updates.
+
+        :param worker: The worker saving the updates.
+        :param jobs: Only updates whose claims matched and whose database rows
+                     were updated, in their original order, including repeated
+                     accepted updates to the same job. Rejected updates are
+                     omitted; this hook is not called if none were accepted.
+        :param cursor: The cursor for the current update transaction.
+        """
+
+    async def on_worker_started(self, *, worker: "Worker"):
+        """
+        Called when a worker starts, before plugin tasks begin running.
+
+        Use this hook to register event handlers or prepare resources needed
+        by other plugins. It is called for plugins with worker scope.
+
+        :param worker: The worker being started.
+        """
+
+    async def on_worker_stopped(self, *, worker: "Worker"):
+        """
+        Called during shutdown, after the worker saves its final job updates.
+
+        Use this hook to save remaining plugin data and release resources.
+        Background tasks have already stopped. If shutdown fails and is retried,
+        this hook may be called again, so repeated calls must be safe.
+
+        :param worker: The worker being stopped.
+        """
+
     async def on_job_updated(
         self,
         *,
@@ -178,14 +227,15 @@ class Plugin(abc.ABC):
         job: QueuedJob,
     ):
         """
-        Called after a job has been run and saved.
+        Called for each accepted job update after its transaction commits.
 
-        Unlike on_job_completed, this method cannot modify the job, but the job
-        is guaranteed to have been updated in the database by the time it is
-        called.
+        This method cannot modify the saved update. Updates rejected because
+        their claims no longer match or their jobs no longer exist do not
+        invoke this hook. Accepted updates retain their original batch order,
+        including repeated updates to the same job.
 
-        :param worker: The worker that is running the job.
-        :param job: The job that was completed.
+        :param worker: The worker saving the update.
+        :param job: The accepted update that was committed.
         """
 
     def get_tables(self) -> list[str]:

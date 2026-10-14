@@ -1,45 +1,45 @@
-import {useRef} from 'react';
 import type {NodeProps} from '@xyflow/react';
-import {Edge, Handle, MarkerType, Node, NodeTypes, Position, ReactFlow,} from '@xyflow/react';
+import {Edge, Handle, MarkerType, Node, NodeTypes, Position, ReactFlow, Background, Controls, useReactFlow} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
-import {Workflow} from '../hooks/useWorkflows.tsx';
-import {Link} from 'react-router-dom';
-import {statusToColor} from '../utils.tsx';
+import type { Workflow, Step } from '../services/schemas';
+import { StatusBadge } from '../components/common/StatusBadge';
+import {statusToColor, extractFunctionName} from '../utils.tsx';
+import { stepStatus } from '../features/workflows/diagnostics';
 
 interface WorkflowChartProps {
   workflow: Workflow;
+  onStepClick: (stepId: string) => void;
+  matchingStepIds?: string[];
 }
 
-type CustomNode = Node<{
-  label: string,
-  jobId: string,
-  state: string,
-  job: {
-    func: string
-  }
-}, 'custom'>;
+type CustomNode = Node<Pick<Step, 'job'> & {
+  state: string;
+  label: string;
+  inspect: () => void;
+}, 'customNode'>;
 
 const CustomNode = ({ data }: NodeProps<CustomNode>) => {
-  const nodeRef = useRef<HTMLDivElement>(null);
+  const functionName = extractFunctionName(data.job?.func || '');
 
   return (
-    <div ref={nodeRef} style={{
-      minWidth: "350px",
+    <div style={{
+      minWidth: "250px",
     }}>
       <Handle type="target" position={Position.Left} style={{
         opacity: 0,
       }} />
-      <div className={`p-3 border border-2 border-${statusToColor(data.state)}`}>
-        <div className={"fw-bolder"}>{data.label}</div>
-        <div className="text-xs">
-          {data.jobId ? (
-            <Link to={`/jobs/${data.jobId}`}>
-              {data.jobId}
-            </Link>
-          ) : "-"}
+      <button type="button" onClick={data.inspect} aria-label={`Inspect step ${data.label}, ${data.state}`} className={`nodrag nopan w-100 text-start text-body p-3 border border-2 border-${statusToColor(data.state)} bg-body`}>
+        <div className="d-flex align-items-center justify-content-between gap-2">
+          <div className="fw-bold text-truncate" title={data.label}>{data.label}</div>
+          <StatusBadge status={data.state} />
         </div>
-      </div>
+        {functionName && (
+          <div className={"text-muted small text-truncate"} title={data.job?.func}>
+            {functionName}
+          </div>
+        )}
+      </button>
       <Handle type="source" position={Position.Right} style={{
         opacity: 0,
       }}/>
@@ -55,10 +55,14 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  dagreGraph.setGraph({ rankdir: direction });
+  dagreGraph.setGraph({
+    rankdir: direction,
+    nodesep: 80,  // Horizontal spacing between nodes at the same rank
+    ranksep: 120, // Vertical spacing between ranks
+  });
 
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: 350, height: 80 });
+    dagreGraph.setNode(node.id, { width: 250, height: 70 });
   });
 
   edges.forEach((edge) => {
@@ -81,7 +85,9 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   return { nodes: layoutNodes, edges };
 };
 
-const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
+const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow, onStepClick, matchingStepIds }) => {
+    const { fitView } = useReactFlow();
+    const matches = matchingStepIds ? new Set(matchingStepIds) : undefined;
     const nodes: Node[] = [];
     const edges: Edge[] = [];
 
@@ -91,10 +97,11 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
             type: 'customNode',
             data: {
               label: stepId,
-              jobId: step.job_id,
-              state: step.state,
+              state: stepStatus(step),
               job: step.job,
+              inspect: () => onStepClick(stepId),
             },
+            style: { opacity: matches && !matches.has(stepId) ? 0.35 : 1 },
             position: { x: 0, y: 0 },
         });
 
@@ -103,7 +110,7 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
                 id: `e${dependencyId}-${stepId}`,
                 source: dependencyId,
                 target: stepId,
-                animated: workflow.steps[stepId].state === null,
+                animated: workflow.steps?.[stepId].state === null,
                 style: {
                   strokeWidth: 2,
                 },
@@ -117,19 +124,28 @@ const WorkflowChart: React.FC<WorkflowChartProps> = ({ workflow }) => {
     const { nodes: layoutNodes, edges: layoutEdges } = getLayoutedElements(nodes, edges);
 
     return (
-        <div style={{ width: '100%', height: '500px' }}>
+        <>
+          {matchingStepIds && (
+            <button className="btn btn-sm btn-outline-secondary mb-2" disabled={matchingStepIds.length === 0} onClick={() => void fitView({ nodes: matchingStepIds.map(id => ({ id })), padding: 0.2, maxZoom: 1 })}>Focus matching steps</button>
+          )}
+          <div style={{ width: '100%', height: '500px' }}>
             <ReactFlow
                 nodes={layoutNodes}
                 edges={layoutEdges}
                 nodeTypes={nodeTypes}
                 nodesDraggable={false}
                 nodesConnectable={false}
+                nodesFocusable={false}
                 proOptions={{
                     hideAttribution: true,
                 }}
                 fitView
-            />
-        </div>
+            >
+                <Background gap={20} size={1} />
+                <Controls showInteractive={false} />
+            </ReactFlow>
+          </div>
+        </>
     );
 };
 

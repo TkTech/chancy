@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from chancy import Chancy, Worker, Queue, job
+from chancy import Chancy, Queue, Worker, job
 
 
 @job()

@@ -16,31 +16,57 @@ capabilities of each executor:
 
 .. list-table:: Executor Capabilities
    :header-rows: 1
-   :widths: 20 15 15 15
+   :widths: 20 10 10 15 20 15
 
    * - Executor
+     - Sync Jobs
+     - Async Jobs
      - Cancellation [#f1]_
-     - Timeouts
+     - Time Limits
      - Memory Limits
    * - ProcessExecutor
      - ✓
      - ✓
-     - ✓
+     - Platform [#f3]_
+     - Automatic [#f3]_
+     - Platform [#f3]_
    * - AsyncExecutor
+     - ✗
      - ✓
      - ✓
+     - Automatic
      - ✗
    * - ThreadedExecutor
-     - ✗
      - ✓
+     - ✓
+     - ✗
+     - Cooperative [#f2]_
      - ✗
    * - SubInterpreter
-     - ✗
      - ✓
+     - ✓
+     - ✗
+     - Cooperative [#f2]_
      - ✗
 
 .. [#f1] Cancellation is always possible before a job is started. Cancellation
          here refers to the ability to stop a job that is actively running.
+.. [#f2] Jobs must accept a :class:`chancy.job.QueuedJob` context and call
+         :meth:`~chancy.job.QueuedJob.checkpoint` periodically.
+.. [#f3] Process capabilities depend on operating-system signal and resource
+         support. Use :meth:`~chancy.executors.base.Executor.supports` to
+         inspect them at runtime.
+
+Capabilities can also be inspected programmatically:
+
+.. code-block:: python
+
+    from chancy.executors.base import Executor
+    from chancy.executors.thread import ThreadedExecutor
+
+    ThreadedExecutor.supports(
+        Executor.Capability.COOPERATIVE_TIME_LIMITS
+    )
 
 ProcessExecutor (Default)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -71,5 +97,8 @@ Custom Executors
 ~~~~~~~~~~~~~~~~
 You can implement your own executor by subclassing the
 :class:`chancy.executors.base.Executor` class and implementing the
-:meth:`~chancy.executors.base.Executor.push` method.
+:meth:`~chancy.executors.base.Executor.push` method. Custom executors should
+declare their supported :class:`~chancy.executors.base.Executor.Capability`
+values in ``capabilities``. The shared execution preparation then rejects
+unsupported function types and resource limits consistently.
 """

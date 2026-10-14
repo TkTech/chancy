@@ -1,56 +1,56 @@
-import {useSessionStorage} from './useSessionStorage.tsx';
+import { ChancyApi } from '../services/chancy';
+import { queryKeys } from '../services/queryKeys';
+import {useLocalStorage} from './useLocalStorage.tsx';
 import {useQuery} from '@tanstack/react-query';
+import { ApiError } from '../services/http';
 import React, {useMemo} from 'react';
+import {dashboardBasePath, dashboardUrl, normalizeServerUrl} from '../config.ts';
 
-interface ServerConfiguration {
-  plugins: string[],
-}
+export const ServerContext = React.createContext<ReturnType<typeof useServerSettings> | null>(null);
 
-const ServerContext = React.createContext<ServerConfiguration | null>(null);
+export function useServerSettings() {
+  // Keep overrides separate for dashboards mounted on the same origin.
+  const [serverUrl, setServerUrl] = useLocalStorage<string>(
+    `settings.serverUrl:${dashboardBasePath}`,
+    dashboardUrl.href.replace(/\/+$/, ''),
+  );
+  const url = useMemo(() => normalizeServerUrl(serverUrl), [serverUrl]);
 
-export function useServerConfiguration() {
-  const [host, setHost] = useSessionStorage<string>('settings.host', "http://localhost");
-  const [port, setPort] = useSessionStorage<number>('settings.port', 8000);
-
-  const { data, isLoading, refetch } = useQuery<ServerConfiguration>({
-    queryKey: ['configuration', host, port],
-    queryFn: async () => {
-      const response = await fetch(`${host}:${port}/api/v1/configuration`);
-      return await response.json();
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: queryKeys.configuration(url),
+    queryFn: async ({ signal }) => {
+      if (!url) return null;
+      try {
+        return await ChancyApi(url).getConfiguration(signal);
+      } catch (e: unknown) {
+        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+          return null; // not authenticated
+        }
+        throw e;
+      }
     },
-    enabled: false
+    enabled: url !== null,
+    staleTime: Infinity,
   });
 
-  const url = useMemo(() => {
-    if (!host || !port) {
-      return null;
-    }
-
-    return `${host}:${port}`;
-  }, [host, port]);
-
   return {
-    configuration: data || null,
+    configuration: data ?? null,
     isLoading,
-    setHost,
-    setPort,
-    host,
-    port,
+    serverUrl,
+    setServerUrl,
     url,
     refetch,
   }
 }
 
-export function ServerConfigurationProvider({children}: {children: React.ReactNode}) {
-  const value = useServerConfiguration();
-
-  return (
-    <ServerContext.Provider value={value.configuration}>
-      {children}
-    </ServerContext.Provider>
-  )
+export function useServerConfiguration() {
+  const context = React.useContext(ServerContext);
+  if (!context) {
+    throw new Error('useServerConfiguration must be used within ServerConfigurationProvider');
+  }
+  return context;
 }
 
 export function useServer() {
-  return React.useContext(ServerContext);
+  return useServerConfiguration().configuration;
 }

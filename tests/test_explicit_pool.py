@@ -1,6 +1,6 @@
 import pytest
 
-from chancy import Chancy, QueuedJob, Job, Queue
+from chancy import Chancy, Job, Queue, QueuedJob
 
 
 def job_to_run():

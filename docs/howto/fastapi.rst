@@ -50,3 +50,38 @@ This can be useful for small applications and simple deployments
 (like containers meant for UnRAID) where you don't want to manage multiple
 processes or containers. However, for larger applications, it's recommended
 to keep your worker separate from your FastAPI application.
+
+Mount the dashboard
+-------------------
+
+You can also serve the Chancy dashboard and API through your existing FastAPI
+application. Install ``chancy[web]`` alongside FastAPI, then use
+:meth:`~chancy.plugins.api.Api.build_starlette_app` to build the sub-application:
+
+.. code-block:: python
+
+    from contextlib import asynccontextmanager
+
+    from fastapi import FastAPI
+    from chancy import Chancy, Worker
+    from chancy.plugins.api import Api, SimpleAuthBackend
+
+    chancy = Chancy("postgresql://localhost/postgres")
+    dashboard = Api(
+        authentication_backend=SimpleAuthBackend({"admin": "change-me"}),
+        secret_key="replace-with-a-strong-random-secret",
+    )
+    worker = Worker(chancy, register_signal_handlers=False)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with chancy:
+            async with worker:
+                yield
+
+    app = FastAPI(lifespan=lifespan)
+    app.mount("/chancy", dashboard.build_starlette_app(worker, chancy))
+
+Let the parent ASGI server handle process signals by passing
+``register_signal_handlers=False`` to the embedded worker. Its lifespan
+context will stop the worker when the server shuts down.
