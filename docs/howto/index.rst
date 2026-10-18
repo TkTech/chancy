@@ -11,4 +11,3 @@ How To...
    retry.rst
    context.rst
    log.rst
-   develop.rst
