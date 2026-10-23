@@ -7,6 +7,7 @@ from typing import (
     Any,
     ParamSpec,
     Protocol,
+    Self,
     TypedDict,
     TypeVar,
     Union,
@@ -14,6 +15,7 @@ from typing import (
 from uuid import UUID
 
 from chancy.utils import importable_name
+from chancy.validation import JSON, Validator
 
 
 class ErrorT(TypedDict):
@@ -188,7 +190,7 @@ class Job:
         }
 
     @classmethod
-    def unpack(cls, data: dict) -> "Job":
+    def unpack(cls, data: dict) -> Self:
         """
         Unpack a serialized job into a Job instance.
         """
@@ -206,6 +208,18 @@ class Job:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
+class SerializedJob(Job):
+    """
+    A job whose kwargs are already in their JSON form, such as one read back
+    by a plugin or built by the CLI. It is pushed as it is and validated when
+    it runs.
+    """
+
+    #: The keyword arguments, in their serialized JSON form.
+    kwargs: dict[str, JSON] | None = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class QueuedJob(Job):
     """
     A job instance is a job that has been pushed onto a queue and now has
@@ -220,6 +234,8 @@ class QueuedJob(Job):
         RETRYING = "retrying"
         SUCCEEDED = "succeeded"
 
+    #: The keyword arguments, in their serialized JSON form.
+    kwargs: dict[str, JSON] | None = dataclasses.field(default_factory=dict)
     #: The unique identifier for this job instance.
     id: UUID
     #: Identifies this execution's claim. Replaced whenever a worker claims
@@ -239,6 +255,11 @@ class QueuedJob(Job):
     errors: list[ErrorT] = dataclasses.field(default_factory=list)
     _time_limit_deadline: float | None = dataclasses.field(
         default=None,
+        compare=False,
+        repr=False,
+    )
+    _validators: tuple[Validator, ...] = dataclasses.field(
+        default=(),
         compare=False,
         repr=False,
     )
@@ -269,6 +290,11 @@ class QueuedJob(Job):
             and time.monotonic() >= self._time_limit_deadline
         ):
             raise TimeoutError("Job timed out.")
+
+    def _with_validators(
+        self, validators: tuple[Validator, ...]
+    ) -> "QueuedJob":
+        return dataclasses.replace(self, _validators=validators)
 
     def _with_time_limit(self, seconds: int) -> "QueuedJob":
         return dataclasses.replace(

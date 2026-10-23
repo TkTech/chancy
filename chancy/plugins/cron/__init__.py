@@ -8,7 +8,7 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from chancy.app import Chancy
-from chancy.job import IsAJob, Job
+from chancy.job import IsAJob, Job, SerializedJob
 from chancy.plugin import Plugin
 from chancy.worker import Worker
 
@@ -308,7 +308,7 @@ class Cron(Plugin):
                         # can push this as part of our transaction.
                         await chancy.push_many_ex(
                             cursor,
-                            [Job.unpack(row["job"])],
+                            [SerializedJob.unpack(row["job"])],
                         )
 
                         chancy.log.debug(
@@ -400,7 +400,7 @@ class Cron(Plugin):
             return {
                 result["unique_key"]: {
                     "unique_key": result["unique_key"],
-                    "job": Job.unpack(result["job"]),
+                    "job": SerializedJob.unpack(result["job"]),
                     "cron": result["cron"],
                     "timezone": result["timezone"],
                     "last_run": result["last_run"],
@@ -456,11 +456,11 @@ class Cron(Plugin):
         :param chancy: The Chancy application.
         :param cron: A cron-like syntax string that describes when to run the
                      job.
-        :param jobs: The jobs to run.
+        :param jobs: The jobs to run, validated now and when they run.
         :param timezone: The timezone in which to evaluate the cron
                          expression. Defaults to UTC.
         """
-        jobs = [job if isinstance(job, Job) else job.job for job in jobs]
+        jobs = [chancy.serialize(job) for job in jobs]
         for job in jobs:
             if not job.unique_key:
                 raise ValueError(
