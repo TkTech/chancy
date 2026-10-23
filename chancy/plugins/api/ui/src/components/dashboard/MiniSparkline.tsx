@@ -3,13 +3,13 @@ import { AreaChart, Area, ResponsiveContainer, XAxis } from 'recharts';
 interface MiniSparklineProps {
   data: Array<{ timestamp: number; value: number | null }>;
   color?: string;
-  height?: number;
+  height?: number | `${number}%`;
 }
 
 /**
  * Minimal sparkline chart for metric cards
  */
-export function MiniSparkline({ data, color = '#3b82f6', height = 40 }: MiniSparklineProps) {
+export function MiniSparkline({ data, color = '#3b82f6', height = '100%' }: MiniSparklineProps) {
   if (!data || data.length === 0) return null;
 
   return (

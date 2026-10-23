@@ -9,8 +9,9 @@ import { useConfirm } from '../../components/common/ConfirmDialog';
 import { JobTimers } from './JobTimers';
 import { JsonViewer } from '../../components/JsonViewer';
 import { useTheme } from '../../contexts/ThemeContext';
+import { PageHeader } from '../../components/common/PageHeader';
 
-export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }) {
+export function JobDetailsView({ job_id, showHeader = false }: { job_id: string, showHeader?: boolean }) {
   const { url } = useServerConfiguration();
   const { data: job, isLoading } = useJob({ url, job_id });
   const { retry, cancel, purge } = useJobActions();
@@ -20,23 +21,27 @@ export function JobDetailsView({ job_id }: { job_id: string, compact?: boolean }
   if (isLoading) return <Loading/>;
   if (!job) return <div className={'alert alert-danger'}>Job not found.</div>;
 
+  const actions = (
+    <div className="d-flex flex-wrap gap-2 justify-content-end">
+      {['failed','retrying','succeeded'].includes(job.state) && (
+        <button className="btn btn-sm btn-primary" disabled={retry.isPending} onClick={() => retry.mutate(job.id)}>Retry Job</button>
+      )}
+      {['pending','running'].includes(job.state) && (
+        <button className="btn btn-sm btn-warning" disabled={cancel.isPending} onClick={() => cancel.mutate(job.id)}>Cancel Job</button>
+      )}
+      {['succeeded','failed'].includes(job.state) && (
+        <button className="btn btn-sm btn-danger" onClick={async () => {
+          const ok = await confirm({ title: 'Purge Job', message: 'This will permanently delete the job record. Continue?' });
+          if (ok) purge.mutate(job.id);
+        }}>Purge Job</button>
+      )}
+    </div>
+  );
+
   return (
     <div>
+      {showHeader ? <PageHeader title="Job" actions={actions} /> : <div className="mb-3">{actions}</div>}
       <JobTimers job={job} />
-      <div className="mb-3 d-flex gap-2 justify-content-end">
-        {['failed','retrying','succeeded'].includes(job.state) && (
-          <button className="btn btn-sm btn-primary" disabled={retry.isPending} onClick={() => retry.mutate(job.id)}>Retry Job</button>
-        )}
-        {['pending','running'].includes(job.state) && (
-          <button className="btn btn-sm btn-warning" disabled={cancel.isPending} onClick={() => cancel.mutate(job.id)}>Cancel Job</button>
-        )}
-        {['succeeded','failed'].includes(job.state) && (
-          <button className="btn btn-sm btn-danger" onClick={async () => {
-            const ok = await confirm({ title: 'Purge Job', message: 'This will permanently delete the job record. Continue?' });
-            if (ok) purge.mutate(job.id);
-          }}>Purge Job</button>
-        )}
-      </div>
       <DetailCard title="Details" flush>
         <table className="table border mb-0">
           <tbody>

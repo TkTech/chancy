@@ -69,8 +69,14 @@ export function Queue() {
 
   return (
     <div className={"container-fluid"}>
-      <PageHeader title={`Queue - ${queue.name}`} actions={!editing && <div className="d-flex gap-2">
+      <PageHeader title={`Queue - ${queue.name}`} actions={!editing && <div className="d-flex flex-wrap gap-2">
         <button className="btn btn-sm btn-primary" onClick={() => { update.reset(); setEditing({ url, queue }); }}>Edit</button>
+        <QueueStateCard
+          state={queue.state}
+          onPause={(resumeAt) => pause.mutate({ name: queue.name, resume_at: resumeAt })}
+          onResume={() => resume.mutate(queue.name)}
+          isPending={pause.isPending || resume.isPending}
+        />
         <button className="btn btn-sm btn-outline-danger" disabled={remove.isPending} onClick={async () => {
           const ok = await confirm({ title: 'Delete Queue', message: 'Delete queue? You can choose to also purge all jobs in this queue in the next step.' });
           if (!ok) return;
@@ -145,13 +151,6 @@ export function Queue() {
                       (Resuming at {new Date(queue.resume_at).toLocaleString()})
                     </small>
                   )}
-                  <QueueStateCard
-                    state={queue.state}
-                    resumeAt={queue.resume_at}
-                    onPause={(resumeAt) => pause.mutate({ name: queue.name, resume_at: resumeAt })}
-                    onResume={() => resume.mutate(queue.name)}
-                    isPending={pause.isPending || resume.isPending}
-                  />
                 </div>
               </td>
             </tr>

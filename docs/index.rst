@@ -161,20 +161,20 @@ workers, and workflows in real-time. Track throughput and completion rates
 for each queue, worker, and job type. Monitor the disk space usage of your
 Chancy tables and indexes.
 
-.. image:: ../misc/ux_jobs.png
+.. image:: _static/screenshots/ux_jobs.png
     :alt: Jobs page
 
-.. image:: ../misc/ux_job_failed.png
+.. image:: _static/screenshots/ux_job_failed.png
     :alt: Failed job page
 
-.. image:: ../misc/ux_queue.png
+.. image:: _static/screenshots/ux_queue.png
     :alt: Queue page
 
-.. image:: ../misc/ux_worker.png
+.. image:: _static/screenshots/ux_worker.png
     :alt: Worker page
 
-.. image:: ../misc/ux_workflow.png
-    :alt: Worker page
+.. image:: _static/screenshots/ux_workflow.png
+    :alt: Workflow page
 
 
 .. toctree::
@@ -186,6 +186,7 @@ Chancy tables and indexes.
    chancy
    design
    faq
+   develop
    similar
 
 

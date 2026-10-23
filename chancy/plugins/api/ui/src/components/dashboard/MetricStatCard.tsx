@@ -18,9 +18,7 @@ export function MetricStatCard({ title, metricKey, url, resolution = '5min', sub
   const value = metricNumber(metric?.summary, stat);
   const status = metricStatus(data, metric, isError);
   const points = metricTimeline(data, metric).map(point => ({ ...point, value: point[stat] }));
-  return <div title={status}>
-    <MetricCard title={title} value={value === null ? '—' : formatValue(value)} loading={isLoading}
-      subtitle={isError || value === null ? status : subtitle ?? 'Observed in selected range'} trend={trend}
-      graphComponent={showSparkline ? <MiniSparkline data={points} color={sparklineColor} /> : undefined} />
-  </div>;
+  return <MetricCard title={title} tooltip={status} value={value === null ? '—' : formatValue(value)} loading={isLoading}
+    subtitle={isError || value === null ? status : subtitle ?? 'Observed in selected range'} trend={trend}
+    graphComponent={showSparkline ? <MiniSparkline data={points} color={sparklineColor} /> : undefined} />;
 }

@@ -63,6 +63,9 @@ dev = [
     "pytest-xdist>=3.8.0",
     "sphinx-copybutton>=0.5.2",
 ]
+screenshots = [
+    "playwright>=1.55",
+]
 
 [project.scripts]
 chancy = "chancy.cli.cli:main"
