@@ -78,10 +78,9 @@ class Hub:
         for handler in chain(
             self._handlers.get(event, []), self._wildcard_handlers
         ):
-            if inspect.iscoroutinefunction(handler):
-                await handler(result)
-            else:
-                handler(result)
+            response = handler(result)
+            if inspect.isawaitable(response):
+                await response
 
         # Notify any asyncio waiters that are waiting for this event, used
         # to implement wait_for().

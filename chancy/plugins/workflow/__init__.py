@@ -3,7 +3,6 @@ import enum
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from functools import partial
 from itertools import islice
 from typing import Self, TextIO
 from uuid import UUID
@@ -16,6 +15,7 @@ from chancy.hub import Event
 from chancy.job import IsAJob, Job, QueuedJob
 from chancy.plugin import Plugin
 from chancy.rule import Rule, SQLAble
+from chancy.session import Authority, OperationContext, PluginSession
 from chancy.utils import chancy_uuid, json_dumps
 from chancy.worker import Worker
 
@@ -398,68 +398,65 @@ class WorkflowPlugin(Plugin):
         # An insertion-ordered set: repeated events retain their place in line.
         self._pending_workflows: dict[UUID, None] = {}
 
-    async def run(self, worker: Worker, chancy: Chancy):
-        handler = partial(self._on_workflow_event, worker=worker)
-        events = ("workflow.created", "workflow.step_completed")
-        for event in events:
-            worker.hub.on(event, handler)
+    async def setup(self, session: PluginSession):
+        worker = session.worker
+        next_poll = asyncio.get_running_loop().time() + self.polling_interval
 
-        loop = asyncio.get_running_loop()
-        next_poll = loop.time() + self.polling_interval
-        retry = worker.database_retry("workflow scheduler")
-        try:
-            while True:
-                await self.wait_for_leader(worker)
-                self.wakeup_signal.clear()
+        async def schedule(ctx: OperationContext):
+            nonlocal next_poll
+            due = asyncio.get_running_loop().time() >= next_poll
+            if not due and not self._pending_workflows:
+                return
+            if self.max_workflows_per_run <= 0:
+                return
+            after, until = self._last_polled_id, self._poll_until_id
+            attempts = 0
 
-                try:
-                    # Event traffic never moves this deadline. Check it between
-                    # batches so notifications cannot starve recovery polling.
-                    if loop.time() >= next_poll:
-                        await worker.increment_counter("workflows:poll_runs", 1)
-                        changes = []
-                        async with (
-                            chancy.pool.connection() as conn,
-                            conn.cursor(row_factory=dict_row) as cursor,
-                        ):
-                            await self.poll(
-                                worker, chancy, cursor, changes=changes
-                            )
-                        await self._record_transitions(worker, changes)
-                        retry.reset()
-                        next_poll = loop.time() + self.polling_interval
+            async def batch(tx):
+                nonlocal attempts
+                self._last_polled_id, self._poll_until_id = after, until
+                changes = []
+                if due or attempts:
+                    if attempts:
+                        self._last_polled_id = self._poll_until_id = None
+                    attempts += 1
+                    await self.poll(
+                        worker, ctx.chancy, tx.cursor, changes=changes
+                    )
+                else:
+                    attempts += 1
+                    await self.process_pending(
+                        worker,
+                        ctx.chancy,
+                        tx.cursor,
+                        changes=changes,
+                    )
+                return changes
 
-                    if not worker.is_leader.is_set():
-                        continue
+            changes = await ctx.database(batch)
+            await self._record_transitions(worker, changes)
+            if due:
+                await worker.increment_counter("workflows:poll_runs", 1)
+                next_poll = (
+                    asyncio.get_running_loop().time() + self.polling_interval
+                )
+            if self._pending_workflows:
+                operation.wake_up()
 
-                    if (
-                        self._pending_workflows
-                        and self.max_workflows_per_run > 0
-                    ):
-                        changes = []
-                        async with (
-                            chancy.pool.connection() as conn,
-                            conn.cursor(row_factory=dict_row) as cursor,
-                        ):
-                            await self.process_pending(
-                                worker, chancy, cursor, changes=changes
-                            )
-                        await self._record_transitions(worker, changes)
-                        retry.reset()
-                        if self._pending_workflows:
-                            continue
-                except retry.errors as exc:
-                    # Hints may have been consumed and the transaction's commit
-                    # may be uncertain. Recover from a fresh sweep after backoff.
-                    self._last_polled_id = self._poll_until_id = None
-                    next_poll = 0
-                    await retry.wait(exc)
-                    continue
+        operation = session.periodic(
+            "schedule",
+            schedule,
+            interval=self.polling_interval,
+            authority=Authority.LEADER,
+        )
 
-                await self.sleep(max(0, next_poll - loop.time()))
-        finally:
-            for event in events:
-                worker.hub.remove(event, handler)
+        def notified(event):
+            self._on_workflow_event(event, worker)
+            if self._pending_workflows:
+                operation.wake_up()
+
+        for event in ("workflow.created", "workflow.step_completed"):
+            session.subscribe(event, notified)
 
     def _on_workflow_event(self, event: Event, worker: Worker):
         """Queue a hint without doing database work in the event listener."""
@@ -472,7 +469,6 @@ class WorkflowPlugin(Plugin):
             return
         if len(self._pending_workflows) < self.max_pending_workflows:
             self._pending_workflows.setdefault(workflow_id, None)
-            self.wake_up()
 
     async def process_pending(
         self,
@@ -1120,21 +1116,21 @@ class WorkflowPlugin(Plugin):
         # Close the digraph
         output.write("}\n")
 
-    async def cleanup(self, chancy: Chancy) -> int | None:
-        async with chancy.pool.connection() as conn, conn.cursor() as cursor:
-            await cursor.execute(
-                sql.SQL(
+    async def cleanup(self, chancy, cursor):
+        """Remove completed workflows matching the pruning rule."""
+        await cursor.execute(
+            sql.SQL(
+                """
+                    DELETE FROM {workflows}
+                    WHERE state NOT IN ('pending', 'running')
+                    AND ({rule})
                     """
-                        DELETE FROM {workflows}
-                        WHERE state NOT IN ('pending', 'running')
-                        AND ({rule})
-                        """
-                ).format(
-                    workflows=sql.Identifier(f"{chancy.prefix}workflows"),
-                    rule=self.pruning_rule.to_sql(),
-                )
+            ).format(
+                workflows=sql.Identifier(f"{chancy.prefix}workflows"),
+                rule=self.pruning_rule.to_sql(),
             )
-            return cursor.rowcount
+        )
+        return cursor.rowcount
 
     @classmethod
     async def wait_for_workflow(

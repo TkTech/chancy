@@ -1,11 +1,11 @@
 from psycopg import AsyncCursor, sql
-from psycopg.rows import DictRow, dict_row
+from psycopg.rows import DictRow
 
 from chancy.app import Chancy
 from chancy.plugin import Plugin
 from chancy.rule import JobRules, SQLAble
+from chancy.session import Authority, OperationContext, PluginSession
 from chancy.utils import timed_block
-from chancy.worker import Worker
 
 
 class Pruner(Plugin):
@@ -130,39 +130,51 @@ class Pruner(Plugin):
     def get_dependencies() -> list[str]:
         return ["chancy.leadership"]
 
-    async def run(self, worker: Worker, chancy: Chancy):
-        while await self.sleep(self.poll_interval):
-            await self.wait_for_leader(worker)
-            async with (
-                chancy.pool.connection() as conn,
-                conn.cursor(row_factory=dict_row) as cursor,
-            ):
-                with timed_block() as chancy_time:
-                    rows_removed = await self.prune(chancy, cursor)
-                    chancy.log.info(
-                        f"Pruner removed {rows_removed} row(s) from the"
-                        f" database. Took {chancy_time.elapsed:.2f}"
-                        f" seconds."
+    async def setup(self, session: PluginSession):
+        session.periodic(
+            "prune",
+            self._prune,
+            interval=self.poll_interval,
+            authority=Authority.LEADER,
+        )
+        for plugin in session.worker.chancy.plugins.values():
+            if type(plugin).cleanup is Plugin.cleanup:
+                continue
+
+            async def cleanup(ctx, plugin=plugin):
+                async def clean(tx):
+                    return await plugin.cleanup(ctx.chancy, tx.cursor)
+
+                rows = await ctx.database(clean)
+                if rows is not None:
+                    ctx.log.info(
+                        "Plugin %s removed %s row(s) from the database.",
+                        type(plugin).__name__,
+                        rows,
                     )
 
-                    await chancy.notify(
-                        cursor,
-                        "pruner.removed",
-                        {
-                            "elapsed": chancy_time.elapsed,
-                            "rows_removed": rows_removed,
-                        },
-                    )
+            session.periodic(
+                f"cleanup:{plugin.get_identifier()}",
+                cleanup,
+                interval=self.poll_interval,
+                authority=Authority.LEADER,
+            )
 
-            for plugin in chancy.plugins.values():
-                rows = await plugin.cleanup(chancy)
-                if rows is None:
-                    continue
-
-                chancy.log.info(
-                    f"Plugin {plugin.__class__.__name__} removed {rows}"
-                    f" row(s) from the database."
+    async def _prune(self, ctx: OperationContext):
+        async def prune(tx):
+            with timed_block() as elapsed:
+                rows = await self.prune(ctx.chancy, tx.cursor)
+                await tx.notify(
+                    "pruner.removed",
+                    {
+                        "elapsed": elapsed.elapsed,
+                        "rows_removed": rows,
+                    },
                 )
+                return rows
+
+        rows = await ctx.database(prune)
+        ctx.log.info("Pruner removed %s row(s).", rows)
 
     async def prune(self, chancy: Chancy, cursor: AsyncCursor[DictRow]) -> int:
         """
