@@ -3,6 +3,12 @@ from psycopg.rows import dict_row
 
 from chancy.plugin import Plugin
 from chancy.rule import JobRules
+from chancy.session import (
+    Authority,
+    OperationContext,
+    PluginSession,
+    TransactionContext,
+)
 
 
 class Reprioritize(Plugin):
@@ -55,92 +61,105 @@ class Reprioritize(Plugin):
     def get_dependencies() -> list[str]:
         return ["chancy.leadership"]
 
-    async def run(self, worker, chancy):
-        while await self.sleep(self.check_interval):
-            await self.wait_for_leader(worker)
-            updated = await self.reprioritize_jobs(chancy)
-            chancy.log.info(
-                f"Reprioritized {updated} jobs by increasing priority"
-                f" by {self.priority_increase}"
-            )
+    async def setup(self, session: PluginSession):
+        session.periodic(
+            "reprioritize",
+            self._reprioritize,
+            interval=self.check_interval,
+            authority=Authority.LEADER,
+        )
 
-    async def reprioritize_jobs(self, chancy) -> int:
+    async def _reprioritize(self, ctx: OperationContext):
+        updated = await self.reprioritize_jobs(ctx.chancy, context=ctx)
+        ctx.log.info("Reprioritized %s jobs.", updated)
+
+    async def reprioritize_jobs(self, chancy, *, context=None) -> int:
         """
-        Reprioritize jobs based on the rules provided to the plugin.
+        Increase matching priorities in batches, once per invocation.
 
-        Returns the total number of jobs that were updated.
+        :param chancy: The Chancy application.
+        :param context: Optional operation context for transaction retries.
+        :return: The number of jobs updated.
         """
-        total_updated = 0
-        last_id = None
+        table = sql.Identifier(f"{chancy.prefix}jobs")
 
-        async with (
-            chancy.pool.connection() as conn,
-            conn.cursor(row_factory=dict_row) as cursor,
-        ):
-            async with conn.transaction():
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        SELECT id
-                        FROM {jobs_table}
-                        ORDER BY id DESC
-                        LIMIT 1
-                        """
-                    ).format(jobs_table=sql.Identifier(f"{chancy.prefix}jobs"))
+        async def execute(callback):
+            if context is not None:
+                return await context.database(callback)
+            async with (
+                chancy.pool.connection() as conn,
+                conn.transaction(),
+                conn.cursor(row_factory=dict_row) as cursor,
+            ):
+                return await callback(TransactionContext(cursor, chancy))
+
+        async def boundary(tx):
+            await tx.cursor.execute(
+                sql.SQL("SELECT id FROM {} ORDER BY id DESC LIMIT 1").format(
+                    table
                 )
-                upper_bound = await cursor.fetchone()
+            )
+            return await tx.cursor.fetchone()
 
-            if upper_bound is None:
-                return 0
+        upper = await execute(boundary)
+        if upper is None:
+            return 0
+        last_id = None
+        total = 0
+        while True:
+            targets = None
 
-            while True:
-                last_id_condition = sql.SQL("")
-                if last_id is not None:
-                    last_id_condition = sql.SQL("AND id > {last_id}").format(
-                        last_id=sql.Literal(last_id)
-                    )
-
-                # Update jobs in batches to avoid long-running transactions
-                async with conn.transaction():
+            async def batch(tx, last_id=last_id):
+                nonlocal targets
+                cursor = tx.cursor
+                if targets is None:
                     await cursor.execute(
                         sql.SQL(
                             """
-                            WITH jobs_to_update AS (
-                                SELECT
-                                    id,
-                                    priority
-                                FROM {jobs_table}
-                                WHERE
-                                    state IN ('pending', 'retrying')
-                                    AND ({rule})
-                                    {last_id_condition}
-                                    AND id <= {upper_bound}
-                                ORDER BY id
-                                LIMIT {batch_size}
-                                FOR UPDATE SKIP LOCKED
-                            )
-                            UPDATE {jobs_table} j
-                            SET
-                                priority = j.priority + {increment}
-                            FROM jobs_to_update
-                            WHERE j.id = jobs_to_update.id
-                            RETURNING j.id
+                            SELECT id, priority FROM {table}
+                            WHERE state IN ('pending', 'retrying')
+                              AND ({rule}) AND id <= {upper}
+                              AND ({last}::uuid IS NULL OR id > {last})
+                            ORDER BY id LIMIT {limit}
+                            FOR UPDATE SKIP LOCKED
                             """
                         ).format(
-                            jobs_table=sql.Identifier(f"{chancy.prefix}jobs"),
+                            table=table,
                             rule=self.rule.to_sql(),
-                            increment=self.priority_increase,
-                            last_id_condition=last_id_condition,
-                            upper_bound=sql.Literal(upper_bound["id"]),
-                            batch_size=sql.Literal(self.batch_size),
-                        )
+                            limit=sql.Literal(self.batch_size),
+                            upper=sql.Literal(upper["id"]),
+                            last=sql.Literal(last_id),
+                        ),
                     )
+                    # Retain absolute targets across an uncertain commit.
+                    targets = [
+                        (row["id"], row["priority"] + self.priority_increase)
+                        for row in await cursor.fetchall()
+                    ]
+                if not targets:
+                    return 0
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                        UPDATE {table} j
+                        SET priority = {choose}(j.priority, target.priority)
+                        FROM unnest(%s::uuid[], %s::integer[]) AS target(id, priority)
+                        WHERE j.id = target.id
+                          AND j.state IN ('pending', 'retrying')
+                        """
+                    ).format(
+                        table=table,
+                        choose=sql.SQL(
+                            "GREATEST"
+                            if self.priority_increase >= 0
+                            else "LEAST"
+                        ),
+                    ),
+                    [[row[0] for row in targets], [row[1] for row in targets]],
+                )
+                return cursor.rowcount
 
-                    results = await cursor.fetchall()
-                    if not results:
-                        break
-
-                    total_updated += len(results)
-                    last_id = max(result["id"] for result in results)
-
-        return total_updated
+            total += await execute(batch)
+            if not targets:
+                return total
+            last_id = targets[-1][0]

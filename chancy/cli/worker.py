@@ -1,4 +1,5 @@
 import secrets
+from contextlib import AsyncExitStack
 
 import click
 from click.core import ParameterSource
@@ -6,6 +7,7 @@ from click.core import ParameterSource
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
 from chancy.errors import MigrationsNeededError
+from chancy.session import PluginSession
 
 
 @click.group(name="worker")
@@ -84,16 +86,6 @@ async def web_command(
     async with chancy:
         worker = Worker(chancy, tags=set())
 
-        # Add infrastructure tasks needed for hub events (LISTEN/NOTIFY)
-        # and job updates, without running full queue processing.
-        worker.manager.add("notifications", worker._maintain_notifications())
-        worker.manager.add("updates", worker._maintain_updates())
-
-        # The metrics plugin needs to be running to pull in cluster-wide
-        # metrics.
-        if metrics := chancy.plugins.get("chancy.metrics"):
-            worker.manager.add("metrics", metrics.run(worker, chancy))
-
         if not (api := chancy.plugins.get("chancy.api")):
             chancy.log.info(
                 "No API plugin was configured on the Chancy application,"
@@ -125,5 +117,29 @@ async def web_command(
             ):
                 api.allow_origins = allow_origin
 
-        worker.manager.add("api", api.run(worker, chancy))
-        await worker.wait_for_shutdown()
+        async with AsyncExitStack() as resources:
+            sessions = []
+            for plugin in (chancy.plugins.get("chancy.metrics"), api):
+                if plugin is None:
+                    continue
+                session = PluginSession(plugin, worker)
+                resources.push_async_callback(session.close)
+                sessions.append(session)
+                await plugin.setup(session)
+
+            for session in sessions:
+                resources.push_async_callback(
+                    session.plugin.on_worker_stopped, worker=worker
+                )
+            resources.push_async_callback(worker.flush)
+            resources.push_async_callback(worker.manager.cancel_all)
+            for session in sessions:
+                session.start()
+
+            # Run dashboard infrastructure without processing queues.
+            if chancy.notifications:
+                worker.manager.add(
+                    "notifications", worker._maintain_notifications()
+                )
+            worker.manager.add("updates", worker._maintain_updates())
+            await worker.wait_for_shutdown()

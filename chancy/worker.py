@@ -1,6 +1,7 @@
 import asyncio
 import dataclasses
 import datetime
+import inspect
 import json
 import platform
 import random
@@ -26,6 +27,7 @@ from chancy.job import QueuedJob, Reference
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
 from chancy.retry import DatabaseRetry, _raise_if_cancelling
+from chancy.session import PluginSession
 from chancy.utils import TaskManager, import_string, lock_order_key, sleep
 
 
@@ -201,6 +203,8 @@ class Worker:
         #: This functionality is not enabled by default - a leadership plugin
         #: must be used to enable this event.
         self.is_leader = asyncio.Event()
+        self._leadership_unfenced = False
+        self._plugin_sessions: list[PluginSession] = []
         #: An event that is set when the worker is shutting down.
         self.shutdown_event = asyncio.Event()
         self._signal_received = False
@@ -241,6 +245,42 @@ class Worker:
             async with Worker(chancy) as worker:
                 await worker.wait_for_shutdown()
         """
+        try:
+            await self._start()
+        except BaseException:
+            self.shutdown_event.set()
+            await self.manager.cancel_all()
+            for session in reversed(self._plugin_sessions):
+                try:
+                    await session.close()
+                except Exception:
+                    self.chancy.log.exception("Failed to close plugin session")
+            self.is_leader.clear()
+            raise
+
+    async def _start(self):
+        for plugin in self.chancy.plugins.values():
+            for name in (
+                "run",
+                "on_worker_started",
+                "sleep",
+                "wait_for_leader",
+                "wake_up",
+                "cleanup_ex",
+            ):
+                if hasattr(plugin, name):
+                    raise TypeError(
+                        f"{type(plugin).__name__}.{name}() is no longer supported. "
+                        "Use setup(session) and session operations; "
+                        "cleanup hooks must accept (chancy, cursor)."
+                    )
+            try:
+                inspect.signature(plugin.cleanup).bind(self.chancy, None)
+            except TypeError as exc:
+                raise TypeError(
+                    f"{type(plugin).__name__}.cleanup() must accept (chancy, cursor)."
+                ) from exc
+
         if not await self.chancy.is_up_to_date():
             raise MigrationsNeededError()
 
@@ -258,18 +298,12 @@ class Worker:
                     f"dependencies: {plugin.get_dependencies()}"
                 )
 
-            await plugin.on_worker_started(worker=self)
+            session = PluginSession(plugin, self)
+            self._plugin_sessions.append(session)
+            await plugin.setup(session)
 
-        for plugin in self.chancy.plugins.values():
-            if plugin.get_scope() != PluginScope.WORKER:
-                continue
-            self.manager.add(
-                plugin.__class__.__name__,
-                plugin.run(self, self.chancy),
-            )
-            self.chancy.log.info(
-                f"Started plugin {plugin.__class__.__name__!r}"
-            )
+        for session in self._plugin_sessions:
+            session.start()
 
         self.manager.add("queues", self._maintain_queues())
         self.manager.add("updates", self._maintain_updates())
@@ -1044,6 +1078,17 @@ class Worker:
         for plugin in self.chancy.plugins.values():
             if plugin.get_scope() == PluginScope.WORKER:
                 await plugin.on_worker_stopped(worker=self)
+        cleanup_errors: list[BaseException] = []
+        for session in reversed(self._plugin_sessions):
+            try:
+                await session.close()
+            except BaseException as exc:  # noqa: BLE001 - raised after cleanup
+                cleanup_errors.append(exc)
+        self.is_leader.clear()
+        if cleanup_errors:
+            raise BaseExceptionGroup(
+                "Plugin session cleanup failed", cleanup_errors
+            )
         await self.hub.emit(
             "worker.stopped"
             if self._drain_result

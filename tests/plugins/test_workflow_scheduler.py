@@ -1,5 +1,5 @@
 import asyncio
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from unittest.mock import AsyncMock, Mock
 
@@ -11,6 +11,7 @@ from psycopg.rows import dict_row
 from chancy import Chancy, Queue, QueuedJob, Reference, Worker
 from chancy.hub import Event
 from chancy.plugins.workflow import EmptyWorkflowError, Workflow, WorkflowPlugin
+from chancy.session import PluginSession
 from chancy.utils import chancy_uuid
 from tests.plugins.test_workflow import sync_success
 
@@ -45,14 +46,15 @@ async def process_batch(plugin, chancy, worker, *, poll=False):
 
 @asynccontextmanager
 async def run_scheduler(plugin, chancy, worker):
-    task = asyncio.create_task(plugin.run(worker, chancy))
+    worker._leadership_unfenced = True
+    session = PluginSession(plugin, worker)
+    await plugin.setup(session)
+    session.start()
     try:
-        await asyncio.sleep(0)  # Register the event handlers.
+        await asyncio.sleep(0)
         yield
     finally:
-        task.cancel()
-        with suppress(asyncio.CancelledError):
-            await task
+        await session.close()
 
 
 async def wait_for_states(chancy, ids, state):
@@ -183,7 +185,6 @@ def test_event_queue_is_bounded_and_coalesces(chancy_just_app):
     notify(plugin, worker, overflow)
     notify(plugin, worker, first)
     assert list(plugin._pending_workflows) == [first, second]
-    assert plugin.wakeup_signal.is_set()
 
 
 @pytest.mark.asyncio
@@ -612,7 +613,8 @@ async def test_scheduler_propagates_exhausted_or_non_transient_errors(
     poll = AsyncMock(side_effect=error_type("persistent failure"))
     monkeypatch.setattr(scheduler, "poll", poll)
     with pytest.raises(error_type, match="persistent failure"):
-        await asyncio.wait_for(
-            scheduler.run(worker_no_start, chancy), timeout=5
-        )
+        async with run_scheduler(scheduler, chancy, worker_no_start):
+            await asyncio.wait_for(
+                worker_no_start.wait_for_shutdown(), timeout=5
+            )
     assert poll.await_count == (3 if error_type is OperationalError else 1)

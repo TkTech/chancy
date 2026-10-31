@@ -209,13 +209,18 @@ class TaskManager:
         Add a task to the manager.
         """
         task: asyncio.Task = asyncio.create_task(task)
-        task.add_done_callback(self._tasks.remove)
+        task.add_done_callback(self._task_done)
         task.set_name(name)
 
         self._tasks.add(task)
         self._added_event.set()
 
         return task
+
+    def _task_done(self, task):
+        # Retain failures until wait_for_shutdown can observe them.
+        if task.cancelled() or task.exception() is None:
+            self._tasks.discard(task)
 
     async def wait_for_shutdown(self):
         """
@@ -240,6 +245,7 @@ class TaskManager:
                 self._added_event.clear()
 
                 for task in done - {added_task}:
+                    self._tasks.discard(task)
                     if not task.cancelled():
                         task.result()
             finally:

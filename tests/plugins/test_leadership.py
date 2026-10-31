@@ -75,7 +75,11 @@ async def test_leadership_renewal_requires_ownership(
         worker.hub.wait_for("leadership.gained", timeout=5)
     )
     await asyncio.sleep(0)
-    leadership.wake_up()
+    next(
+        session
+        for session in worker._plugin_sessions
+        if session.plugin is leadership
+    ).operations["renew"].wake_up()
     assert await gained
     assert worker.is_leader.is_set()
 
@@ -100,7 +104,11 @@ async def test_leadership_renewal_requires_ownership(
         )
     )
     await asyncio.sleep(0)
-    leadership.wake_up()
+    next(
+        session
+        for session in worker._plugin_sessions
+        if session.plugin is leadership
+    ).operations["renew"].wake_up()
     events = await result
     assert events
 

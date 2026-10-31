@@ -1,8 +1,8 @@
 from functools import partial
 
-from chancy.app import Chancy
 from chancy.hub import Event
 from chancy.plugin import Plugin
+from chancy.session import PluginSession
 from chancy.worker import Worker
 
 
@@ -15,8 +15,8 @@ class DebugPlugin(Plugin):
         super().__init__()
         self.event_counts = {}
 
-    async def run(self, worker: Worker, chancy: Chancy):
-        worker.hub.on_any(partial(self._log_any, worker))
+    async def setup(self, session: PluginSession):
+        session.subscribe(None, partial(self._log_any, session.worker))
 
     def _log_any(self, worker: Worker, event: Event):
         worker.chancy.log.info("Event %s: %s", event.name, event.body)

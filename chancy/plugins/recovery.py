@@ -1,8 +1,9 @@
 from psycopg import AsyncCursor, sql
-from psycopg.rows import DictRow, dict_row
+from psycopg.rows import DictRow
 
 from chancy.app import Chancy
 from chancy.plugin import Plugin
+from chancy.session import Authority, OperationContext, PluginSession
 from chancy.utils import timed_block
 from chancy.worker import Worker
 
@@ -52,28 +53,29 @@ class Recovery(Plugin):
     def get_dependencies() -> list[str]:
         return ["chancy.leadership"]
 
-    async def run(self, worker: Worker, chancy: Chancy):
-        while await self.sleep(self.poll_interval):
-            await self.wait_for_leader(worker)
-            async with (
-                chancy.pool.connection() as conn,
-                conn.cursor(row_factory=dict_row) as cursor,
-            ):
-                with timed_block() as chancy_time:
-                    rows_recovered = await self.recover(worker, chancy, cursor)
-                    chancy.log.info(
-                        f"Recovery recovered {rows_recovered} row(s) from"
-                        f" the database. Took {chancy_time.elapsed:.2f}"
-                        f" seconds."
-                    )
-                    await chancy.notify(
-                        cursor,
-                        "recovery.recovered",
-                        {
-                            "elapsed": chancy_time.elapsed,
-                            "rows_recovered": rows_recovered,
-                        },
-                    )
+    async def setup(self, session: PluginSession):
+        session.periodic(
+            "recover",
+            self._recover,
+            interval=self.poll_interval,
+            authority=Authority.LEADER,
+        )
+
+    async def _recover(self, ctx: OperationContext):
+        async def recover(tx):
+            with timed_block() as elapsed:
+                rows = await self.recover(ctx.worker, ctx.chancy, tx.cursor)
+                await tx.notify(
+                    "recovery.recovered",
+                    {
+                        "elapsed": elapsed.elapsed,
+                        "rows_recovered": rows,
+                    },
+                )
+                return rows
+
+        rows = await ctx.database(recover)
+        ctx.log.info("Recovery recovered %s row(s).", rows)
 
     @classmethod
     async def recover(

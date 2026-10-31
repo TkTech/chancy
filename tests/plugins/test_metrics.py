@@ -145,7 +145,11 @@ async def test_chunks_survive_repeated_flushes_and_expire(chancy, clock):
     assert (await metrics.get_metrics(chancy, "ticks"))["series"][
         "ticks"
     ].summary is None
-    assert await metrics.cleanup(chancy)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=module.dict_row) as cursor,
+    ):
+        assert await metrics.cleanup(chancy, cursor)
     assert await metrics.list_metrics(chancy) == []
     metrics._prune_buffer()
     assert not metrics._buckets
@@ -261,18 +265,32 @@ async def test_periodic_flush_failure_retries_without_stopping_worker(
     succeeded = asyncio.Event()
     attempts = 0
 
-    async def flaky_flush(app):
-        nonlocal attempts
-        # Startup flushes must not satisfy the test before "retry" is recorded.
+    async def flaky_flush(app, *, context=None):
         await recorded.wait()
-        attempts += 1
-        if attempts == 1:
-            raise psycopg.OperationalError("temporary connection failure")
-        await flush(app)
+        if context is None:
+            return await flush(app)
+        database = context.database
+
+        async def flaky_database(callback):
+            async def flaky_save(tx):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    raise psycopg.OperationalError(
+                        "temporary connection failure"
+                    )
+                return await callback(tx)
+
+            return await database(flaky_save)
+
+        context.database = flaky_database
+        await flush(app, context=context)
         succeeded.set()
 
     monkeypatch.setattr(metrics, "flush", flaky_flush)
-    async with Worker(chancy, register_signal_handlers=False) as worker:
+    async with Worker(
+        chancy, register_signal_handlers=False, backoff_initial=0
+    ) as worker:
         try:
             await worker.increment_counter("retry", 5)
         finally:
