@@ -260,7 +260,6 @@ class WorkflowPlugin(Plugin):
 
     .. code-block:: python
 
-        from chancy.plugins.leadership import Leadership
         from chancy.plugins.workflow import WorkflowPlugin
 
         async with Chancy(
@@ -280,7 +279,6 @@ class WorkflowPlugin(Plugin):
 
         import asyncio
         from chancy import Chancy, job
-        from chancy.plugins.leadership import Leadership
         from chancy.plugins.workflow import Workflow, WorkflowPlugin
 
         @job()
@@ -302,7 +300,7 @@ class WorkflowPlugin(Plugin):
         async def main():
             async with Chancy(
                 "postgresql://localhost/postgres",
-                plugins=[Leadership(), WorkflowPlugin()]
+                plugins=[WorkflowPlugin()]
             ) as chancy:
                 workflow = (
                     Workflow("example")
@@ -460,7 +458,7 @@ class WorkflowPlugin(Plugin):
 
     def _on_workflow_event(self, event: Event, worker: Worker):
         """Queue a hint without doing database work in the event listener."""
-        if not worker.is_leader.is_set():
+        if not worker.is_leader:
             return
         workflow_id = event.body.get("workflow_id", event.body.get("id"))
         try:
@@ -1116,7 +1114,9 @@ class WorkflowPlugin(Plugin):
         # Close the digraph
         output.write("}\n")
 
-    async def cleanup(self, chancy, cursor):
+    async def cleanup(
+        self, chancy: Chancy, cursor: AsyncCursor[DictRow]
+    ) -> int | None:
         """Remove completed workflows matching the pruning rule."""
         await cursor.execute(
             sql.SQL(
@@ -1202,10 +1202,6 @@ class WorkflowPlugin(Plugin):
     @staticmethod
     def get_identifier() -> str:
         return "chancy.workflow_plugin"
-
-    @staticmethod
-    def get_dependencies() -> list[str]:
-        return ["chancy.leadership"]
 
 
 class Sequence:

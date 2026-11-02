@@ -20,11 +20,9 @@ class Pruner(Plugin):
     .. testcode:: pruner
 
         from chancy import Chancy
-        from chancy.plugins.leadership import Leadership
         from chancy.plugins.pruner import Pruner
 
         app = Chancy("postgresql://localhost/postgres", plugins=[
-            Leadership(),
             Pruner(
                 (Pruner.Rules.Queue() == "default") & (Pruner.Rules.Age() > 60)
             )
@@ -125,10 +123,6 @@ class Pruner(Plugin):
     @staticmethod
     def get_identifier() -> str:
         return "chancy.pruner"
-
-    @staticmethod
-    def get_dependencies() -> list[str]:
-        return ["chancy.leadership"]
 
     async def setup(self, session: PluginSession):
         session.periodic(

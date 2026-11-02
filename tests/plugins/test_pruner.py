@@ -5,7 +5,6 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from chancy import Chancy, Queue, QueuedJob, Worker, job
-from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.pruner import Pruner
 
 
@@ -18,9 +17,7 @@ def job_to_run():
     "chancy",
     [
         {
-            "plugins": [
-                ImmediateLeadership(),
-            ],
+            "plugins": [],
             "no_default_plugins": True,
         }
     ],

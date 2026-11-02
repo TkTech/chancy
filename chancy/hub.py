@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from itertools import chain
@@ -20,7 +21,8 @@ class Hub:
     An event hub for registering and emitting events.
     """
 
-    def __init__(self):
+    def __init__(self, *, log: logging.Logger | None = None):
+        self._log = log if log is not None else logging.getLogger(__name__)
         # Called when any event is emitted, useful for debugging.
         self._wildcard_handlers: list[EventCallbackT] = []
         self._handlers: dict[str, list[EventCallbackT]] = {}
@@ -69,18 +71,28 @@ class Hub:
 
         self._waiters = {}
 
-    async def emit(self, event: str, body):
+    async def emit(self, event: str, body, *, isolate_errors: bool = False):
         """
         Emit an event with the given body.
+
+        With ``isolate_errors``, report handler exceptions and continue delivery.
+        Cancellation always propagates. Direct local emissions remain fail-fast.
         """
         result = Event(name=event, body=body)
 
-        for handler in chain(
-            self._handlers.get(event, []), self._wildcard_handlers
+        for handler in tuple(
+            chain(self._handlers.get(event, []), self._wildcard_handlers)
         ):
-            response = handler(result)
-            if inspect.isawaitable(response):
-                await response
+            try:
+                response = handler(result)
+                if inspect.isawaitable(response):
+                    await response
+            except Exception:
+                if not isolate_errors:
+                    raise
+                self._log.exception(
+                    "Handler %r failed for event %r", handler, event
+                )
 
         # Notify any asyncio waiters that are waiting for this event, used
         # to implement wait_for().

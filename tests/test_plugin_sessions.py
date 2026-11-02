@@ -1,16 +1,23 @@
 import asyncio
 import inspect
+import logging
 from contextlib import asynccontextmanager
 from functools import partial
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 from psycopg import OperationalError, sql
+from psycopg.errors import (
+    DeadlockDetected,
+    LockNotAvailable,
+    QueryCanceled,
+    SerializationFailure,
+)
 
 from chancy import Job, Worker
 from chancy.plugin import Plugin
-from chancy.plugins.leadership import Leadership
 from chancy.plugins.reprioritize import Reprioritize
+from chancy.retry import RetryTransaction
 from chancy.rule import JobRules
 from chancy.session import (
     Authority,
@@ -150,19 +157,65 @@ def test_registration_validation(chancy_just_app):
 
 
 @pytest.mark.asyncio
-async def test_failure_before_wait_is_still_observed(chancy_just_app):
+@pytest.mark.parametrize("source", ["plugin", "maintenance"])
+async def test_failure_is_logged_before_wait_and_still_propagates(
+    chancy_just_app, caplog, source
+):
+    logger = logging.getLogger("chancy.tests.task_failures")
+    chancy_just_app.log = logger
+    caplog.set_level(logging.ERROR, logger=logger.name)
     worker = Worker(chancy_just_app)
     session = PluginSession(SessionPlugin(), worker)
-    operation = session.service(
-        "broken", AsyncMock(side_effect=ValueError("broken"))
-    )
+    error = ValueError("broken")
+    if source == "plugin":
+        operation = session.service("broken", AsyncMock(side_effect=error))
+        session.start()
+        task_name = "test.session:broken"
+    else:
+        worker.manager.add("maintenance", AsyncMock(side_effect=error)())
+        task_name = "maintenance"
+    try:
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        # Embedded workers must report failures without a shutdown waiter.
+        records = [r for r in caplog.records if r.name == logger.name]
+        assert len(records) == 1
+        assert records[0].levelno == logging.ERROR
+        assert task_name in records[0].getMessage()
+        assert records[0].exc_info[1] is error
+        assert records[0].exc_info[2] is not None
+        with pytest.raises(ValueError) as raised:
+            await worker.wait_for_shutdown()
+        assert raised.value is error
+        if source == "plugin":
+            assert operation.state == "failed"
+        assert len([r for r in caplog.records if r.name == logger.name]) == 1
+    finally:
+        await worker.manager.cancel_all()
+        await session.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_success_and_cancellation_do_not_log_task_failures(
+    chancy_just_app, caplog, cancel
+):
+    logger = logging.getLogger("chancy.tests.task_failures")
+    chancy_just_app.log = logger
+    caplog.set_level(logging.ERROR, logger=logger.name)
+    worker = Worker(chancy_just_app)
+    session = PluginSession(SessionPlugin(), worker)
+
+    async def service(ctx):
+        if cancel:
+            await asyncio.Future()
+
+    session.service("service", service)
     session.start()
     await asyncio.sleep(0)
-    await asyncio.sleep(0)
-    with pytest.raises(ValueError, match="broken"):
-        await worker.wait_for_shutdown()
-    assert operation.state == "failed"
     await session.close()
+    assert not [r for r in caplog.records if r.name == logger.name]
+    assert not worker.manager._tasks
 
 
 @pytest.mark.asyncio
@@ -201,7 +254,6 @@ async def test_periodic_wakeups_do_not_overlap_or_postpone_period(
         "sleep",
         "wait_for_leader",
         "wake_up",
-        "cleanup_ex",
     ],
 )
 @pytest.mark.parametrize("inherited", [False, True])
@@ -239,6 +291,38 @@ async def test_old_cleanup_signature_fails_before_setup(chancy_just_app):
     with pytest.raises(TypeError, match=r"cleanup.*must accept"):
         await worker.start()
     plugin.setup.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_ex_is_not_a_reserved_plugin_hook(chancy_just_app):
+    plugin = SessionPlugin()
+    plugin.cleanup_ex = Mock()
+    plugin.setup = AsyncMock(side_effect=ValueError("setup reached"))
+    chancy_just_app.plugins = {plugin.get_identifier(): plugin}
+    chancy_just_app.is_up_to_date = AsyncMock(return_value=True)
+    with pytest.raises(ValueError, match="setup reached"):
+        await Worker(chancy_just_app).start()
+    plugin.setup.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event", ["test", None])
+async def test_observer_failure_isolated_but_cancellation_propagates(
+    chancy_just_app, event, caplog
+):
+    worker = Worker(chancy_just_app)
+    session = PluginSession(SessionPlugin(), worker)
+    observed = Mock()
+    session.subscribe(event, Mock(side_effect=ValueError("observer failed")))
+    session.subscribe(event, observed)
+    await worker.hub.emit("test", {})
+    observed.assert_called_once()
+    assert "observer failed" in caplog.text
+    session.subscribe(event, AsyncMock(side_effect=asyncio.CancelledError))
+    with pytest.raises(asyncio.CancelledError):
+        await worker.hub.emit("test", {})
+    assert worker.healthy
+    await session.close()
 
 
 def test_async_cleanup_callback_is_rejected(chancy_just_app):
@@ -322,7 +406,6 @@ async def test_worker_closes_all_sessions_after_cleanup_failure(
     worker = Worker(chancy_just_app)
     worker._drain_result = True
     worker.flush = AsyncMock()
-    worker.is_leader.set()
     cleaned = []
 
     def cleanup(name, error):
@@ -346,7 +429,7 @@ async def test_worker_closes_all_sessions_after_cleanup_failure(
         "third failed",
         "second failed",
     ]
-    assert not worker.is_leader.is_set()
+    assert not worker.is_leader
 
 
 @pytest.mark.asyncio
@@ -383,6 +466,35 @@ async def test_database_retries_rollback_and_returns_only_committed_results(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        DeadlockDetected,
+        SerializationFailure,
+        LockNotAvailable,
+        QueryCanceled,
+        RetryTransaction,
+    ],
+)
+async def test_statement_errors_preserve_leadership(chancy, error_type):
+    worker = Worker(chancy, backoff_initial=0)
+    await worker._leadership.renew()
+    ctx = await context(worker)
+    calls = 0
+
+    async def conflict(tx):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise error_type("retry this transaction")
+        return 42
+
+    assert await ctx.database(conflict) == 42
+    assert calls == 2
+    assert worker.is_leader
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("error", [OperationalError, ValueError])
 async def test_database_exhaustion_and_permanent_errors(chancy, error):
     worker = Worker(chancy, backoff_initial=0, backoff_max_retries=2)
@@ -414,18 +526,18 @@ async def test_cancellation_during_backoff(chancy):
 async def test_stale_leader_cannot_perform_database_effects(chancy):
     worker = Worker(chancy)
     ctx = await context(worker, authority=Authority.LEADER)
-    worker.is_leader.set()
+    await worker._leadership.renew()
     async with chancy.pool.connection() as conn:
         await conn.execute(
             sql.SQL(
-                "INSERT INTO {} (id, worker_id, expires_at) VALUES (1, 'other', now() + interval '1 hour')"
+                "UPDATE {} SET worker_id = 'other', expires_at = now() + interval '1 hour'"
             ).format(sql.Identifier(f"{chancy.prefix}leader"))
         )
     effect = AsyncMock()
     with pytest.raises(LeadershipLost):
         await ctx.database(effect)
     effect.assert_not_awaited()
-    assert not worker.is_leader.is_set()
+    assert not worker.is_leader
 
 
 @pytest.mark.asyncio
@@ -440,8 +552,7 @@ async def test_reprioritize_retries_uncertain_commits_without_double_increment(
         JobRules.Age() >= 0, priority_increase=5, batch_size=2
     )
     worker = Worker(chancy, backoff_initial=0)
-    worker.is_leader.set()
-    worker._leadership_unfenced = True
+    await worker._leadership.renew()
     ctx = await context(worker, authority=Authority.LEADER)
     connection = chancy.pool.connection
     committed = False
@@ -469,24 +580,6 @@ async def test_reprioritize_retries_uncertain_commits_without_double_increment(
 
 
 @pytest.mark.asyncio
-async def test_leadership_lease_expires_without_renewal(chancy):
-    plugin = Leadership(poll_interval=1, timeout=2)
-    worker = Worker(chancy)
-    session = PluginSession(plugin, worker)
-    await plugin.setup(session)
-    session.start()
-    session.operations["renew"].wake_up()
-    try:
-        await asyncio.wait_for(worker.is_leader.wait(), timeout=1)
-        await worker.manager.cancel("chancy.leadership:renew")
-        async with asyncio.timeout(5):
-            while worker.is_leader.is_set():
-                await asyncio.sleep(0.01)
-    finally:
-        await session.close()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("outage", [0.1, 3], ids=["short", "past-lease"])
 async def test_leadership_recovers_and_fences_old_worker(
     chancy, monkeypatch, outage
@@ -495,20 +588,24 @@ async def test_leadership_recovers_and_fences_old_worker(
 
     ref = await chancy.push(Job(func="tests.test_plugin_sessions.test_job"))
     first = Worker(
-        chancy, worker_id="first", backoff_initial=0.01, backoff_max=0.01
+        chancy,
+        worker_id="first",
+        backoff_initial=0.01,
+        backoff_max=0.01,
+        leadership_poll_interval=0.05,
+        leadership_timeout=2,
     )
-    leadership = Leadership(poll_interval=1, timeout=2)
-    first_session = PluginSession(leadership, first)
-    await leadership.setup(first_session)
-    first_session.start()
-    first_session.operations["renew"].wake_up()
+    tasks = [asyncio.create_task(first._leadership.maintain())]
     async with Chancy(chancy.dsn, prefix=chancy.prefix) as other:
-        second = Worker(other, worker_id="second")
-        second_session = PluginSession(leadership, second)
+        second = Worker(
+            other,
+            worker_id="second",
+            leadership_poll_interval=0.05,
+            leadership_timeout=2,
+        )
         try:
-            await asyncio.wait_for(first.is_leader.wait(), timeout=2)
-            await leadership.setup(second_session)
-            second_session.start()
+            await asyncio.wait_for(first.wait_for_leadership(), timeout=2)
+            tasks.append(asyncio.create_task(second._leadership.maintain()))
             connection = chancy.pool.connection
             failed = asyncio.Event()
 
@@ -517,17 +614,15 @@ async def test_leadership_recovers_and_fences_old_worker(
                 raise OperationalError("isolated worker")
 
             monkeypatch.setattr(chancy.pool, "connection", disconnected)
-            first_session.operations["renew"].wake_up()
             await asyncio.wait_for(failed.wait(), timeout=2)
             await asyncio.sleep(outage)
-            assert not first.is_leader.is_set()
+            assert not first.is_leader
             monkeypatch.setattr(chancy.pool, "connection", connection)
-            if outage < leadership.timeout:
-                await asyncio.wait_for(first.is_leader.wait(), timeout=2)
-                assert not second.is_leader.is_set()
+            if outage < 2:
+                await asyncio.wait_for(first.wait_for_leadership(), timeout=2)
+                assert not second.is_leader
             else:
-                await asyncio.wait_for(second.is_leader.wait(), timeout=5)
-                first.is_leader.set()  # A stale local flag cannot authorize writes.
+                await asyncio.wait_for(second.wait_for_leadership(), timeout=5)
                 old = await context(first, authority=Authority.LEADER)
                 with pytest.raises(LeadershipLost):
                     await old.database(AsyncMock())
@@ -544,8 +639,9 @@ async def test_leadership_recovers_and_fences_old_worker(
                 await current.database(effect)
                 assert (await chancy.get_job(ref)).priority == 7
         finally:
-            await first_session.close()
-            await second_session.close()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -567,22 +663,21 @@ async def test_takeover_waits_for_protected_effect_transaction(chancy):
         await release.wait()
 
     task = asyncio.create_task(ctx.database(effect))
-    leadership = Leadership(poll_interval=1, timeout=2)
-    session = PluginSession(leadership, second)
+    renewal = None
     try:
         await asyncio.wait_for(entered.wait(), timeout=1)
         await asyncio.sleep(0.12)
-        await leadership.setup(session)
-        session.start()
-        session.operations["renew"].wake_up()
+        renewal = asyncio.create_task(second._leadership.renew())
         await asyncio.sleep(0.04)
-        assert not second.is_leader.is_set()
+        assert not second.is_leader
         release.set()
         await task
-        await asyncio.wait_for(second.is_leader.wait(), timeout=2)
+        await asyncio.wait_for(second.wait_for_leadership(), timeout=2)
         with pytest.raises(LeadershipLost):
             await ctx.database(AsyncMock())
     finally:
         release.set()
         await asyncio.gather(task, return_exceptions=True)
-        await session.close()
+        if renewal is not None:
+            renewal.cancel()
+            await asyncio.gather(renewal, return_exceptions=True)

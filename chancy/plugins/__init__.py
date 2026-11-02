@@ -20,9 +20,6 @@ Default Plugins
 - :class:`chancy.plugins.metrics.Metrics`: This plugin collects metrics about
   the performance of the Chancy cluster and makes them available to the API,
   dashboard, and database.
-- :class:`chancy.plugins.leadership.Leadership`: This plugin is responsible for
-  managing leadership elections between multiple workers. Most other plugins
-  require this plugin to be enabled.
 - :class:`chancy.plugins.pruner.Pruner`: This plugin is responsible for pruning
   old jobs from the database when they are no longer needed.
 - :class:`chancy.plugins.recovery.Recovery`: This plugin is responsible for

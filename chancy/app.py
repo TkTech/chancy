@@ -237,7 +237,6 @@ class Chancy:
             # If the user hasn't specified otherwise, well enable some common
             # default plugins with reasonable defaults.
             defaults = {
-                Leadership.get_identifier(): lambda: Leadership(),
                 Pruner.get_identifier(): lambda: Pruner(),
                 Recovery.get_identifier(): lambda: Recovery(),
                 Metrics.get_identifier(): lambda: Metrics(),
@@ -1246,6 +1245,7 @@ class Chancy:
                 {workers} wr
             LEFT JOIN
                 {leader} l on l.worker_id = wr.worker_id
+                    AND l.expires_at > clock_timestamp()
             """
         ).format(
             workers=sql.Identifier(f"{self.prefix}workers"),
@@ -1575,7 +1575,6 @@ class Chancy:
         }
 
 
-from chancy.plugins.leadership import Leadership
 from chancy.plugins.metrics import Metrics
 from chancy.plugins.pruner import Pruner
 from chancy.plugins.recovery import Recovery

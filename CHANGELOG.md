@@ -1,6 +1,36 @@
 Changelog
 =========
 
+0.27.0
+----------
+
+🚨 This release changes the plugin & leadership APIs. Custom plugins will need
+some minor structural changes.
+
+- Plugins now register background work and resources in `setup(session)`.
+  Replace `run(worker, chancy)` loops with `session.periodic(...)` or
+  `session.service(...)`; use `OperationContext.database(...)` for retryable
+  transactions. `cleanup` now accepts `(chancy, cursor)` and must use that
+  transaction. The old `run`, `on_worker_started`, `sleep`, `wait_for_leader`,
+  `wake_up`, and `wakeup_signal` APIs are removed. Plugins using only unchanged
+  job hooks need no lifecycle migration. See the plugin-session documentation.
+- Task cancellation no longer interrupts cleanup with repeated cancellation
+  requests or raises the done-callback `KeyError` reported in #105.
+- `Worker.teardown_timeout` bounds the wait for cancelled background tasks,
+  separately from the executor drain timeout. Tasks that ignore cancellation
+  remain tracked with their resources open; callers can retry `stop()` after
+  they finish. Completed finalization is not repeated after a cleanup error.
+- Leadership is now a core Worker capability, enabled even with no plugins.
+  Remove `Leadership(...)` from plugin lists and `chancy.leadership` from plugin
+  dependency lists. Configure `leadership_poll_interval` and `leadership_timeout`
+  on Worker instead. Set `leadership_eligible=False` to opt out; the standalone
+  dashboard worker opts out automatically. Custom election plugins and
+  `ImmediateLeadership` are removed. No schema migration is needed.
+- `worker.is_leader` is now a read-only boolean; replace `.is_set()` calls with
+  the property and `.wait()` calls with `worker.wait_for_leadership()`. Leadership
+  is observational; leader-only transactions still verify and lock the DB lease.
+  Expired leases no longer appear as leaders in worker listings.
+
 0.26.0
 ------
 

@@ -5,6 +5,10 @@ from collections.abc import Callable
 from psycopg import InterfaceError, OperationalError
 
 
+class RetryTransaction(Exception):
+    """A recoverable conflict requiring a fresh transaction, not a new lease."""
+
+
 def _raise_if_cancelling() -> None:
     """
     Re-raise a cancellation that was converted into a database error.
@@ -22,7 +26,7 @@ def _raise_if_cancelling() -> None:
 class DatabaseRetry:
     """Backoff state for one database maintenance loop."""
 
-    errors = (OperationalError, InterfaceError)
+    errors = (OperationalError, InterfaceError, RetryTransaction)
 
     def __init__(
         self,

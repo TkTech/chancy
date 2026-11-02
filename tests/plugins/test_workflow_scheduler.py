@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -11,9 +12,56 @@ from psycopg.rows import dict_row
 from chancy import Chancy, Queue, QueuedJob, Reference, Worker
 from chancy.hub import Event
 from chancy.plugins.workflow import EmptyWorkflowError, Workflow, WorkflowPlugin
-from chancy.session import PluginSession
+from chancy.session import OperationContext, PluginSession
 from chancy.utils import chancy_uuid
 from tests.plugins.test_workflow import sync_success
+
+
+@pytest.mark.asyncio
+async def test_early_batch_crossing_deadline_does_not_defer_poll(
+    chancy_just_app, monkeypatch
+):
+    worker = Worker(chancy_just_app)
+    monkeypatch.setattr(worker, "wait_for_leadership", AsyncMock())
+    plugin = WorkflowPlugin(polling_interval=0.2)
+    session = PluginSession(plugin, worker)
+    entered, release, polled = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    ended = None
+    poll_time = None
+
+    async def pending(*args, **kwargs):
+        nonlocal ended
+        plugin._pending_workflows.clear()
+        entered.set()
+        await release.wait()
+        ended = asyncio.get_running_loop().time()
+
+    async def poll(*args, **kwargs):
+        nonlocal poll_time
+        poll_time = asyncio.get_running_loop().time()
+        polled.set()
+
+    async def database(ctx, callback):
+        return await callback(SimpleNamespace(cursor=None))
+
+    monkeypatch.setattr(plugin, "process_pending", pending)
+    monkeypatch.setattr(plugin, "poll", poll)
+    monkeypatch.setattr(OperationContext, "database", database)
+    await plugin.setup(session)
+    plugin._pending_workflows[chancy_uuid()] = None
+    session.start()
+    session.operations["schedule"].wake_up()
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        await asyncio.sleep(
+            0.25
+        )  # Cross the deadline inside notification work.
+        release.set()
+        await asyncio.wait_for(polled.wait(), 1)
+        assert poll_time - ended < 0.1
+    finally:
+        release.set()
+        await session.close()
 
 
 @pytest_asyncio.fixture
@@ -46,7 +94,7 @@ async def process_batch(plugin, chancy, worker, *, poll=False):
 
 @asynccontextmanager
 async def run_scheduler(plugin, chancy, worker):
-    worker._leadership_unfenced = True
+    await worker._leadership.renew()
     session = PluginSession(plugin, worker)
     await plugin.setup(session)
     session.start()
@@ -108,7 +156,7 @@ async def test_empty_workflow_submission_writes_nothing(
 async def test_legacy_empty_workflows_do_not_block_batch(
     chancy, scheduler, worker_no_start, poll
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     empty_ids = {state: chancy_uuid() for state in Workflow.State}
     async with (
         chancy.pool.connection() as conn,
@@ -177,7 +225,7 @@ def test_event_queue_is_bounded_and_coalesces(chancy_just_app):
     notify(plugin, worker, first)
     assert not plugin._pending_workflows  # Followers do no event-driven work.
 
-    worker.is_leader.set()
+    worker = SimpleNamespace(is_leader=True)
     notify(plugin, worker, first, created=True)
     for _ in range(100):
         notify(plugin, worker, first)
@@ -191,7 +239,7 @@ def test_event_queue_is_bounded_and_coalesces(chancy_just_app):
 async def test_notified_workflows_are_loaded_in_batches(
     chancy, scheduler, worker_no_start, monkeypatch
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     scheduler.max_workflows_per_run = 2
     ids = [
         await WorkflowPlugin.push(
@@ -226,7 +274,7 @@ async def test_notified_workflows_are_loaded_in_batches(
 async def test_notifications_during_processing_are_retained(
     chancy, scheduler, worker_no_start, monkeypatch
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     workflow_id = await WorkflowPlugin.push(
         chancy, Workflow("in_flight").add("step", sync_success)
     )
@@ -251,7 +299,7 @@ async def test_notifications_during_processing_are_retained(
 async def test_locked_notification_is_recovered_by_polling(
     chancy, scheduler, worker_no_start
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     workflow_id = await WorkflowPlugin.push(
         chancy, Workflow("locked").add("step", sync_success)
     )
@@ -277,7 +325,7 @@ async def test_locked_notification_is_recovered_by_polling(
 async def test_busy_event_queue_does_not_delay_polling(
     chancy, scheduler, worker_no_start, monkeypatch
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     scheduler.polling_interval = 0.02
     workflow_id = await WorkflowPlugin.push(
         chancy, Workflow("busy").add("step", sync_success)
@@ -319,7 +367,7 @@ async def test_busy_event_queue_does_not_delay_polling(
 async def test_event_handler_does_not_wait_for_processing(
     chancy, scheduler, worker_no_start, monkeypatch
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     entered = asyncio.Event()
     release = asyncio.Event()
     pending = scheduler.process_pending
@@ -355,7 +403,7 @@ async def test_polling_recovers_overflow_and_disabled_notifications(
     chancy, scheduler, worker_no_start, notifications
 ):
     chancy.notifications = notifications
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     scheduler.polling_interval = 0.02
     scheduler.max_pending_workflows = 1
     scheduler.max_workflows_per_run = 1
@@ -508,7 +556,7 @@ async def test_failed_batch_hook_rolls_back_jobs_and_retains_updates(
 async def test_scheduler_recovers_failed_transactions(
     chancy, scheduler, worker_no_start, monkeypatch, operation, error_type
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     worker_no_start.backoff_initial = 0
     scheduler.polling_interval = 0.01 if operation == "poll" else 3600
     workflow_id = await WorkflowPlugin.push(
@@ -565,7 +613,7 @@ async def test_scheduler_recovers_failed_transactions(
 async def test_scheduler_recovers_uncertain_commit(
     chancy, scheduler, worker_no_start, monkeypatch
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     worker_no_start.backoff_initial = 0
     scheduler.polling_interval = 0.01
     scheduler.max_workflows_per_run = 1
@@ -606,7 +654,7 @@ async def test_scheduler_recovers_uncertain_commit(
 async def test_scheduler_propagates_exhausted_or_non_transient_errors(
     chancy, scheduler, worker_no_start, monkeypatch, error_type
 ):
-    worker_no_start.is_leader.set()
+    await worker_no_start._leadership.renew()
     worker_no_start.backoff_initial = 0
     worker_no_start.backoff_max_retries = 2
     scheduler.polling_interval = 0

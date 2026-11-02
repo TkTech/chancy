@@ -5,7 +5,6 @@ import pytest
 from psycopg import sql
 
 from chancy import Chancy, Job, Queue, Worker
-from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.reprioritize import Reprioritize
 from chancy.rule import JobRules
 
@@ -19,7 +18,6 @@ def simple_job():
     [
         {
             "plugins": [
-                ImmediateLeadership(),
                 Reprioritize(
                     JobRules.Age() > 0,
                     check_interval=1,

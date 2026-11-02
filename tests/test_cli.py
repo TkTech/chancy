@@ -21,8 +21,16 @@ async def test_dashboard_session_lifecycle(
     app = chancy_just_app
     monkeypatch.setattr(Chancy, "__aenter__", AsyncMock(return_value=app))
     monkeypatch.setattr(Chancy, "__aexit__", AsyncMock(return_value=False))
-    monkeypatch.setattr(Worker, "_maintain_notifications", AsyncMock())
-    monkeypatch.setattr(Worker, "_maintain_updates", AsyncMock())
+
+    async def maintain():
+        await asyncio.Future()
+
+    monkeypatch.setattr(
+        Worker, "_maintain_notifications", AsyncMock(side_effect=maintain)
+    )
+    monkeypatch.setattr(
+        Worker, "_maintain_updates", AsyncMock(side_effect=maintain)
+    )
     monkeypatch.setattr(Worker, "_maintain_queues", AsyncMock())
     monkeypatch.setattr(Worker, "flush", AsyncMock())
     metrics = Metrics()

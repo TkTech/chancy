@@ -1,5 +1,4 @@
 import secrets
-from contextlib import AsyncExitStack
 
 import click
 from click.core import ParameterSource
@@ -84,7 +83,7 @@ async def web_command(
     chancy: Chancy = ctx.obj["app"]
 
     async with chancy:
-        worker = Worker(chancy, tags=set())
+        worker = Worker(chancy, tags=set(), leadership_eligible=False)
 
         if not (api := chancy.plugins.get("chancy.api")):
             chancy.log.info(
@@ -117,29 +116,26 @@ async def web_command(
             ):
                 api.allow_origins = allow_origin
 
-        async with AsyncExitStack() as resources:
-            sessions = []
+        try:
             for plugin in (chancy.plugins.get("chancy.metrics"), api):
                 if plugin is None:
                     continue
                 session = PluginSession(plugin, worker)
-                resources.push_async_callback(session.close)
-                sessions.append(session)
+                worker._plugin_sessions.append(session)
                 await plugin.setup(session)
+        except BaseException as error:  # noqa: BLE001 - re-raised after cleanup
+            await worker._abort_start(error)
 
-            for session in sessions:
-                resources.push_async_callback(
-                    session.plugin.on_worker_stopped, worker=worker
-                )
-            resources.push_async_callback(worker.flush)
-            resources.push_async_callback(worker.manager.cancel_all)
-            for session in sessions:
+        try:
+            for session in worker._plugin_sessions:
                 session.start()
 
             # Run dashboard infrastructure without processing queues.
             if chancy.notifications:
-                worker.manager.add(
+                worker._start_task(
                     "notifications", worker._maintain_notifications()
                 )
-            worker.manager.add("updates", worker._maintain_updates())
+            worker._start_task("updates", worker._maintain_updates())
             await worker.wait_for_shutdown()
+        finally:
+            await worker.stop()

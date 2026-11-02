@@ -5,14 +5,15 @@ import logging
 import math
 import typing
 from collections.abc import Awaitable, Callable
-from contextlib import AsyncExitStack
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, Literal, ParamSpec, TypeVar
 
-from psycopg import AsyncCursor, sql
+from psycopg import AsyncCursor
 from psycopg.rows import DictRow, dict_row
 
+from chancy.errors import LeadershipLost
 from chancy.hub import EventCallbackT
 
 if typing.TYPE_CHECKING:
@@ -31,10 +32,6 @@ class Authority(enum.Enum):
     WORKER = "worker"
     #: Wait for leadership and verify the lease in each database transaction.
     LEADER = "leader"
-
-
-class LeadershipLost(Exception):
-    """The worker no longer owns a valid leadership lease."""
 
 
 class TransactionContext:
@@ -79,6 +76,7 @@ class OperationContext:
         even if an earlier attempt committed but its response was lost. Return
         results from the callback; publish observations after this method returns.
         Cancellation, other errors, and exhausted retries propagate to the caller.
+        Explicit :exc:`chancy.retry.RetryTransaction` conflicts also retry.
 
         For leader operations, each transaction verifies the lease and prevents
         takeover until it ends. This does not protect calls to external services.
@@ -95,43 +93,18 @@ class OperationContext:
                     conn.cursor(row_factory=dict_row) as cursor,
                 ):
                     if self._operation.authority is Authority.LEADER:
-                        await self._guard_leadership(cursor)
+                        await self.worker._leadership.guard(cursor)
                     result = await callback(
                         TransactionContext(cursor, self.chancy)
                     )
                 return result
             except retry.errors as exc:
-                if not self.worker._leadership_unfenced:
-                    self.worker.is_leader.clear()
+                self.worker._leadership.on_database_error(exc)
                 self._operation.state = "retrying"
                 self._operation.error = exc
                 await retry.wait(exc)
                 self._operation.state = "running"
                 self._operation.error = None
-
-    async def _guard_leadership(self, cursor: AsyncCursor[DictRow]) -> None:
-        if self.worker._leadership_unfenced:
-            if self.worker.is_leader.is_set():
-                return
-            raise LeadershipLost()
-        # Hold the lease against renewal or takeover until this work commits.
-        await cursor.execute(
-            sql.SQL(
-                "SELECT worker_id, expires_at FROM {} WHERE id = 1 FOR SHARE"
-            ).format(sql.Identifier(f"{self.chancy.prefix}leader"))
-        )
-        lease = await cursor.fetchone()
-        await cursor.execute("SELECT clock_timestamp() AS now")
-        clock = await cursor.fetchone()
-        assert clock is not None
-        now = clock["now"]
-        if (
-            lease is None
-            or lease["worker_id"] != self.worker.worker_id
-            or lease["expires_at"] <= now
-        ):
-            self.worker.is_leader.clear()
-            raise LeadershipLost()
 
 
 @dataclass
@@ -168,7 +141,7 @@ class PluginSession:
         self.plugin = plugin
         self.worker = worker
         self.operations: dict[str, Operation] = {}
-        self._resources = AsyncExitStack()
+        self._resources = ExitStack()
         self._started = False
         self._closed = False
         self._tasks: list[asyncio.Task[None]] = []
@@ -193,6 +166,7 @@ class PluginSession:
         Leader operations wait for leadership before each call. Losing leadership
         does not cancel the callback; use :meth:`OperationContext.database` to
         protect database changes. Exceptions outside that method are not retried.
+        An unhandled failure initiates worker shutdown even without a waiter.
 
         :param name: Operation name, unique within this session.
         :param callback: Async callable accepting an :class:`OperationContext`.
@@ -213,6 +187,7 @@ class PluginSession:
 
         The callback receives an :class:`OperationContext`. It may run until
         shutdown cancels it, or return normally. Failed services are not restarted.
+        An unhandled failure initiates worker shutdown.
 
         :param name: Operation name, unique within this session.
         :param callback: Async callable implementing the service.
@@ -242,17 +217,33 @@ class PluginSession:
         """
         Register a handler until the session closes.
 
+        Subscriptions are observers: exceptions are logged without interrupting
+        other handlers or the notification listener. Cancellation propagates.
+
         :param event: Event name, or None to receive all events.
         :param callback: Sync or async callable accepting a :class:`~chancy.hub.Event`.
         """
         if self._closed:
             raise RuntimeError("Session is closed")
+
+        async def observe(message):
+            try:
+                result = callback(message)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                self.worker.chancy.log.exception(
+                    "Plugin %s handler failed for event %r",
+                    self.plugin.get_identifier(),
+                    message.name,
+                )
+
         if event is None:
-            self.worker.hub.on_any(callback)
-            self._resources.callback(self.worker.hub.remove_on_any, callback)
+            self.worker.hub.on_any(observe)
+            self._resources.callback(self.worker.hub.remove_on_any, observe)
         else:
-            self.worker.hub.on(event, callback)
-            self._resources.callback(self.worker.hub.remove, event, callback)
+            self.worker.hub.on(event, observe)
+            self._resources.callback(self.worker.hub.remove, event, observe)
 
     def callback(
         self, callback: Callable[P, object], *args: P.args, **kwargs: P.kwargs
@@ -292,9 +283,10 @@ class PluginSession:
         self._started = True
         for operation in self.operations.values():
             self._tasks.append(
-                self.worker.manager.add(
+                self.worker._start_task(
                     f"{self.plugin.get_identifier()}:{operation.name}",
                     self._run(operation),
+                    allow_return=operation.interval is None,
                 )
             )
 
@@ -321,13 +313,14 @@ class PluginSession:
                 first = False
                 operation.wakeup.clear()
                 if operation.authority is Authority.LEADER:
-                    await self.worker.is_leader.wait()
+                    await self.worker.wait_for_leadership()
+                scheduled = loop.time() >= deadline
                 operation.state = "running"
                 try:
                     await operation.callback(ctx)
                 except LeadershipLost:
                     continue
-                if loop.time() >= deadline:
+                if scheduled:
                     deadline = loop.time() + operation.interval
                 await asyncio.sleep(0)
         except asyncio.CancelledError:
@@ -353,9 +346,7 @@ class PluginSession:
         await asyncio.shield(self._close_task)
 
     async def _close(self) -> None:
-        try:
-            for task in self._tasks:
-                task.cancel()
-            await asyncio.gather(*self._tasks, return_exceptions=True)
-        finally:
-            await self._resources.aclose()
+        # Share cancellation ownership with Worker; repeated close/stop calls
+        # must not interrupt a task already releasing its resources.
+        await self.worker.manager.cancel_tasks(self._tasks)
+        self._resources.close()

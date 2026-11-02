@@ -57,10 +57,6 @@ class Reprioritize(Plugin):
     def get_identifier() -> str:
         return "chancy.reprioritize"
 
-    @staticmethod
-    def get_dependencies() -> list[str]:
-        return ["chancy.leadership"]
-
     async def setup(self, session: PluginSession):
         session.periodic(
             "reprioritize",

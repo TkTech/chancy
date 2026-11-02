@@ -37,7 +37,6 @@ from psycopg import sql
 from chancy import Chancy, Job, Limit, Queue, Worker
 from chancy.plugins.api import Api, SimpleAuthBackend
 from chancy.plugins.cron import Cron
-from chancy.plugins.leadership import Leadership
 from chancy.plugins.metrics import Metrics
 from chancy.plugins.pruner import Pruner
 from chancy.plugins.reprioritize import Reprioritize
@@ -52,7 +51,6 @@ BACKLOG = 500
 
 def application(dsn):
     plugins = [
-        Leadership(poll_interval=5, timeout=15),
         Cron(poll_interval=5),
         RetryPlugin(),
         Trigger(),
@@ -261,6 +259,8 @@ async def run(args):
                     app,
                     tags={"reports"} if i == 0 else {"general"},
                     register_signal_handlers=False,
+                    leadership_poll_interval=5,
+                    leadership_timeout=15,
                 )
             )
             for i, app in enumerate(apps)

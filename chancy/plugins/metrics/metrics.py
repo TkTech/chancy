@@ -13,12 +13,13 @@ from functools import partial
 from typing import Literal, cast
 from uuid import UUID, uuid4
 
-from psycopg import sql
-from psycopg.rows import dict_row
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 
 from chancy.job import QueuedJob
 from chancy.plugin import Plugin
+from chancy.retry import RetryTransaction
 from chancy.session import Authority, TransactionContext
 
 Resolution = Literal["1min", "5min", "1hour", "1day"]
@@ -612,7 +613,7 @@ class Metrics(Plugin):
                     )
                     stored = await cursor.fetchall()
                     if len(stored) != len(definitions):
-                        raise RuntimeError(
+                        raise RetryTransaction(
                             "Metric catalog changed during flush; retry required"
                         )
                     ids = {}
@@ -1035,7 +1036,7 @@ class Metrics(Plugin):
             )
             return [row["key"] for row in await cursor.fetchall()]
 
-    async def cleanup(self, chancy, cursor):
+    async def cleanup(self, chancy, cursor: AsyncCursor[DictRow]) -> int | None:
         """Remove expired metrics and unused metric definitions."""
         now = utcnow()
         conditions = []

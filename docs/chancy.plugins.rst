@@ -14,7 +14,6 @@ Submodules
 
    chancy.plugins.api
    chancy.plugins.cron
-   chancy.plugins.leadership
    chancy.plugins.metrics
    chancy.plugins.pruner
    chancy.plugins.recovery

@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from contextlib import asynccontextmanager
 
@@ -8,8 +9,64 @@ from psycopg import sql
 from chancy import Worker
 from chancy.plugins.metrics import Metrics
 from chancy.plugins.metrics import metrics as module
+from chancy.session import OperationContext, PluginSession
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_catalog_pruning_race_retries_in_fresh_transaction(
+    chancy, monkeypatch
+):
+    from psycopg import sql
+
+    metrics = Metrics()
+    worker = Worker(chancy, backoff_initial=0)
+    await worker._leadership.renew()
+    session = PluginSession(metrics, worker)
+    await metrics.setup(session)
+    ctx = OperationContext(session, session.operations["flush"])
+    table = sql.Identifier(f"{chancy.prefix}metric_definitions")
+    async with chancy.pool.connection() as conn:
+        await conn.execute(
+            sql.SQL(
+                "INSERT INTO {} (key, metric_type, unit) VALUES ('race', 'counter', 'count')"
+            ).format(table)
+        )
+    await worker.increment_counter("race", 3)
+    execute = psycopg.AsyncCursor.execute
+    pruned = False
+    attempts = 0
+
+    async def interleave(cursor, query, *args, **kwargs):
+        nonlocal pruned, attempts
+        result = await execute(cursor, query, *args, **kwargs)
+        rendered = (
+            query.as_string()
+            if isinstance(query, sql.Composable)
+            else str(query)
+        )
+        if "ON CONFLICT (key) DO NOTHING" in rendered:
+            attempts += 1
+            if not pruned:
+                pruned = True
+                async with (
+                    chancy.pool.connection() as conn,
+                    conn.cursor(row_factory=module.dict_row) as other,
+                ):
+                    await asyncio.wait_for(metrics.cleanup(chancy, other), 2)
+        return result
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(psycopg.AsyncCursor, "execute", interleave)
+            await metrics._flush(ctx)
+        assert pruned and attempts == 2
+        assert worker.is_leader
+        assert not metrics._dirty
+        result = await metrics.get_metrics(chancy, "race")
+        assert result["series"]["race"].summary == 3
+    finally:
+        await session.close()
 
 
 @pytest.fixture
