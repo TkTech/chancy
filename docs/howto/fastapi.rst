@@ -85,3 +85,10 @@ application. Install ``chancy[web]`` alongside FastAPI, then use
 Let the parent ASGI server handle process signals by passing
 ``register_signal_handlers=False`` to the embedded worker. Its lifespan
 context will stop the worker when the server shuts down.
+
+Background worker failures initiate worker shutdown even without a call to
+``wait_for_shutdown()``. They do not cancel the FastAPI lifespan task or stop
+the ASGI server. ``worker.healthy`` becomes false, and the mounted dashboard's
+health endpoint returns 503. The lifespan context reports retained failures
+when it exits; applications may also await ``worker.wait_for_shutdown()`` to
+observe the outcome earlier.

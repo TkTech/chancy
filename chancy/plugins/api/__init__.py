@@ -242,10 +242,14 @@ class Api(Plugin):
             ],
         )
 
-    async def run(self, worker: Worker, chancy: Chancy):
+    async def setup(self, session):
+        session.service("server", self._serve)
+
+    async def _serve(self, ctx):
         """
         Start the standalone web server.
         """
+        worker, chancy = ctx.worker, ctx.chancy
         app = self.build_starlette_app(worker, chancy)
 
         server = uvicorn.Server(

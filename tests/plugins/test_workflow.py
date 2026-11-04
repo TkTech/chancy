@@ -7,7 +7,6 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from chancy import Chancy, Queue, QueuedJob, Reference, Worker, job
-from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.workflow import (
     CircularDependencyError,
     InvalidDependencyError,
@@ -45,7 +44,6 @@ async def async_failure():
     [
         {
             "plugins": [
-                ImmediateLeadership(),
                 WorkflowPlugin(),
             ],
             "no_default_plugins": True,
@@ -82,7 +80,7 @@ async def test_sequential_workflow(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -124,7 +122,7 @@ async def test_parallel_workflow(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         }
     ],
@@ -160,7 +158,7 @@ async def test_workflow_failure(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         }
     ],
@@ -197,7 +195,7 @@ async def test_sequence(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         }
     ],
@@ -226,7 +224,7 @@ async def test_workflow_timeout(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         }
     ],
@@ -243,7 +241,7 @@ async def test_missing_workflow(chancy: Chancy, worker):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy",
-    [{"plugins": [ImmediateLeadership(), WorkflowPlugin()]}],
+    [{"plugins": [WorkflowPlugin()]}],
     indirect=True,
 )
 async def test_async_workflow(chancy: Chancy, worker):
@@ -274,7 +272,7 @@ async def test_async_workflow(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         }
     ],
@@ -315,7 +313,7 @@ async def test_workflow_with_modified_jobs(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -346,7 +344,7 @@ async def test_simple_circular_dependency(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -376,7 +374,7 @@ async def test_complex_circular_dependency(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -401,7 +399,7 @@ async def test_self_dependency(chancy: Chancy, worker):
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -455,7 +453,7 @@ async def test_validate_can_be_called_independently():
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -512,7 +510,6 @@ async def _count_running(chancy: Chancy, ids: list[str]) -> int:
     [
         {
             "plugins": [
-                ImmediateLeadership(),
                 WorkflowPlugin(polling_interval=3600),
             ],
             "no_default_plugins": True,
@@ -541,13 +538,13 @@ async def test_step_completion_notifies_leader(
 
     # Start listening after creation so workflow.created cannot wake a poll.
     async with Worker(chancy) as leader:
-        await asyncio.wait_for(leader.is_leader.wait(), timeout=5)
+        await asyncio.wait_for(leader.wait_for_leadership(), timeout=5)
         received = asyncio.Event()
         advanced = asyncio.Event()
         leader.hub.on("workflow.step_completed", lambda event: received.set())
         leader.hub.on("workflow.updated", lambda event: advanced.set())
 
-        assert not worker_no_start.is_leader.is_set()
+        assert not worker_no_start.is_leader
         await worker_no_start.queue_update(
             replace(first, state=QueuedJob.State.SUCCEEDED)
         )
@@ -565,7 +562,7 @@ async def test_step_completion_notifies_leader(
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -597,7 +594,7 @@ async def test_poll_processes_full_batch(
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -637,7 +634,7 @@ async def test_poll_continues_after_previous_batch(
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -698,7 +695,7 @@ async def test_poll_revisits_workflows_during_continuous_arrivals(
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],
@@ -734,7 +731,7 @@ async def test_poll_restarts_when_sweep_tail_finishes(
     "chancy",
     [
         {
-            "plugins": [ImmediateLeadership(), WorkflowPlugin()],
+            "plugins": [WorkflowPlugin()],
             "no_default_plugins": True,
         },
     ],

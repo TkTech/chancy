@@ -21,6 +21,7 @@ Submodules
    chancy.queue
    chancy.worker
    chancy.plugin
+   chancy.session
    chancy.migrate
    chancy.hub
    chancy.rule

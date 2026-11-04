@@ -68,9 +68,11 @@ Certain plugins like :doc:`cron <chancy.plugins.cron>` and
 :doc:`workflows <chancy.plugins.workflow>` will only run on the worker that
 currently holds leadership to prevent race conditions.
 
-The default leadership process is handled by the
-:class:`~chancy.plugins.leadership.Leadership` plugin, and can easily be
-replaced with a custom implementation.
+Leadership is a core :class:`~chancy.worker.Worker` capability, enabled even
+when all plugins are disabled. Workers elect and renew a database lease;
+leader-only plugin transactions check and lock that lease before doing work.
+Set ``leadership_eligible=False`` on a Worker to exclude it from election. The
+standalone dashboard worker is excluded automatically.
 
 Multi-mode concurrency
 ----------------------

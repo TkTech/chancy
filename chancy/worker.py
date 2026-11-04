@@ -1,7 +1,9 @@
 import asyncio
 import dataclasses
 import datetime
+import inspect
 import json
+import math
 import platform
 import random
 import re
@@ -12,7 +14,8 @@ import time
 import uuid
 import warnings
 from collections import defaultdict
-from contextlib import AsyncExitStack
+from collections.abc import Coroutine
+from contextlib import AsyncExitStack, suppress
 
 from psycopg import AsyncConnection, InterfaceError, OperationalError, sql
 from psycopg.rows import dict_row
@@ -23,10 +26,18 @@ from chancy.errors import MigrationsNeededError
 from chancy.executors.base import Executor
 from chancy.hub import Event, Hub
 from chancy.job import QueuedJob, Reference
+from chancy.leadership import LeadershipLease
 from chancy.plugin import PluginScope
 from chancy.queue import Queue
 from chancy.retry import DatabaseRetry, _raise_if_cancelling
-from chancy.utils import TaskManager, import_string, lock_order_key, sleep
+from chancy.session import PluginSession
+from chancy.utils import (
+    ExceptionSnapshot,
+    TaskManager,
+    import_string,
+    lock_order_key,
+    sleep,
+)
 
 
 class Worker:
@@ -122,6 +133,18 @@ class Worker:
                                        should be processing.
     :param shutdown_timeout: The number of seconds to wait for a clean shutdown
                                 before forcing the worker to stop.
+    :param teardown_timeout: Seconds to wait for cancelled background tasks to
+                             finish cleanup after draining. A timeout raises
+                             without releasing resources still used by tasks;
+                             a later :meth:`stop` can finish teardown.
+    :param leadership_eligible: Participate in cluster leadership election
+                                (default True). Set False to exclude this worker.
+    :param leadership_poll_interval: Seconds between lease renewal/election
+                                     attempts (default 60). The first attempt
+                                     is immediate.
+    :param leadership_timeout: Lease lifetime in seconds (default 120). Must be
+                               greater than the poll interval; twice it is
+                               recommended.
     :param tags: Extra tags to associate with the worker.
     :param register_signal_handlers: Whether to register signal handlers.
     :param backoff_initial: The initial ceiling in seconds for retry
@@ -146,12 +169,18 @@ class Worker:
         heartbeat_timeout: int = 90,
         queue_change_poll_interval: int = 10,
         shutdown_timeout: int = 30,
+        teardown_timeout: float = 30,
+        leadership_eligible: bool = True,
+        leadership_poll_interval: float = 60,
+        leadership_timeout: float = 120,
         tags: set[str] | None = None,
         register_signal_handlers: bool = True,
         backoff_initial: float = 1.0,
         backoff_max: float = 60.0,
         backoff_max_retries: int | None = None,
     ):
+        if not math.isfinite(teardown_timeout) or teardown_timeout < 0:
+            raise ValueError("teardown_timeout must be finite and non-negative")
         #: The Chancy application that the worker is associated with.
         self.chancy = chancy
         #: The ID of the worker, which must be globally unique.
@@ -164,6 +193,8 @@ class Worker:
         #: The number of seconds to wait for a clean shutdown before forcing
         #: the worker to stop.
         self.shutdown_timeout = shutdown_timeout
+        #: Time allowed for cancelled tasks to release their resources.
+        self.teardown_timeout = teardown_timeout
         #: The number of seconds between sending outgoing updates to the
         #: database.
         self.send_outgoing_interval = 1
@@ -171,7 +202,7 @@ class Worker:
         #: should be processing.
         self.queue_change_poll_interval = queue_change_poll_interval
         #: An event hub with cluster and local telemetry, useful for plugins.
-        self.hub = Hub()
+        self.hub = Hub(log=chancy.log)
         #: Whether to register signal handlers on startup of the worker.
         self.register_signal_handlers = register_signal_handlers
         #: Initial backoff delay in seconds for transient errors in
@@ -188,7 +219,12 @@ class Worker:
 
         #: The task manager for the worker, responsible for managing all the
         #: worker's internal asyncio tasks.
-        self.manager = TaskManager()
+        self.manager = TaskManager(
+            log=chancy.log,
+            on_failure=self._on_task_failure,
+            on_exit=self._on_task_exit,
+        )
+        self._task_returns: dict[asyncio.Task, bool] = {}
 
         #: A queue of updates waiting to be sent to the database.
         self.outgoing: asyncio.Queue[QueuedJob] = asyncio.Queue()
@@ -197,10 +233,13 @@ class Worker:
         self._pending_updates: list[QueuedJob] = []
         self._accepting_updates = True
 
-        #: An event that is set when the worker is the leader.
-        #: This functionality is not enabled by default - a leadership plugin
-        #: must be used to enable this event.
-        self.is_leader = asyncio.Event()
+        self._leadership = LeadershipLease(
+            self,
+            eligible=leadership_eligible,
+            poll_interval=leadership_poll_interval,
+            timeout=leadership_timeout,
+        )
+        self._plugin_sessions: list[PluginSession] = []
         #: An event that is set when the worker is shutting down.
         self.shutdown_event = asyncio.Event()
         self._signal_received = False
@@ -219,6 +258,61 @@ class Worker:
         self._stop_task: asyncio.Task[bool] | None = None
         # Preserve the teardown result if final persistence needs a retry.
         self._drain_result: bool | None = None
+        self._starting = False
+        self._failure_event = asyncio.Event()
+        self._stop_requested = asyncio.Event()
+        self._finalized = False
+        self._cleanup_errors: list[ExceptionSnapshot] = []
+        self._stop_errors: dict[asyncio.Task, ExceptionSnapshot] = {}
+        self._stopped_sessions: set[PluginSession] = set()
+        self._queues_task: asyncio.Task | None = None
+        self._queue_tasks: dict[str, asyncio.Task] = {}
+
+    @property
+    def healthy(self) -> bool:
+        """Whether the worker is accepting work without terminal failures."""
+        return not (self.shutdown_event.is_set() or self.manager.errors)
+
+    def _on_task_failure(self) -> None:
+        self._failure_event.set()
+        if not self._starting and self._stop_task is None:
+            self._begin_stop(self.shutdown_timeout)
+
+    @property
+    def is_leader(self) -> bool:
+        """Whether this worker currently has a locally valid leadership lease.
+
+        This observation cannot authorize database writes: leader operations
+        verify and lock the lease inside each transaction.
+        """
+        return self._leadership.is_leader
+
+    async def wait_for_leadership(self) -> None:
+        """Wait for a valid lease. Ineligible workers never acquire leadership."""
+        await self._leadership.wait()
+
+    def _start_task(
+        self, name: str, coroutine: Coroutine, *, allow_return: bool = False
+    ) -> asyncio.Task:
+        """Supervise required work while allowing explicitly finite tasks."""
+        task = self.manager.add(name, coroutine)
+        self._task_returns[task] = allow_return
+        return task
+
+    def _on_task_exit(
+        self, task: asyncio.Task, cancellation_requested: bool
+    ) -> BaseException | None:
+        allow_return = self._task_returns.pop(task, None)
+        if allow_return is None or self.shutdown_event.is_set():
+            return None
+        if task.cancelled():
+            if not cancellation_requested:
+                return RuntimeError(
+                    f"Task {task.get_name()!r} was unexpectedly cancelled"
+                )
+        elif task.exception() is None and not allow_return:
+            return RuntimeError(f"Task {task.get_name()!r} exited unexpectedly")
+        return None
 
     async def start(self):
         """
@@ -241,6 +335,85 @@ class Worker:
             async with Worker(chancy) as worker:
                 await worker.wait_for_shutdown()
         """
+        self._starting = True
+        try:
+            await self._start()
+        except BaseException as error:  # noqa: BLE001 - re-raised after cleanup
+            await self._abort_start(error)
+        finally:
+            self._starting = False
+
+    async def _abort_start(self, error: BaseException) -> None:
+        """Release partial setup without running final persistence hooks."""
+        self.shutdown_event.set()
+        errors = [ExceptionSnapshot(error)]
+        cancellation = (
+            error if isinstance(error, asyncio.CancelledError) else None
+        )
+        try:
+            await self.manager.cancel_all(timeout=self.teardown_timeout)
+            await self._close_sessions()
+        except BaseException as cleanup_error:
+            self.chancy.log.error(
+                "Startup teardown failed", exc_info=cleanup_error
+            )
+            errors.append(ExceptionSnapshot(cleanup_error))
+            if isinstance(cleanup_error, asyncio.CancelledError):
+                cancellation = cancellation or cleanup_error
+        self._leadership.clear()
+        if cancellation is not None:
+            try:
+                self.manager.raise_errors(
+                    "Worker startup cleanup failed",
+                    [
+                        entry
+                        for entry in (*errors, *self._cleanup_errors)
+                        if entry.exception is not cancellation
+                    ],
+                )
+            except BaseException as cleanup_error:
+                raise cancellation from cleanup_error
+            raise cancellation
+        self.manager.raise_errors(
+            "Worker startup failed", (*errors, *self._cleanup_errors)
+        )
+
+    async def _close_sessions(self) -> None:
+        for session in reversed(self._plugin_sessions):
+            try:
+                await session.close()
+            except BaseException as error:
+                if isinstance(error, asyncio.CancelledError):
+                    task = asyncio.current_task()
+                    if task is not None and task.cancelling():
+                        raise
+                self._cleanup_errors.append(ExceptionSnapshot(error))
+                self.chancy.log.error(
+                    "Plugin session cleanup failed", exc_info=error
+                )
+
+    async def _start(self):
+        for plugin in self.chancy.plugins.values():
+            for name in (
+                "run",
+                "on_worker_started",
+                "sleep",
+                "wait_for_leader",
+                "wake_up",
+            ):
+                if hasattr(plugin, name):
+                    raise TypeError(
+                        f"{type(plugin).__name__}.{name}() is no longer supported. "
+                        "Use setup(session) and session operations; "
+                        "cleanup hooks must accept (chancy, cursor)."
+                    )
+            try:
+                inspect.signature(plugin.cleanup).bind(self.chancy, None)
+            except TypeError as exc:
+                raise TypeError(
+                    f"{type(plugin).__name__}.cleanup() must accept (chancy, cursor)."
+                ) from exc
+
         if not await self.chancy.is_up_to_date():
             raise MigrationsNeededError()
 
@@ -258,28 +431,37 @@ class Worker:
                     f"dependencies: {plugin.get_dependencies()}"
                 )
 
-            await plugin.on_worker_started(worker=self)
+            session = PluginSession(plugin, self)
+            self._plugin_sessions.append(session)
+            await plugin.setup(session)
 
-        for plugin in self.chancy.plugins.values():
-            if plugin.get_scope() != PluginScope.WORKER:
-                continue
-            self.manager.add(
-                plugin.__class__.__name__,
-                plugin.run(self, self.chancy),
-            )
-            self.chancy.log.info(
-                f"Started plugin {plugin.__class__.__name__!r}"
-            )
+        if self._leadership.eligible:
+            self._start_task("leadership", self._leadership.maintain())
+            self._start_task("leadership_expiry", self._leadership.expire())
 
-        self.manager.add("queues", self._maintain_queues())
-        self.manager.add("updates", self._maintain_updates())
-        self.manager.add("heartbeat", self._maintain_heartbeat())
+        for session in self._plugin_sessions:
+            session.start()
+
+        self._queues_task = self._start_task("queues", self._maintain_queues())
+        self._start_task("updates", self._maintain_updates())
+        self._start_task("heartbeat", self._maintain_heartbeat())
 
         # pgbouncer and other connection pools may not support LISTEN/NOTIFY
         # properly, so this needs to remain an optional (but default) feature.
         if self.chancy.notifications:
-            self.manager.add("notifications", self._maintain_notifications())
-            await self._notifications_ready_event.wait()
+            self._start_task("notifications", self._maintain_notifications())
+            ready = asyncio.create_task(self._notifications_ready_event.wait())
+            failed = asyncio.create_task(self._failure_event.wait())
+            try:
+                await asyncio.wait(
+                    {ready, failed}, return_when=asyncio.FIRST_COMPLETED
+                )
+                if errors := self.manager.errors:
+                    raise errors[0]
+            finally:
+                ready.cancel()
+                failed.cancel()
+                await asyncio.gather(ready, failed, return_exceptions=True)
 
         if self.register_signal_handlers and sys.platform == "win32":
             warnings.warn(
@@ -297,14 +479,18 @@ class Worker:
 
         await self.chancy.declare(Queue(name="default"))
         await self.hub.emit("worker.started", {"worker": self})
+        if errors := self.manager.errors:
+            raise errors[0]
 
     async def wait_for_shutdown(self):
         """
-        Wait until the worker is stopped, including its final job updates.
+        Wait for teardown, then report the worker's outcome to every caller.
+
+        Supervision runs independently of this method. One failure is raised
+        directly; multiple failures are reported together in an exception group.
         """
-        await self.manager.wait_for_shutdown()
-        if self._stop_task is not None:
-            await asyncio.shield(self._stop_task)
+        await self._stop_requested.wait()
+        return await self._wait_for_stop()
 
     def _calculate_backoff(self, consecutive_failures: int) -> float:
         """Calculate capped exponential backoff delay with full jitter.
@@ -365,10 +551,6 @@ class Worker:
                 for queue_name, queue in db_queues.items():
                     if queue_name not in self._queues:
                         self._queues[queue_name] = queue
-                        self.manager.add(
-                            f"queue_{queue_name}",
-                            self._maintain_queue(queue),
-                        )
                         self.chancy.log.info(
                             f"Adding queue {queue_name!r} to worker"
                             f" using executor {queue.executor!r}."
@@ -380,6 +562,22 @@ class Worker:
                                 f"Updated configuration for the"
                                 f" queue {queue_name!r}."
                             )
+
+                    # A removed queue may be re-added while its previous loop
+                    # drains. Let that loop adopt the new configuration first.
+                    task = self._queue_tasks.get(queue_name)
+                    if task is None or task.done():
+                        task = self._start_task(
+                            f"queue_{queue_name}",
+                            self._maintain_queue(queue),
+                            allow_return=True,
+                        )
+                        self._queue_tasks[queue_name] = task
+                        task.add_done_callback(
+                            lambda done, name=queue_name: self._queue_finished(
+                                name, done
+                            )
+                        )
 
                 retry.reset()
             except retry.errors as exc:
@@ -393,6 +591,10 @@ class Worker:
                 )
             except TimeoutError:
                 pass
+
+    def _queue_finished(self, name: str, task: asyncio.Task) -> None:
+        if self._queue_tasks.get(name) is task:
+            del self._queue_tasks[name]
 
     async def _maintain_queue(self, queue: Queue):
         """
@@ -575,7 +777,7 @@ class Worker:
                 retry.reset()
                 async for notification in connection.notifies():
                     j = json.loads(notification.payload)
-                    await self.hub.emit(j.pop("t"), j)
+                    await self.hub.emit(j.pop("t"), j, isolate_errors=True)
             except retry.errors as exc:
                 _raise_if_cancelling()
                 if not ever_connected:
@@ -610,11 +812,6 @@ class Worker:
             except retry.errors as exc:
                 await retry.wait(exc)
                 continue
-            except Exception:
-                self.chancy.log.exception(
-                    "Failed while processing outgoing job updates."
-                )
-                raise
 
             retry.reset()
             await asyncio.sleep(self.send_outgoing_interval)
@@ -982,7 +1179,9 @@ class Worker:
                 return
 
             self._signal_received = True
-            await self.stop()
+            # Failures are already logged and remain available to waiters.
+            with suppress(Exception, BaseExceptionGroup):
+                await self.stop()
 
     def _force_shutdown(self):
         asyncio.get_running_loop().stop()
@@ -1015,12 +1214,21 @@ class Worker:
         If final persistence fails, a later call retries it without repeating
         completed teardown or changing the original drain result.
 
+        Cancelled tasks get a separate ``teardown_timeout`` to finish. On
+        timeout they remain tracked and plugin resources stay open. Keep the
+        application open and retry ``stop()`` after those tasks finish. Python
+        cannot forcibly terminate a coroutine that ignores cancellation.
+
+        Terminal task and cleanup failures are reported after teardown. A later
+        call reports them again without repeating completed finalization.
+
         :param timeout: An optional timeout in seconds to wait for the worker to
             stop before forcing a shutdown. If not provided, the worker's
             `shutdown_timeout` attribute will be used.
         """
         if (
-            self._stop_task is not None
+            not self._finalized
+            and self._stop_task is not None
             and self._stop_task.done()
             and (
                 self._stop_task.cancelled()
@@ -1031,19 +1239,56 @@ class Worker:
 
         if self._stop_task is None:
             timeout = timeout if timeout is not None else self.shutdown_timeout
-            self._stop_task = asyncio.create_task(self._stop(timeout))
+            self._begin_stop(timeout)
 
-        return await asyncio.shield(self._stop_task)
+        return await self._wait_for_stop()
+
+    def _begin_stop(self, timeout: float) -> None:
+        self.shutdown_event.set()
+        self._leadership.clear()
+        self._stop_task = asyncio.create_task(self._stop(timeout))
+        self._stop_task.add_done_callback(self._stop_done)
+        self._stop_requested.set()
+
+    def _stop_done(self, task: asyncio.Task) -> None:
+        # Automatic shutdown has no caller to retrieve/log persistence errors.
+        if not task.cancelled() and (error := task.exception()) is not None:
+            self._stop_errors.setdefault(task, ExceptionSnapshot(error))
+            self.chancy.log.error("Worker shutdown failed", exc_info=error)
+
+    async def _wait_for_stop(self) -> bool:
+        task = self._stop_task
+        assert task is not None
+        errors = []
+        result = False
+        try:
+            result = await asyncio.shield(task)
+        except (Exception, BaseExceptionGroup) as error:  # noqa: BLE001 - aggregated below
+            errors.append(
+                self._stop_errors.setdefault(task, ExceptionSnapshot(error))
+            )
+        self.manager.raise_errors(
+            "Worker failed", (*self._cleanup_errors, *errors)
+        )
+        return result
 
     async def _stop(self, timeout: float) -> bool:
         """Share teardown and finish persisting the accepted job updates."""
         if self._drain_result is None:
             self._drain_result = await self._drain(timeout)
 
+        # Keep the original drain result if cancellation times out. A later
+        # stop retries this wait without cancelling unwinding tasks again.
+        await self.manager.cancel_all(timeout=self.teardown_timeout)
         await self.flush()
-        for plugin in self.chancy.plugins.values():
-            if plugin.get_scope() == PluginScope.WORKER:
+        for session in self._plugin_sessions:
+            plugin = session.plugin
+            if session not in self._stopped_sessions:
                 await plugin.on_worker_stopped(worker=self)
+                self._stopped_sessions.add(session)
+        await self._close_sessions()
+        self._leadership.clear()
+        self._finalized = True
         await self.hub.emit(
             "worker.stopped"
             if self._drain_result
@@ -1053,17 +1298,15 @@ class Worker:
         return self._drain_result
 
     async def _drain(self, timeout: float) -> bool:
-        """Drain executors and tear down the worker's maintenance tasks."""
+        """Stop fetching work and let executors finish before cancellation."""
         self.shutdown_event.set()
         clean = True
 
         try:
             async with asyncio.timeout(timeout) as cm:
                 # Stop accepting new queues and queue changes.
-                try:
-                    await self.manager.cancel("queues")
-                except KeyError:
-                    pass
+                if self._queues_task is not None:
+                    await self.manager.cancel(self._queues_task)
 
                 # Stop queue loops from fetching more work and wake them so
                 # they can observe the removal immediately.
@@ -1087,9 +1330,6 @@ class Worker:
         # Anything accepted before the cutoff is persisted by the final flush.
         self._accepting_updates = False
 
-        # Teardown must happen even when the graceful drain exceeded its
-        # timeout. Preserve its result before attempting final persistence.
-        await self.manager.cancel_all()
         return clean
 
     async def _handle_cancellation(self, event: Event):

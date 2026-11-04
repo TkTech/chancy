@@ -85,7 +85,7 @@ jobs:
       fail-fast: true
       matrix:
         python-version: ["3.11", "3.14"]
-        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        os: ["ubuntu-24.04", "macos-26", "windows-2022"]
         # Django 5.2 supports both Python endpoints and PostgreSQL 14+.
         django: ["5.2"]
         pg: ["14", "18"]

@@ -286,10 +286,11 @@ class CoreApiPlugin(ApiPlugin):
         Health check endpoint - returns 200 if the worker is healthy.
         Does not require authentication.
         """
+        healthy = worker.healthy
         return Response(
-            json_dumps({"status": "healthy"}),
+            json_dumps({"status": "healthy" if healthy else "unhealthy"}),
             media_type="application/json",
-            status_code=200,
+            status_code=200 if healthy else 503,
         )
 
     @staticmethod

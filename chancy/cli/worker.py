@@ -6,6 +6,7 @@ from click.core import ParameterSource
 from chancy import Chancy, Worker
 from chancy.cli import run_async_command
 from chancy.errors import MigrationsNeededError
+from chancy.session import PluginSession
 
 
 @click.group(name="worker")
@@ -82,17 +83,7 @@ async def web_command(
     chancy: Chancy = ctx.obj["app"]
 
     async with chancy:
-        worker = Worker(chancy, tags=set())
-
-        # Add infrastructure tasks needed for hub events (LISTEN/NOTIFY)
-        # and job updates, without running full queue processing.
-        worker.manager.add("notifications", worker._maintain_notifications())
-        worker.manager.add("updates", worker._maintain_updates())
-
-        # The metrics plugin needs to be running to pull in cluster-wide
-        # metrics.
-        if metrics := chancy.plugins.get("chancy.metrics"):
-            worker.manager.add("metrics", metrics.run(worker, chancy))
+        worker = Worker(chancy, tags=set(), leadership_eligible=False)
 
         if not (api := chancy.plugins.get("chancy.api")):
             chancy.log.info(
@@ -125,5 +116,26 @@ async def web_command(
             ):
                 api.allow_origins = allow_origin
 
-        worker.manager.add("api", api.run(worker, chancy))
-        await worker.wait_for_shutdown()
+        try:
+            for plugin in (chancy.plugins.get("chancy.metrics"), api):
+                if plugin is None:
+                    continue
+                session = PluginSession(plugin, worker)
+                worker._plugin_sessions.append(session)
+                await plugin.setup(session)
+        except BaseException as error:  # noqa: BLE001 - re-raised after cleanup
+            await worker._abort_start(error)
+
+        try:
+            for session in worker._plugin_sessions:
+                session.start()
+
+            # Run dashboard infrastructure without processing queues.
+            if chancy.notifications:
+                worker._start_task(
+                    "notifications", worker._maintain_notifications()
+                )
+            worker._start_task("updates", worker._maintain_updates())
+            await worker.wait_for_shutdown()
+        finally:
+            await worker.stop()

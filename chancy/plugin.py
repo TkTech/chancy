@@ -1,5 +1,4 @@
 import abc
-import asyncio
 import enum
 import typing
 from collections.abc import Sequence
@@ -8,12 +7,12 @@ from typing import Any
 from psycopg import AsyncCursor
 from psycopg.rows import DictRow
 
-from chancy import utils
 from chancy.job import QueuedJob
 from chancy.migrate import Migrator
 
 if typing.TYPE_CHECKING:
     from chancy.app import Chancy
+    from chancy.session import PluginSession
     from chancy.worker import Worker
 
 
@@ -26,15 +25,58 @@ class Plugin(abc.ABC):
     """
     Base class for all plugins.
 
-    Plugins are used to extend the functionality of the worker. When a worker
-    starts, it will call :meth:`run` on all plugins that have a scope that
-    matches the worker's scope.
-    """
+    Plugins are used to extend the functionality of the worker and most of
+    Chancy's features are implemented as swappable plugins. Writing and using
+    plugins is fairly simple. For example:
 
-    def __init__(self):
-        #: An asyncio.Event that can be used to wake up the plugin if it's
-        #: sleeping.
-        self.wakeup_signal = asyncio.Event()
+    .. code-block:: python
+
+        import asyncio
+
+        from psycopg import sql
+
+        from chancy import Chancy, Worker
+        from chancy.plugin import Plugin
+
+        class PendingJobs(Plugin):
+            @staticmethod
+            def get_identifier():
+                return "myapp.pending_jobs"
+
+            async def setup(self, session):
+                session.periodic("report", self.report, interval=60)
+
+            async def report(self, ctx):
+                async def count_pending(tx):
+                    await tx.cursor.execute(
+                        sql.SQL(
+                            "SELECT count(*) AS count FROM {} WHERE state = 'pending'"
+                        ).format(sql.Identifier(f"{ctx.chancy.prefix}jobs"))
+                    )
+                    return (await tx.cursor.fetchone())["count"]
+
+                count = await ctx.database(count_pending)
+                ctx.log.info("Pending jobs: %s", count)
+
+        async def main():
+            async with Chancy(
+                "postgresql://localhost/postgres",
+                plugins=[PendingJobs()],
+            ) as chancy:
+                await chancy.migrate()
+                async with Worker(chancy) as worker:
+                    await worker.wait_for_shutdown()
+
+        if __name__ == "__main__":
+            asyncio.run(main())
+
+    You're free to do whatever you want within a ``Plugin``, but we recommend
+    using :class:`~chancy.session.PluginSession` to schedule work and manage
+    resources, and :meth:`~chancy.session.OperationContext.database` for database
+    operations. These helpers handle shutdown and retries after transient
+    database errors. Database callbacks may run more than once, so they must
+    be safe to repeat.
+    """
 
     @classmethod
     def get_scope(cls) -> PluginScope:
@@ -46,12 +88,14 @@ class Plugin(abc.ABC):
         """
         return PluginScope.WORKER
 
-    async def run(self, worker: "Worker", chancy: "Chancy"):
+    async def setup(self, session: "PluginSession") -> None:
         """
-        Runs the plugin.
+        Register work and subscriptions for one worker.
 
-        This function can and should run indefinitely, as it will be cancelled
-        when the worker is stopped.
+        Called once before background work starts. An exception aborts worker
+        startup and closes all sessions created so far.
+
+        :param session: The worker's session for this plugin.
         """
 
     def migrate_package(self) -> str | None:
@@ -93,39 +137,18 @@ class Plugin(abc.ABC):
 
         return Migrator(key, package, prefix=chancy.prefix)
 
-    async def sleep(self, seconds: int) -> bool:
+    async def cleanup(
+        self, chancy: "Chancy", cursor: AsyncCursor[DictRow]
+    ) -> int | None:
         """
-        Sleep for a specified number of seconds, but allow the plugin to be
-        woken up early.
-        """
-        await utils.sleep(seconds, events=[self.wakeup_signal.wait()])
-        self.wakeup_signal.clear()
-        return True
+        Remove expired data using the supplied transaction.
 
-    @staticmethod
-    async def wait_for_leader(worker: "Worker") -> None:
-        """
-        Wait until the worker running this plugin is the leader.
-        """
-        return await worker.is_leader.wait()
+        Pruner calls this hook periodically. It may repeat after a connection
+        failure, so repeated calls must be safe. Do not commit the transaction.
 
-    def wake_up(self):
-        """
-        Wake up the plugin if it's sleeping.
-        """
-        self.wakeup_signal.set()
-
-    async def cleanup(self, chancy: "Chancy") -> int | None:
-        """
-        Clean up any resources used by the plugin.
-
-        Should return either None, if no work was done, or the number of
-        rows cleaned up.
-
-        .. note::
-
-            Normally, you don't need to call this yourself. The Pruner plugin
-            will call the cleanup method of all other registered plugins.
+        :param chancy: The Chancy application.
+        :param cursor: The cursor to use for database operations.
+        :return: The number of rows removed, or None if no work was done.
         """
 
     def api_plugin(self) -> str | None:
@@ -197,16 +220,6 @@ class Plugin(abc.ABC):
                      accepted updates to the same job. Rejected updates are
                      omitted; this hook is not called if none were accepted.
         :param cursor: The cursor for the current update transaction.
-        """
-
-    async def on_worker_started(self, *, worker: "Worker"):
-        """
-        Called when a worker starts, before plugin tasks begin running.
-
-        Use this hook to register event handlers or prepare resources needed
-        by other plugins. It is called for plugins with worker scope.
-
-        :param worker: The worker being started.
         """
 
     async def on_worker_stopped(self, *, worker: "Worker"):

@@ -314,7 +314,11 @@ async def test_standalone_server_uses_factory(
     monkeypatch.setattr("chancy.plugins.api.uvicorn.Server", server_factory)
     worker = Worker(chancy_just_app)
 
-    await api.run(worker, chancy_just_app)
+    from chancy.session import OperationContext, PluginSession
+
+    session = PluginSession(api, worker)
+    await api.setup(session)
+    await api._serve(OperationContext(session, session.operations["server"]))
 
     factory.assert_called_once_with(worker, chancy_just_app)
     assert server_factory.call_args.kwargs["config"].app is app
