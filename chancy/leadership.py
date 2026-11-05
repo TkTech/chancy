@@ -36,6 +36,12 @@ class LeadershipLease:
                 "Leadership intervals must be finite and positive, with "
                 "leadership_timeout > leadership_poll_interval"
             )
+        if idle_timeout is not None and (
+            not isinstance(idle_timeout, int) or idle_timeout <= 0
+        ):
+            raise ValueError(
+                "leadership_idle_timeout must be a positive integer or None"
+            )
         self.worker = worker
         self.eligible = eligible
         self.poll_interval = poll_interval
