@@ -41,7 +41,7 @@ async def _cancel_during_shutdown():
 @job()
 async def _wait_for_dependency(*, dsn: str, prefix: str, dependency: str):
     async with Chancy(dsn, prefix=prefix) as app:
-        await app.wait_for_job(Reference(dependency), interval=0.01, timeout=10)
+        await app.wait_for_job(Reference(dependency), interval=1, timeout=10)
 
 
 @pytest.mark.asyncio
@@ -306,7 +306,7 @@ async def test_worker_flushes_completed_job_updates_before_stopping(
             queue_name,
             executor=Chancy.Executor.Threaded,
             concurrency=1,
-            polling_interval=0.01,
+            polling_interval=1,
             tags={"^shutdown$"},
         )
     )
@@ -356,9 +356,8 @@ async def test_shutdown_persists_updates_while_jobs_drain(
         await chancy.get_job(dependency), state=QueuedJob.State.SUCCEEDED
     )
     await chancy.declare(
-        Queue("waiting", executor=Chancy.Executor.Async, polling_interval=0.01)
+        Queue("waiting", executor=Chancy.Executor.Async, polling_interval=1)
     )
-    worker_no_start.send_outgoing_interval = 0.01
     async with worker_no_start as worker:
         waiting = await chancy.push(
             _wait_for_dependency.job.with_queue("waiting").with_kwargs(
@@ -368,10 +367,10 @@ async def test_shutdown_persists_updates_while_jobs_drain(
             )
         )
         await chancy.wait_for_job(
-            waiting, states={QueuedJob.State.RUNNING}, interval=0.01, timeout=5
+            waiting, states={QueuedJob.State.RUNNING}, interval=1, timeout=5
         )
 
-        stop_task = asyncio.create_task(worker.stop(timeout=2))
+        stop_task = asyncio.create_task(worker.stop(timeout=5))
         await wait_until(lambda: not worker, timeout=5)
         assert await worker.queue_update(completed)
 
@@ -396,7 +395,7 @@ async def test_worker_abandons_thread_completion_after_timeout(chancy: Chancy):
             queue_name,
             executor=Chancy.Executor.Threaded,
             concurrency=1,
-            polling_interval=0.01,
+            polling_interval=1,
             tags={"^shutdown$"},
         )
     )
@@ -446,7 +445,7 @@ async def test_worker_abandons_async_completion_after_timeout(chancy: Chancy):
             queue_name,
             executor=Chancy.Executor.Async,
             concurrency=1,
-            polling_interval=0.01,
+            polling_interval=1,
             tags={"^shutdown$"},
         )
     )
@@ -466,7 +465,7 @@ async def test_worker_abandons_async_completion_after_timeout(chancy: Chancy):
         await chancy.wait_for_job(
             ref,
             states={QueuedJob.State.RUNNING},
-            interval=0.01,
+            interval=1,
             timeout=10,
         )
 

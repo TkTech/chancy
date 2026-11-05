@@ -150,7 +150,7 @@ async def test_wait_for_jobs_ignores_purged_jobs(
     await chancy.purge_jobs([purged_ref])
 
     completed = await chancy.wait_for_jobs(
-        [existing_ref, purged_ref], interval=0.01, timeout=1
+        [existing_ref, purged_ref], interval=1, timeout=1
     )
 
     assert [job.id for job in completed] == [existing_ref.identifier]

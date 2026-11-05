@@ -316,7 +316,7 @@ async def test_periodic_flush_failure_retries_without_stopping_worker(
     import asyncio
 
     metrics = chancy.plugins["chancy.metrics"]
-    metrics.sync_interval = 0.01
+    metrics.sync_interval = 1
     flush = metrics.flush
     recorded = asyncio.Event()
     succeeded = asyncio.Event()

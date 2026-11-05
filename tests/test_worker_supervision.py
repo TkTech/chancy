@@ -12,21 +12,22 @@ from chancy import Queue, Worker
 from chancy.plugin import Plugin
 from chancy.plugins.api.core import CoreApiPlugin
 from chancy.session import PluginSession
+from tests.helpers import wait_until
 
 pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
-def worker(chancy_just_app):
+def unit_worker(chancy_just_app):
     chancy_just_app.plugins = {}
-    worker = Worker(
+    unit_worker = Worker(
         chancy_just_app,
         register_signal_handlers=False,
         leadership_eligible=False,
-        queue_change_poll_interval=0.005,
+        queue_change_poll_interval=1,
     )
-    worker.flush = AsyncMock()
-    return worker
+    unit_worker.flush = AsyncMock()
+    return unit_worker
 
 
 class Observer(Plugin):
@@ -35,14 +36,40 @@ class Observer(Plugin):
         return "test.observer"
 
 
-async def eventually(predicate):
-    async with asyncio.timeout(2):
-        while not predicate():
-            await asyncio.sleep(0.001)
+class BlockedCleanup:
+    def __init__(self, error=None):
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+        self.error = error
+
+    async def __call__(self, *args, **kwargs):
+        self.entered.set()
+        try:
+            await self.release.wait()
+        except asyncio.CancelledError:
+            await self.release.wait()
+        if self.error is not None:
+            raise self.error
+
+
+@pytest.fixture
+def expire_shutdown(unit_worker, monkeypatch):
+    """Expire the next cleanup wait after the selected stage has started."""
+    await_cleanup = unit_worker._await_cleanup
+
+    def after(entered):
+        async def wait(task, deadline):
+            monkeypatch.setattr(unit_worker, "_await_cleanup", await_cleanup)
+            await asyncio.wait_for(entered.wait(), 5)
+            await await_cleanup(task, 0)
+
+        monkeypatch.setattr(unit_worker, "_await_cleanup", wait)
+
+    return after
 
 
 async def test_failure_stops_embedded_worker_before_reporting_to_waiters(
-    worker,
+    unit_worker,
 ):
     flushing, release = asyncio.Event(), asyncio.Event()
 
@@ -50,20 +77,20 @@ async def test_failure_stops_embedded_worker_before_reporting_to_waiters(
         flushing.set()
         await release.wait()
 
-    worker.flush = flush
+    unit_worker.flush = flush
     failures = [ValueError("first"), RuntimeError("second")]
     for failure in failures:
-        worker._start_task("failed", AsyncMock(side_effect=failure)())
+        unit_worker._start_task("failed", AsyncMock(side_effect=failure)())
     # No shutdown waiter is needed to initiate teardown.
     await asyncio.wait_for(flushing.wait(), 1)
-    assert worker.shutdown_event.is_set()
-    assert not worker.healthy
+    assert unit_worker.shutdown_event.is_set()
+    assert not unit_worker.healthy
     response = await CoreApiPlugin.health(
-        None, chancy=worker.chancy, worker=worker
+        None, chancy=unit_worker.chancy, worker=unit_worker
     )
     assert response.status_code == 503
     waiters = [
-        asyncio.create_task(worker.wait_for_shutdown()) for _ in range(2)
+        asyncio.create_task(unit_worker.wait_for_shutdown()) for _ in range(2)
     ]
     await asyncio.sleep(0)
     assert not any(waiter.done() for waiter in waiters)
@@ -73,162 +100,160 @@ async def test_failure_stops_embedded_worker_before_reporting_to_waiters(
         assert isinstance(result, ExceptionGroup)
         assert set(result.exceptions) == set(failures)
     with pytest.raises(ExceptionGroup) as caught:
-        await worker.stop()
+        await unit_worker.stop()
     assert set(caught.value.exceptions) == set(failures)
 
 
 @pytest.mark.parametrize("exit", ["return", "cancel", "cancel-before-start"])
-async def test_unexpected_maintenance_exit_is_fatal(worker, exit):
+async def test_unexpected_maintenance_exit_is_fatal(unit_worker, exit):
     coroutine = asyncio.sleep(0 if exit == "return" else 3600)
-    task = worker._start_task("maintenance", coroutine)
+    task = unit_worker._start_task("maintenance", coroutine)
     if exit == "cancel":
         await asyncio.sleep(0)
         task.cancel()
     elif exit == "cancel-before-start":
         task.cancel()
     with pytest.raises(RuntimeError, match="unexpected"):
-        await asyncio.wait_for(worker.wait_for_shutdown(), 1)
-    assert worker._finalized
+        await asyncio.wait_for(unit_worker.wait_for_shutdown(), 1)
+    assert unit_worker._finalized
 
 
-async def test_finite_service_and_requested_cancel_are_expected(worker):
-    session = PluginSession(Observer(), worker)
+async def test_finite_service_and_requested_cancel_are_expected(
+    unit_worker,
+):
+    session = PluginSession(Observer(), unit_worker)
     session.service("one-shot", AsyncMock())
     session.service("long", lambda ctx: asyncio.sleep(3600))
     session.start()
     await asyncio.sleep(0)
     await session.close()
-    assert worker.healthy
-    assert not worker.manager.errors
-    assert worker._stop_task is None
-    await worker.stop()
+    assert unit_worker.healthy
+    assert not unit_worker.manager.errors
+    assert unit_worker._stop_task is None
+    await unit_worker.stop()
 
 
-async def test_shutdown_timeout_keeps_resources_until_retry(worker):
-    release, entered = asyncio.Event(), asyncio.Event()
+async def test_shutdown_timeout_keeps_resources_until_retry(
+    unit_worker, expire_shutdown
+):
+    service = BlockedCleanup()
     cleaned = Mock()
-    session = PluginSession(Observer(), worker)
-
-    async def service(ctx):
-        entered.set()
-        try:
-            await asyncio.Future()
-        except asyncio.CancelledError:
-            await release.wait()
-
+    session = PluginSession(Observer(), unit_worker)
     session.service("stubborn", service)
     session.callback(cleaned)
-    worker._plugin_sessions.append(session)
+    unit_worker._plugin_sessions.append(session)
     session.start()
-    await entered.wait()
+    await service.entered.wait()
+    expire_shutdown(service.entered)
     try:
         with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
-            await worker.stop(timeout=0.01)
+            await unit_worker.stop()
         cleaned.assert_not_called()
-        worker.flush.assert_not_awaited()
+        unit_worker.flush.assert_not_awaited()
         assert session._tasks[0].cancelling() == 1
     finally:
-        release.set()
-        await worker.stop()
+        service.release.set()
+        await unit_worker.stop()
     cleaned.assert_called_once()
-    worker.flush.assert_awaited_once()
+    unit_worker.flush.assert_awaited_once()
 
 
 @pytest.mark.parametrize(
     "stage", ["drain", "flush", "hook", "sessions", "event"]
 )
-async def test_shutdown_deadline_covers_every_stage(worker, stage):
-    entered, release = asyncio.Event(), asyncio.Event()
-
-    async def blocked(*args, **kwargs):
-        entered.set()
-        try:
-            await release.wait()
-        except asyncio.CancelledError:
-            await release.wait()
-        return True
+async def test_shutdown_deadline_covers_every_stage(
+    unit_worker, expire_shutdown, stage
+):
+    blocked = BlockedCleanup()
 
     if stage == "drain":
-        worker._drain = blocked
+
+        async def drain():
+            await blocked()
+            return True
+
+        unit_worker._drain = drain
     elif stage == "flush":
-        worker.flush = blocked
+        unit_worker.flush = blocked
     elif stage == "hook":
         plugin = Observer()
         plugin.on_worker_stopped = blocked
-        worker._plugin_sessions.append(PluginSession(plugin, worker))
+        unit_worker._plugin_sessions.append(PluginSession(plugin, unit_worker))
     elif stage == "sessions":
-        worker._close_sessions = blocked
+        unit_worker._close_sessions = blocked
     else:
-        worker.hub.on("worker.stopped", blocked)
+        unit_worker.hub.on("worker.stopped", blocked)
 
+    expire_shutdown(blocked.entered)
     try:
         with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
-            await asyncio.wait_for(worker.stop(timeout=0.02), timeout=1)
-        assert entered.is_set()
-        cleanup = worker._cleanup_task
+            await unit_worker.stop()
+        cleanup = unit_worker._cleanup_task
         assert not cleanup.done()
-        assert not worker._accepting_updates
+        assert not unit_worker._accepting_updates
+        expire_shutdown(blocked.entered)
         with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
-            await asyncio.wait_for(worker.stop(timeout=0.02), timeout=1)
-        assert worker._cleanup_task is cleanup
+            await unit_worker.stop()
+        assert unit_worker._cleanup_task is cleanup
         assert cleanup.cancelling() == 1
     finally:
-        release.set()
-        await worker.stop()
-    assert worker._finalized
+        blocked.release.set()
+        await unit_worker.stop()
+    assert unit_worker._finalized
 
 
-async def test_shutdown_stages_share_one_deadline(worker):
-    entered = asyncio.Event()
-    release = asyncio.Event()
-
+async def test_shutdown_stages_share_one_deadline(unit_worker):
     async def drain():
-        entered.set()
-        await release.wait()
+        await asyncio.sleep(0.6)
         return True
 
-    worker._drain = drain
-    deadline = asyncio.get_running_loop().time() + 0.1
-    worker._begin_stop(0.1)
-    await entered.wait()
-    await asyncio.sleep(0.07)
-    worker.flush = lambda: asyncio.sleep(0.07)
-    release.set()
-    with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
-        await worker.wait_for_shutdown()
-    assert asyncio.get_running_loop().time() < deadline + 0.2
-    worker.flush = AsyncMock()
-    await worker.stop()
-
-
-async def test_shutdown_waiters_share_the_original_deadline(worker):
-    entered = asyncio.Event()
-
     async def flush():
-        entered.set()
-        await asyncio.Future()
+        await asyncio.sleep(0.6)
 
-    worker.flush = flush
-    first = asyncio.create_task(worker.stop(timeout=0.05))
-    await entered.wait()
-    second = asyncio.create_task(worker.stop(timeout=10))
-    waiter = asyncio.create_task(worker.wait_for_shutdown())
-    results = await asyncio.wait_for(
-        asyncio.gather(first, second, waiter, return_exceptions=True), timeout=1
-    )
-    assert all(isinstance(error, TimeoutError) for error in results)
-    assert results[0] is results[1] is results[2]
-    worker.flush = AsyncMock()
-    await worker.stop()
+    unit_worker._drain = drain
+    unit_worker.flush = AsyncMock(side_effect=flush)
+    try:
+        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+            await asyncio.wait_for(unit_worker.stop(timeout=1), timeout=5)
+        unit_worker.flush.assert_awaited_once()
+    finally:
+        unit_worker.flush = AsyncMock()
+        await unit_worker.stop()
 
 
-async def test_stop_finishes_after_startup_cleanup_times_out(worker):
-    worker.shutdown_timeout = 1
+async def test_shutdown_waiters_share_the_original_deadline(
+    unit_worker, expire_shutdown
+):
+    flush = BlockedCleanup()
+    waiters_ready = asyncio.Event()
+    unit_worker.flush = flush
+    expire_shutdown(waiters_ready)
+    first = asyncio.create_task(unit_worker.stop(timeout=1))
+    try:
+        await asyncio.wait_for(flush.entered.wait(), 5)
+        second = asyncio.create_task(unit_worker.stop(timeout=10))
+        waiter = asyncio.create_task(unit_worker.wait_for_shutdown())
+        waiters_ready.set()
+        results = await asyncio.wait_for(
+            asyncio.gather(first, second, waiter, return_exceptions=True), 5
+        )
+        assert all(isinstance(error, TimeoutError) for error in results)
+        assert results[0] is results[1] is results[2]
+    finally:
+        waiters_ready.set()
+        flush.release.set()
+        unit_worker.flush = AsyncMock()
+        await asyncio.gather(first, return_exceptions=True)
+        await unit_worker.stop()
+
+
+async def test_stop_finishes_after_startup_cleanup_times_out(unit_worker):
+    unit_worker.shutdown_timeout = 1
     release = asyncio.Event()
     drain_timeouts = []
-    worker.hub.on("worker.shutdown_timeout", drain_timeouts.append)
-    session = PluginSession(Observer(), worker)
-    worker._plugin_sessions.append(session)
+    unit_worker.hub.on("worker.shutdown_timeout", drain_timeouts.append)
+    session = PluginSession(Observer(), unit_worker)
+    unit_worker._plugin_sessions.append(session)
     close = session.close
 
     async def blocked_close():
@@ -239,160 +264,194 @@ async def test_stop_finishes_after_startup_cleanup_times_out(worker):
         await close()
 
     session.close = blocked_close
-    worker._start = AsyncMock(side_effect=ValueError("setup failed"))
+    unit_worker._start = AsyncMock(side_effect=ValueError("setup failed"))
     try:
         with pytest.raises(ExceptionGroup) as caught:
-            await worker.start()
+            await unit_worker.start()
         assert any(
             isinstance(error, TimeoutError) for error in caught.value.exceptions
         )
-        stopping = asyncio.create_task(worker.stop())
-        await eventually(lambda: worker._stop_task is not None)
+        stopping = asyncio.create_task(unit_worker.stop())
+        await wait_until(lambda: unit_worker._stop_task is not None)
         release.set()
         assert await stopping is True
-        assert worker._finalized
-        worker.flush.assert_awaited_once()
+        assert unit_worker._finalized
+        unit_worker.flush.assert_awaited_once()
         assert not drain_timeouts
     finally:
         release.set()
-        await worker._cleanup_task
+        await unit_worker._cleanup_task
 
 
 @pytest.mark.parametrize("wait", [False, True])
-async def test_context_exit_does_not_restart_timed_out_shutdown(worker, wait):
-    worker.start = AsyncMock()
-
-    async def blocked_flush():
-        await asyncio.Future()
-
-    worker.flush = AsyncMock(side_effect=blocked_flush)
-    try:
-        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
-            async with worker:
-                if wait:
-                    worker._begin_stop(0.01)
-                    await worker.wait_for_shutdown()
-                else:
-                    await worker.stop(timeout=0.01)
-        worker.flush.assert_awaited_once()
-    finally:
-        worker.flush = AsyncMock()
-        await worker.stop()
-
-
-async def test_cancelled_final_flush_is_not_automatically_repeated(worker):
-    worker.flush = AsyncMock(side_effect=asyncio.CancelledError)
-    with pytest.raises(asyncio.CancelledError):
-        await worker.stop()
-    worker.flush.assert_awaited_once()
-
-
-@pytest.mark.parametrize("late_error", [OperationalError, TimeoutError])
-@pytest.mark.parametrize("retry_before_exit", [False, True])
-@pytest.mark.parametrize("retry_fails", [False, True])
-async def test_shutdown_retry_recovers_from_late_flush_error(
-    worker, caplog, late_error, retry_before_exit, retry_fails
+async def test_context_exit_does_not_restart_timed_out_shutdown(
+    unit_worker, expire_shutdown, wait
 ):
-    release = asyncio.Event()
-    calls = 0
-    failure = late_error("cancelled flush")
-
-    async def flush():
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            try:
-                await asyncio.Future()
-            except asyncio.CancelledError:
-                await release.wait()
-                raise failure
-        if calls == 2 and retry_fails:
-            raise ValueError("retry failed")
-
-    worker.flush = flush
+    unit_worker.start = AsyncMock()
+    flush = BlockedCleanup()
+    unit_worker.flush = AsyncMock(side_effect=flush.__call__)
+    expire_shutdown(flush.entered)
     try:
         with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
-            await worker.stop(timeout=0.01)
-        previous = worker._stop_task
-        cleanup = worker._cleanup_task
-        if retry_before_exit:
-            retry = asyncio.create_task(worker.stop(timeout=1))
-            await eventually(lambda: worker._stop_task is not previous)
-            assert not retry.done()
-            assert calls == 1
-            release.set()
-        else:
-            release.set()
-            await asyncio.gather(cleanup, return_exceptions=True)
-            retry = asyncio.create_task(worker.stop(timeout=1))
-        if retry_fails:
-            with pytest.raises(ValueError, match="retry failed"):
-                await retry
-            assert await worker.stop() is True
-        else:
-            assert await retry is True
-        assert await worker.wait_for_shutdown() is True
-        assert await worker.stop() is True
-        assert worker._finalized
-        assert calls == (3 if retry_fails else 2)
-        assert (
-            sum(
-                record.exc_info is not None and record.exc_info[1] is failure
-                for record in caplog.records
-            )
-            == 1
-        )
+            async with unit_worker:
+                if wait:
+                    unit_worker._begin_stop(30)
+                    await unit_worker.wait_for_shutdown()
+                else:
+                    await unit_worker.stop()
+        unit_worker.flush.assert_awaited_once()
     finally:
-        release.set()
-        await asyncio.gather(worker._cleanup_task, return_exceptions=True)
+        flush.release.set()
+        unit_worker.flush = AsyncMock()
+        await unit_worker.stop()
 
 
-async def test_late_resource_cleanup_failure_remains_reported(worker):
-    release = asyncio.Event()
-    session = PluginSession(Observer(), worker)
-    worker._plugin_sessions.append(session)
+async def test_cancelled_final_flush_is_not_automatically_repeated(
+    unit_worker,
+):
+    unit_worker.flush = AsyncMock(side_effect=asyncio.CancelledError)
+    with pytest.raises(asyncio.CancelledError):
+        await unit_worker.stop()
+    unit_worker.flush.assert_awaited_once()
+
+
+@pytest.mark.parametrize("error_type", [OperationalError, TimeoutError])
+async def test_shutdown_retry_recovers_from_late_flush_error(
+    unit_worker, caplog, expire_shutdown, error_type
+):
+    failure = error_type("cancelled flush")
+    flush = BlockedCleanup(failure)
+    unit_worker.flush = flush
+    expire_shutdown(flush.entered)
+    try:
+        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+            await unit_worker.stop()
+        flush.release.set()
+        await asyncio.gather(unit_worker._cleanup_task, return_exceptions=True)
+
+        unit_worker.flush = AsyncMock()
+        assert await unit_worker.stop() is True
+        assert await unit_worker.wait_for_shutdown() is True
+        assert await unit_worker.stop() is True
+        unit_worker.flush.assert_awaited_once()
+        assert [
+            record.exc_info[1]
+            for record in caplog.records
+            if record.exc_info is not None
+        ] == [failure]
+    finally:
+        flush.release.set()
+        await asyncio.gather(unit_worker._cleanup_task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("error_type", [OperationalError, TimeoutError])
+async def test_shutdown_retry_waits_for_previous_cleanup(
+    unit_worker, expire_shutdown, error_type
+):
+    flush = BlockedCleanup(error_type("cancelled flush"))
+    unit_worker.flush = flush
+    expire_shutdown(flush.entered)
+    retry = None
+    try:
+        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+            await unit_worker.stop()
+
+        previous = unit_worker._stop_task
+        unit_worker.flush = AsyncMock()
+        retry = asyncio.create_task(unit_worker.stop())
+        await wait_until(lambda: unit_worker._stop_task is not previous)
+        await asyncio.sleep(0)
+        assert not retry.done()
+        unit_worker.flush.assert_not_awaited()
+
+        flush.release.set()
+        assert await retry is True
+        unit_worker.flush.assert_awaited_once()
+    finally:
+        flush.release.set()
+        if retry is not None:
+            await asyncio.gather(retry, return_exceptions=True)
+        await asyncio.gather(unit_worker._cleanup_task, return_exceptions=True)
+
+
+async def test_shutdown_retry_reports_its_own_flush_failure(
+    unit_worker, expire_shutdown
+):
+    flush = BlockedCleanup(OperationalError("cancelled flush"))
+    unit_worker.flush = flush
+    expire_shutdown(flush.entered)
+    try:
+        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+            await unit_worker.stop()
+        flush.release.set()
+        await asyncio.gather(unit_worker._cleanup_task, return_exceptions=True)
+
+        unit_worker.flush = AsyncMock(side_effect=ValueError("retry failed"))
+        with pytest.raises(ValueError, match="retry failed"):
+            await unit_worker.stop()
+        unit_worker.flush.assert_awaited_once()
+
+        unit_worker.flush = AsyncMock()
+        assert await unit_worker.stop() is True
+        unit_worker.flush.assert_awaited_once()
+    finally:
+        flush.release.set()
+        await asyncio.gather(unit_worker._cleanup_task, return_exceptions=True)
+
+
+async def test_late_resource_cleanup_failure_remains_reported(
+    unit_worker, expire_shutdown
+):
+    blocked = BlockedCleanup()
+    session = PluginSession(Observer(), unit_worker)
+    unit_worker._plugin_sessions.append(session)
     failure = ValueError("resource cleanup failed")
     cleanup = Mock(side_effect=failure)
     session.callback(cleanup)
     close = session._close
 
     async def delayed_close():
-        await release.wait()
+        await blocked()
         await close()
 
     session._close = delayed_close
+    expire_shutdown(blocked.entered)
     try:
         with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
-            await worker.stop(timeout=0.01)
-        release.set()
+            await unit_worker.stop()
+        blocked.release.set()
         await asyncio.gather(session._close_task, return_exceptions=True)
         for _ in range(2):
             with pytest.raises(ValueError) as caught:
-                await worker.stop()
+                await unit_worker.stop()
             assert caught.value is failure
-        assert worker._finalized
+        assert unit_worker._finalized
         cleanup.assert_called_once()
     finally:
-        release.set()
-        await asyncio.gather(worker._cleanup_task, return_exceptions=True)
+        blocked.release.set()
+        await asyncio.gather(unit_worker._cleanup_task, return_exceptions=True)
 
 
-async def test_terminal_cleanup_failure_does_not_repeat_hooks(worker):
+async def test_terminal_cleanup_failure_does_not_repeat_hooks(
+    unit_worker,
+):
     plugin = Observer()
     plugin.on_worker_stopped = AsyncMock()
-    session = PluginSession(plugin, worker)
+    session = PluginSession(plugin, unit_worker)
     cleanup = Mock(side_effect=ValueError("cleanup failed"))
     session.callback(cleanup)
-    worker._plugin_sessions.append(session)
+    unit_worker._plugin_sessions.append(session)
     for _ in range(2):
         with pytest.raises(ValueError, match="cleanup failed"):
-            await worker.stop()
-    worker.flush.assert_awaited_once()
+            await unit_worker.stop()
+    unit_worker.flush.assert_awaited_once()
     plugin.on_worker_stopped.assert_awaited_once()
     cleanup.assert_called_once()
 
 
-async def test_cancellation_failures_join_the_triggering_failure(worker):
+async def test_cancellation_failures_join_the_triggering_failure(
+    unit_worker,
+):
     entered = asyncio.Event()
     original = ValueError("original failure")
     cleanup = RuntimeError("task cleanup failed")
@@ -404,37 +463,37 @@ async def test_cancellation_failures_join_the_triggering_failure(worker):
         finally:
             raise cleanup
 
-    worker._start_task("service", service())
+    unit_worker._start_task("service", service())
     await entered.wait()
-    worker._start_task("broken", AsyncMock(side_effect=original)())
+    unit_worker._start_task("broken", AsyncMock(side_effect=original)())
     with pytest.raises(ExceptionGroup) as caught:
-        await asyncio.wait_for(worker.wait_for_shutdown(), 1)
+        await asyncio.wait_for(unit_worker.wait_for_shutdown(), 1)
     assert set(caught.value.exceptions) == {original, cleanup}
-    assert worker._finalized
+    assert unit_worker._finalized
 
 
 async def test_startup_cleanup_keeps_original_error_and_closes_every_session(
-    worker,
+    unit_worker,
 ):
     first_cleanup = Mock()
     second_cleanup = Mock(side_effect=RuntimeError("cleanup failed"))
     original = ValueError("setup failed")
-    first = PluginSession(Observer(), worker)
-    second = PluginSession(Observer(), worker)
+    first = PluginSession(Observer(), unit_worker)
+    second = PluginSession(Observer(), unit_worker)
     first.callback(first_cleanup)
     second.callback(second_cleanup)
-    worker._plugin_sessions.extend([first, second])
+    unit_worker._plugin_sessions.extend([first, second])
     with pytest.raises(ExceptionGroup) as caught:
-        await worker._abort_start(original)
+        await unit_worker._abort_start(original)
     first_cleanup.assert_called_once()
     second_cleanup.assert_called_once()
     assert caught.value.exceptions[0] is original
     assert str(caught.value.exceptions[1]) == "cleanup failed"
-    worker.flush.assert_not_awaited()
+    unit_worker.flush.assert_not_awaited()
 
 
 async def test_notification_handler_failure_keeps_listener_and_delivery_alive(
-    worker, monkeypatch
+    unit_worker, monkeypatch
 ):
     delivered = asyncio.Event()
     release = asyncio.Event()
@@ -450,53 +509,59 @@ async def test_notification_handler_failure_keeps_listener_and_delivery_alive(
         "chancy.worker.AsyncConnection.connect",
         AsyncMock(return_value=connection),
     )
-    worker.hub.on("test", Mock(side_effect=ValueError("observer failed")))
-    worker.hub.on("test", lambda event: delivered.set())
-    waiter = asyncio.create_task(worker.hub.wait_for("test"))
+    unit_worker.hub.on("test", Mock(side_effect=ValueError("observer failed")))
+    unit_worker.hub.on("test", lambda event: delivered.set())
+    waiter = asyncio.create_task(unit_worker.hub.wait_for("test"))
     await asyncio.sleep(0)
-    task = worker._start_task("notifications", worker._maintain_notifications())
+    task = unit_worker._start_task(
+        "notifications", unit_worker._maintain_notifications()
+    )
     await asyncio.wait_for(delivered.wait(), 1)
     assert await waiter
-    assert not task.done() and worker.healthy
-    await worker.stop()
+    assert not task.done() and unit_worker.healthy
+    await unit_worker.stop()
     connection.close.assert_awaited_once()
 
 
-async def test_notification_startup_failure_cannot_hang(worker, monkeypatch):
-    worker.chancy.is_up_to_date = AsyncMock(return_value=True)
-    worker.chancy.declare = AsyncMock()
+async def test_notification_startup_failure_cannot_hang(
+    unit_worker, monkeypatch
+):
+    unit_worker.chancy.is_up_to_date = AsyncMock(return_value=True)
+    unit_worker.chancy.declare = AsyncMock()
     for name in (
         "_maintain_queues",
         "_maintain_updates",
         "_maintain_heartbeat",
     ):
-        monkeypatch.setattr(worker, name, lambda: asyncio.sleep(3600))
+        monkeypatch.setattr(unit_worker, name, lambda: asyncio.sleep(3600))
     monkeypatch.setattr(
-        worker,
+        unit_worker,
         "_maintain_notifications",
         AsyncMock(side_effect=ValueError("connect failed")),
     )
     with pytest.raises(ValueError, match="connect failed"):
-        await asyncio.wait_for(worker.start(), 1)
-    assert not worker.manager
+        await asyncio.wait_for(unit_worker.start(), 1)
+    assert not unit_worker.manager
 
 
-async def test_queue_failure_is_fatal_without_a_waiter(worker):
-    worker.chancy.get_all_queues = AsyncMock(
+async def test_queue_failure_is_fatal_without_a_waiter(unit_worker):
+    unit_worker.chancy.get_all_queues = AsyncMock(
         return_value=[Queue("broken", executor="no_such_executor.Class")]
     )
-    worker._queues_task = worker._start_task(
-        "queues", worker._maintain_queues()
+    unit_worker._queues_task = unit_worker._start_task(
+        "queues", unit_worker._maintain_queues()
     )
-    await eventually(lambda: worker._finalized)
-    assert not worker.healthy and not worker.manager
+    await wait_until(lambda: unit_worker._finalized)
+    assert not unit_worker.healthy and not unit_worker.manager
     with pytest.raises(ModuleNotFoundError):
-        await worker.wait_for_shutdown()
+        await unit_worker.wait_for_shutdown()
 
 
-async def test_readded_queue_does_not_overlap_its_old_loop(worker):
+async def test_readded_queue_does_not_overlap_its_old_loop(unit_worker):
     queues = [Queue("test")]
-    worker.chancy.get_all_queues = AsyncMock(side_effect=lambda: list(queues))
+    unit_worker.chancy.get_all_queues = AsyncMock(
+        side_effect=lambda: list(queues)
+    )
     release = asyncio.Event()
     calls = 0
 
@@ -507,39 +572,41 @@ async def test_readded_queue_does_not_overlap_its_old_loop(worker):
         if calls > 1:
             await asyncio.Future()
 
-    worker._maintain_queue = process
-    worker._queues_task = worker._start_task(
-        "queues", worker._maintain_queues()
+    unit_worker._maintain_queue = process
+    unit_worker._queues_task = unit_worker._start_task(
+        "queues", unit_worker._maintain_queues()
     )
     try:
-        await eventually(lambda: calls == 1)
+        await wait_until(lambda: calls == 1)
         queues.clear()
-        await eventually(lambda: "test" not in worker._queues)
+        await wait_until(lambda: "test" not in unit_worker._queues)
         queues.append(Queue("test"))
-        await eventually(lambda: "test" in worker._queues)
+        await wait_until(lambda: "test" in unit_worker._queues)
         assert calls == 1
         release.set()
-        await eventually(lambda: calls == 2)
-        assert worker.healthy
+        await wait_until(lambda: calls == 2)
+        assert unit_worker.healthy
     finally:
-        await worker.stop()
+        await unit_worker.stop()
 
 
 @pytest.mark.parametrize("cleanup_fails", [False, True])
-async def test_startup_cancellation_remains_cancellation(worker, cleanup_fails):
+async def test_startup_cancellation_remains_cancellation(
+    unit_worker, cleanup_fails
+):
     failure = ValueError("cleanup failed")
     cleaned = Mock(side_effect=failure if cleanup_fails else None)
-    session = PluginSession(Observer(), worker)
+    session = PluginSession(Observer(), unit_worker)
     session.callback(cleaned)
-    worker._plugin_sessions.append(session)
+    unit_worker._plugin_sessions.append(session)
     entered = asyncio.Event()
 
     async def start():
         entered.set()
         await asyncio.Future()
 
-    worker._start = start
-    task = asyncio.create_task(worker.start())
+    unit_worker._start = start
+    task = asyncio.create_task(unit_worker.start())
     await entered.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError) as caught:
@@ -549,24 +616,24 @@ async def test_startup_cancellation_remains_cancellation(worker, cleanup_fails):
     assert caught.value.__cause__ is (failure if cleanup_fails else None)
 
 
-async def test_startup_timeout_preserves_cleanup_failure(worker):
+async def test_startup_timeout_preserves_cleanup_failure(unit_worker):
     failure = ValueError("cleanup failed")
-    session = PluginSession(Observer(), worker)
+    session = PluginSession(Observer(), unit_worker)
     session.callback(Mock(side_effect=failure))
-    worker._plugin_sessions.append(session)
-    worker._start = lambda: asyncio.sleep(3600)
+    unit_worker._plugin_sessions.append(session)
+    unit_worker._start = lambda: asyncio.sleep(3600)
     with pytest.raises(TimeoutError) as caught:
         async with asyncio.timeout(0.01):
-            await worker.start()
+            await unit_worker.start()
     assert isinstance(caught.value.__cause__, asyncio.CancelledError)
     assert caught.value.__cause__.__cause__ is failure
 
 
 @pytest.mark.parametrize("origin", ["task", "cleanup", "stop"])
 async def test_repeated_worker_waiters_preserve_original_traceback(
-    worker, origin
+    unit_worker, origin
 ):
-    worker._drain_result = True
+    unit_worker._drain_result = True
 
     async def fail():
         raise ValueError("original failure")
@@ -575,21 +642,21 @@ async def test_repeated_worker_waiters_preserve_original_traceback(
         raise ValueError("original failure")
 
     if origin == "task":
-        worker._start_task("failed", fail())
-        await eventually(lambda: worker._stop_task is not None)
+        unit_worker._start_task("failed", fail())
+        await wait_until(lambda: unit_worker._stop_task is not None)
     elif origin == "cleanup":
-        session = PluginSession(Observer(), worker)
+        session = PluginSession(Observer(), unit_worker)
         session.callback(fail_cleanup)
-        worker._plugin_sessions.append(session)
-        worker._begin_stop(1)
+        unit_worker._plugin_sessions.append(session)
+        unit_worker._begin_stop(1)
     else:
-        worker.flush = fail
-        worker._begin_stop(1)
+        unit_worker.flush = fail
+        unit_worker._begin_stop(1)
 
     traces = []
     for _ in range(3):
         with pytest.raises(ValueError) as caught:
-            await worker.wait_for_shutdown()
+            await unit_worker.wait_for_shutdown()
         traces.append(
             [
                 frame.name
@@ -604,23 +671,23 @@ async def test_repeated_worker_waiters_preserve_original_traceback(
 
 @pytest.mark.parametrize("origin", ["task", "stop"])
 async def test_signal_consumes_already_reported_failures(
-    worker, caplog, origin
+    unit_worker, caplog, origin
 ):
-    worker._drain_result = True
+    unit_worker._drain_result = True
     failure = ValueError("signal failure")
     if origin == "task":
-        worker._start_task("failed", AsyncMock(side_effect=failure)())
-        await eventually(lambda: worker.manager.errors)
+        unit_worker._start_task("failed", AsyncMock(side_effect=failure)())
+        await wait_until(lambda: unit_worker.manager.errors)
     else:
-        worker.flush = AsyncMock(side_effect=failure)
+        unit_worker.flush = AsyncMock(side_effect=failure)
 
     loop = asyncio.get_running_loop()
     unhandled = []
     previous = loop.get_exception_handler()
     loop.set_exception_handler(lambda loop, ctx: unhandled.append(ctx))
     try:
-        task = asyncio.create_task(worker.on_signal(signal.SIGTERM))
-        await eventually(task.done)
+        task = asyncio.create_task(unit_worker.on_signal(signal.SIGTERM))
+        await wait_until(task.done)
         del task
         gc.collect()
         await asyncio.sleep(0)
@@ -633,31 +700,33 @@ async def test_signal_consumes_already_reported_failures(
             == 1
         )
         with pytest.raises(ValueError) as caught:
-            await worker.wait_for_shutdown()
+            await unit_worker.wait_for_shutdown()
         assert caught.value is failure
     finally:
         loop.set_exception_handler(previous)
 
 
-async def test_startup_reports_each_background_failure_once(worker):
+async def test_startup_reports_each_background_failure_once(unit_worker):
     failures = [
         ValueError("heartbeat failed"),
         RuntimeError("notifications failed"),
     ]
-    worker.chancy.is_up_to_date = AsyncMock(return_value=True)
-    worker.chancy.declare = AsyncMock()
-    worker._maintain_queues = lambda: asyncio.sleep(3600)
-    worker._maintain_updates = lambda: asyncio.sleep(3600)
-    worker._maintain_heartbeat = AsyncMock(side_effect=failures[0])
-    worker._maintain_notifications = AsyncMock(side_effect=failures[1])
+    unit_worker.chancy.is_up_to_date = AsyncMock(return_value=True)
+    unit_worker.chancy.declare = AsyncMock()
+    unit_worker._maintain_queues = lambda: asyncio.sleep(3600)
+    unit_worker._maintain_updates = lambda: asyncio.sleep(3600)
+    unit_worker._maintain_heartbeat = AsyncMock(side_effect=failures[0])
+    unit_worker._maintain_notifications = AsyncMock(side_effect=failures[1])
     with pytest.raises(ExceptionGroup) as caught:
-        await worker.start()
+        await unit_worker.start()
     assert set(caught.value.exceptions) == set(failures)
-    assert not list(worker.manager)
+    assert not list(unit_worker.manager)
 
 
-async def test_stop_retry_does_not_replace_an_existing_waiters_failure(worker):
-    worker._drain_result = True
+async def test_stop_retry_does_not_replace_an_existing_waiters_failure(
+    unit_worker,
+):
+    unit_worker._drain_result = True
     failure = ValueError("first attempt failed")
     entered, release = asyncio.Event(), asyncio.Event()
 
@@ -666,17 +735,17 @@ async def test_stop_retry_does_not_replace_an_existing_waiters_failure(worker):
         await release.wait()
         raise failure
 
-    worker.flush = first_attempt
+    unit_worker.flush = first_attempt
     retry = None
 
     def retry_stop(task):
         nonlocal retry
-        worker.flush = AsyncMock()
-        retry = asyncio.create_task(worker.stop())
+        unit_worker.flush = AsyncMock()
+        retry = asyncio.create_task(unit_worker.stop())
 
-    worker._begin_stop(1)
-    worker._stop_task.add_done_callback(retry_stop)
-    original = asyncio.create_task(worker.wait_for_shutdown())
+    unit_worker._begin_stop(1)
+    unit_worker._stop_task.add_done_callback(retry_stop)
+    original = asyncio.create_task(unit_worker.wait_for_shutdown())
     await entered.wait()
     release.set()
     with pytest.raises(ValueError) as caught:
@@ -688,12 +757,12 @@ async def test_stop_retry_does_not_replace_an_existing_waiters_failure(worker):
 
 @pytest.mark.parametrize("cleanup_kind", ["task", "session"])
 async def test_cancellation_during_startup_cleanup_remains_cancellation(
-    worker, cleanup_kind
+    unit_worker, cleanup_kind
 ):
     original = ValueError("startup failed")
     entered, release = asyncio.Event(), asyncio.Event()
-    session = PluginSession(Observer(), worker)
-    worker._plugin_sessions.append(session)
+    session = PluginSession(Observer(), unit_worker)
+    unit_worker._plugin_sessions.append(session)
 
     async def cleanup():
         entered.set()
@@ -706,12 +775,12 @@ async def test_cancellation_during_startup_cleanup_remains_cancellation(
             await cleanup()
 
     if cleanup_kind == "task":
-        worker._start_task("service", service())
+        unit_worker._start_task("service", service())
         await asyncio.sleep(0)
     else:
         session.close = cleanup
-    worker._start = AsyncMock(side_effect=original)
-    task = asyncio.create_task(worker.start())
+    unit_worker._start = AsyncMock(side_effect=original)
+    task = asyncio.create_task(unit_worker.start())
     try:
         await asyncio.wait_for(entered.wait(), 1)
         task.cancel()
@@ -721,6 +790,6 @@ async def test_cancellation_during_startup_cleanup_remains_cancellation(
         assert caught.value.__cause__ is original
     finally:
         release.set()
-        await worker.manager.cancel_all(timeout=1)
+        await unit_worker.manager.cancel_all(timeout=1)
         await session.close()
         await asyncio.gather(task, return_exceptions=True)

@@ -23,7 +23,7 @@ async def test_early_batch_crossing_deadline_does_not_defer_poll(
 ):
     worker = Worker(chancy_just_app)
     monkeypatch.setattr(worker, "wait_for_leadership", AsyncMock())
-    plugin = WorkflowPlugin(polling_interval=0.2)
+    plugin = WorkflowPlugin(polling_interval=1)
     session = PluginSession(plugin, worker)
     entered, release, polled = asyncio.Event(), asyncio.Event(), asyncio.Event()
     ended = None
@@ -53,9 +53,7 @@ async def test_early_batch_crossing_deadline_does_not_defer_poll(
     session.operations["schedule"].wake_up()
     try:
         await asyncio.wait_for(entered.wait(), 1)
-        await asyncio.sleep(
-            0.25
-        )  # Cross the deadline inside notification work.
+        await asyncio.sleep(1.1)  # Cross the deadline inside notification work.
         release.set()
         await asyncio.wait_for(polled.wait(), 1)
         assert poll_time - ended < 0.1
@@ -326,7 +324,7 @@ async def test_busy_event_queue_does_not_delay_polling(
     chancy, scheduler, worker_no_start, monkeypatch
 ):
     await worker_no_start._leadership.renew()
-    scheduler.polling_interval = 0.02
+    scheduler.polling_interval = 1
     workflow_id = await WorkflowPlugin.push(
         chancy, Workflow("busy").add("step", sync_success)
     )
@@ -404,7 +402,7 @@ async def test_polling_recovers_overflow_and_disabled_notifications(
 ):
     chancy.notifications = notifications
     await worker_no_start._leadership.renew()
-    scheduler.polling_interval = 0.02
+    scheduler.polling_interval = 1
     scheduler.max_pending_workflows = 1
     scheduler.max_workflows_per_run = 1
     ids = [
@@ -558,7 +556,7 @@ async def test_scheduler_recovers_failed_transactions(
 ):
     await worker_no_start._leadership.renew()
     worker_no_start.backoff_initial = 0
-    scheduler.polling_interval = 0.01 if operation == "poll" else 3600
+    scheduler.polling_interval = 1 if operation == "poll" else 3600
     workflow_id = await WorkflowPlugin.push(
         chancy, Workflow("reconnect").add("step", sync_success)
     )
@@ -615,7 +613,7 @@ async def test_scheduler_recovers_uncertain_commit(
 ):
     await worker_no_start._leadership.renew()
     worker_no_start.backoff_initial = 0
-    scheduler.polling_interval = 0.01
+    scheduler.polling_interval = 1
     scheduler.max_workflows_per_run = 1
     ids = [
         await WorkflowPlugin.push(
