@@ -2,20 +2,24 @@ import asyncio
 
 import pytest
 from psycopg import InterfaceError, OperationalError
+from psycopg.errors import IdleInTransactionSessionTimeout
 
 from chancy import Worker
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("error_type", [OperationalError, InterfaceError])
+@pytest.mark.parametrize(
+    "error_type",
+    [OperationalError, InterfaceError, IdleInTransactionSessionTimeout],
+)
 async def test_database_retry_limits_reset_and_independent_state(
     chancy_just_app, error_type
 ):
     worker = Worker(chancy_just_app, backoff_max_retries=2)
     attempts = []
 
-    def delay(attempt):
-        attempts.append(attempt)
+    def delay(consecutive_failures):
+        attempts.append(consecutive_failures)
         return 0
 
     worker._calculate_backoff = delay
@@ -56,7 +60,10 @@ async def test_database_retry_sleep_is_cancellable(chancy_just_app):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("error_type", [OperationalError, InterfaceError])
+@pytest.mark.parametrize(
+    "error_type",
+    [OperationalError, InterfaceError, IdleInTransactionSessionTimeout],
+)
 @pytest.mark.parametrize("max_retries", [None, 0])
 async def test_database_retry_preserves_masked_cancellation(
     chancy_just_app, error_type, max_retries

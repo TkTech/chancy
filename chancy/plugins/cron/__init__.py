@@ -1,6 +1,7 @@
 import json
 from copy import copy
 from datetime import UTC, datetime, timedelta
+from typing import Any, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import CroniterBadDateError, croniter
@@ -10,9 +11,18 @@ from psycopg.rows import dict_row
 from chancy.app import Chancy
 from chancy.job import IsAJob, Job
 from chancy.plugin import Plugin
-from chancy.worker import Worker
+from chancy.session import OperationContext, PluginSession
 
 DEFAULT_TIMEZONE = ZoneInfo("Etc/UTC")
+
+
+class Schedule(TypedDict):
+    unique_key: str
+    job: Job
+    cron: str
+    timezone: str
+    last_run: datetime | None
+    next_run: datetime
 
 
 def _is_repeated_wall_time(dt: datetime) -> bool:
@@ -22,8 +32,11 @@ def _is_repeated_wall_time(dt: datetime) -> bool:
     October in Europe/Paris.
     """
     first_offset = dt.replace(fold=0).utcoffset()
+    second_offset = dt.replace(fold=1).utcoffset()
     return (
-        first_offset > dt.replace(fold=1).utcoffset()
+        first_offset is not None
+        and second_offset is not None
+        and first_offset > second_offset
         and dt.utcoffset() != first_offset
     )
 
@@ -255,82 +268,82 @@ class Cron(Plugin):
         super().__init__()
         self.poll_interval = poll_interval
 
-    async def run(self, worker: Worker, chancy: Chancy):
+    async def setup(self, session: PluginSession):
+        session.periodic(
+            "schedule", self._schedule, interval=self.poll_interval
+        )
+
+    async def _schedule(self, ctx: OperationContext):
+        chancy = ctx.chancy
         table = sql.Identifier(f"{chancy.prefix}cron")
 
-        while await self.sleep(self.poll_interval):
-            async with chancy.pool.connection() as conn:
-                # We need to find every row in the {prefix}_cron table where
-                # the next_run time is less than or equal to the current time,
-                # lock it, update the next_run time, and then push the job onto
-                # the queue.
-                now = datetime.now(tz=UTC)
-                async with (
-                    conn.cursor(row_factory=dict_row) as cursor,
-                    conn.transaction(),
-                ):
-                    await cursor.execute(
-                        sql.SQL(
-                            """
-                                SELECT
-                                    unique_key,
-                                    cron,
-                                    job,
-                                    timezone
-                                FROM {table}
-                                WHERE next_run <= %(now)s
-                                FOR UPDATE SKIP LOCKED
-                                """
-                        ).format(table=table),
-                        {"now": now},
+        async def schedule(tx):
+            cursor = tx.cursor
+            now = datetime.now(tz=UTC)
+            await cursor.execute(
+                sql.SQL(
+                    """
+                        SELECT
+                            unique_key,
+                            cron,
+                            job,
+                            timezone
+                        FROM {table}
+                        WHERE next_run <= %(now)s
+                        FOR UPDATE SKIP LOCKED
+                        """
+                ).format(table=table),
+                {"now": now},
+            )
+
+            for row in await cursor.fetchall():
+                # Compute the next run before pushing anything, so a
+                # schedule with an invalid expression or timezone is
+                # skipped instead of rolling back every due schedule.
+                try:
+                    next_run = _next_run(
+                        row["cron"],
+                        now,
+                        ZoneInfo(row["timezone"]),
                     )
+                except (ValueError, ZoneInfoNotFoundError):
+                    chancy.log.exception(
+                        f"Skipping cron job {row['unique_key']!r},"
+                        f" unable to compute its next run from"
+                        f" {row['cron']!r} in timezone"
+                        f" {row['timezone']!r}."
+                    )
+                    continue
 
-                    for row in await cursor.fetchall():
-                        # Compute the next run before pushing anything, so a
-                        # schedule with an invalid expression or timezone is
-                        # skipped instead of rolling back every due schedule.
-                        try:
-                            next_run = _next_run(
-                                row["cron"],
-                                now,
-                                ZoneInfo(row["timezone"]),
-                            )
-                        except (ValueError, ZoneInfoNotFoundError):
-                            chancy.log.exception(
-                                f"Skipping cron job {row['unique_key']!r},"
-                                f" unable to compute its next run from"
-                                f" {row['cron']!r} in timezone"
-                                f" {row['timezone']!r}."
-                            )
-                            continue
+                # If we're using our built-in default queue, we
+                # can push this as part of our transaction.
+                await chancy.push_many_ex(
+                    cursor,
+                    [Job.unpack(row["job"])],
+                )
 
-                        # If we're using our built-in default queue, we
-                        # can push this as part of our transaction.
-                        await chancy.push_many_ex(
-                            cursor,
-                            [Job.unpack(row["job"])],
-                        )
+                chancy.log.debug(
+                    f"Pushed scheduled cron job {row['unique_key']!r}"
+                )
 
-                        chancy.log.debug(
-                            f"Pushed scheduled cron job {row['unique_key']!r}"
-                        )
+                await cursor.execute(
+                    sql.SQL(
+                        """
+                            UPDATE {table}
+                            SET
+                                next_run = %(next_run)s,
+                                last_run = %(last_run)s
+                            WHERE unique_key = %(unique_key)s
+                            """
+                    ).format(table=table),
+                    {
+                        "next_run": next_run,
+                        "last_run": now,
+                        "unique_key": row["unique_key"],
+                    },
+                )
 
-                        await cursor.execute(
-                            sql.SQL(
-                                """
-                                    UPDATE {table}
-                                    SET
-                                        next_run = %(next_run)s,
-                                        last_run = %(last_run)s
-                                    WHERE unique_key = %(unique_key)s
-                                    """
-                            ).format(table=table),
-                            {
-                                "next_run": next_run,
-                                "last_run": now,
-                                "unique_key": row["unique_key"],
-                            },
-                        )
+        await ctx.database(schedule)
 
     def migrate_key(self) -> str | None:
         return "cron"
@@ -352,7 +365,7 @@ class Cron(Plugin):
     @classmethod
     async def get_schedules(
         cls, chancy: Chancy, *, unique_keys: list[str] | None = None
-    ) -> dict[str, dict]:
+    ) -> dict[str, Schedule]:
         """
         Get scheduled cron jobs by their unique keys.
 
@@ -364,7 +377,7 @@ class Cron(Plugin):
             all_schedules = await Cron.get_schedules(chancy)
 
             # Get a specific job
-            job_schedule = await Cron.get_schedules(chancy, ["hello_world_cron"])
+            job_schedule = await Cron.get_schedules(chancy, unique_keys=["hello_world_cron"])
 
         :param chancy: The Chancy application.
         :param unique_keys: Optional list of unique keys to filter by.
@@ -441,7 +454,7 @@ class Cron(Plugin):
         cls,
         chancy: Chancy,
         cron: str,
-        *jobs: Job | IsAJob,
+        *jobs: Job | IsAJob[..., Any],
         timezone: ZoneInfo = DEFAULT_TIMEZONE,
     ):
         """
@@ -460,8 +473,10 @@ class Cron(Plugin):
         :param timezone: The timezone in which to evaluate the cron
                          expression. Defaults to UTC.
         """
-        jobs = [job if isinstance(job, Job) else job.job for job in jobs]
-        for job in jobs:
+        scheduled_jobs = [
+            job if isinstance(job, Job) else job.job for job in jobs
+        ]
+        for job in scheduled_jobs:
             if not job.unique_key:
                 raise ValueError(
                     "Scheduling jobs for execution on a cron-like schedule"
@@ -507,6 +522,6 @@ class Cron(Plugin):
                         "timezone": timezone.key,
                         "next_run": next_run,
                     }
-                    for job in jobs
+                    for job in scheduled_jobs
                 ],
             )

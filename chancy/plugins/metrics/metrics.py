@@ -10,15 +10,17 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 from uuid import UUID, uuid4
 
-from psycopg import sql
-from psycopg.rows import dict_row
+from psycopg import AsyncCursor, sql
+from psycopg.rows import DictRow, dict_row
 from psycopg.types.json import Jsonb
 
 from chancy.job import QueuedJob
 from chancy.plugin import Plugin
+from chancy.retry import RetryTransaction
+from chancy.session import Authority, TransactionContext
 
 Resolution = Literal["1min", "5min", "1hour", "1day"]
 MetricType = Literal["counter", "gauge", "histogram"]
@@ -111,6 +113,16 @@ class Metric:
             "min": min(value["min"] for value in values),
             "max": max(value["max"] for value in values),
         }
+
+
+class MetricsResponse(TypedDict):
+    """A metrics query's time window and observed series."""
+
+    start: datetime.datetime
+    end: datetime.datetime
+    resolution: Resolution
+    generated_at: datetime.datetime
+    series: dict[str, Metric]
 
 
 @dataclass(frozen=True)
@@ -281,47 +293,29 @@ class Metrics(Plugin):
     def api_plugin(self):
         return "chancy.plugins.metrics.api.MetricsApiPlugin"
 
-    async def on_worker_started(self, *, worker):
-        if worker in self._workers:
-            return
-        handler = partial(self._handle_event, worker=worker)
-        self._workers[worker] = uuid4(), handler
-        for kind in ("counter", "gauge", "histogram"):
-            worker.hub.on(f"metrics.{kind}", handler)
-
     async def on_worker_stopped(self, *, worker):
-        # Keep subscriptions alive through final on_job_updated callbacks.
-        # A failed flush retains both the subscriptions and dirty snapshots.
+        # A failed flush keeps the worker recording observations for a retry.
         await self.flush(worker.chancy)
-        registration = self._workers.pop(worker, None)
-        if registration:
-            _, handler = registration
-            for kind in ("counter", "gauge", "histogram"):
-                worker.hub.remove(f"metrics.{kind}", handler)
+        self._workers.pop(worker, None)
         self._prune_buffer()
 
-    async def run(self, worker, chancy):
-        """
-        Run the metrics plugin.
-
-        Periodically save recorded metrics and collect database table sizes.
-        Workers start this automatically when the plugin is enabled.
-        """
-        await self.on_worker_started(worker=worker)
-        worker.manager.add(
-            "metrics_table_sizes", self._collect_table_sizes(worker, chancy)
+    async def setup(self, session):
+        worker = session.worker
+        handler = partial(self._handle_event, worker=worker)
+        self._workers[worker] = uuid4()
+        session.callback(self._workers.pop, worker, None)
+        for kind in ("counter", "gauge", "histogram"):
+            session.subscribe(f"metrics.{kind}", handler)
+        session.periodic("flush", self._flush, interval=self.sync_interval)
+        session.periodic(
+            "table_sizes",
+            self._collect_table_sizes,
+            interval=self.collection_interval,
+            authority=Authority.LEADER,
         )
-        delay = self.sync_interval
-        while await self.sleep(delay):
-            try:
-                await self.flush(chancy)
-            except Exception:
-                chancy.log.exception(
-                    "Metrics flush failed; buffered observations will be retried"
-                )
-                delay = min(delay * 2, 300)
-            else:
-                delay = self.sync_interval
+
+    async def _flush(self, ctx):
+        await self.flush(ctx.chancy, context=ctx)
 
     def _warn(self, message):
         # Invalid custom observations must neither flood logs nor stop a worker.
@@ -366,8 +360,7 @@ class Metrics(Plugin):
             self._warn(f"Dropped metric with conflicting type or unit: {key}")
             return
         now = utcnow()
-        session = self._workers.get(worker)
-        session_id = session[0] if session else self.session_id
+        session_id = self._workers.get(worker, self.session_id)
         worker_id = worker.worker_id if worker is not None else self.worker_id
         keys = [
             (key, seconds, bucket_time(now, seconds), session_id, worker_id)
@@ -451,7 +444,9 @@ class Metrics(Plugin):
         """
         self._record(metric_key, value, "histogram", unit)
 
-    async def _handle_event(self, event, *, worker=None):
+    async def _handle_event(self, event, *, worker):
+        if worker not in self._workers:
+            return
         self._record(
             event.body.get("key"),
             event.body.get("value"),
@@ -496,9 +491,7 @@ class Metrics(Plugin):
             seconds: self.retention(name)
             for name, seconds in RESOLUTIONS.items()
         }
-        active_sessions = {session for session, _ in self._workers.values()} | {
-            self.session_id
-        }
+        active_sessions = set(self._workers.values()) | {self.session_id}
         for key in list(self._buckets):
             _, seconds, timestamp, session_id, _ = key
             expired = (
@@ -520,7 +513,7 @@ class Metrics(Plugin):
             key: value for key, value in self._types.items() if key in active
         }
 
-    async def flush(self, chancy):
+    async def flush(self, chancy, *, context=None):
         """
         Save recorded metrics so they can be queried.
 
@@ -529,6 +522,7 @@ class Metrics(Plugin):
         fails, pending observations are kept so this method can be retried.
 
         :param chancy: The Chancy application instance.
+        :param context: Optional operation context for transaction retries.
         """
         async with self._flush_lock:
             self._prune_buffer()
@@ -566,11 +560,9 @@ class Metrics(Plugin):
                     key[0]: (value.type, value.unit)
                     for key, value in snapshot.items()
                 }
-                async with (
-                    chancy.pool.connection() as conn,
-                    conn.transaction(),
-                    conn.cursor(row_factory=dict_row) as cursor,
-                ):
+
+                async def save(tx, definitions=definitions, batch=batch):
+                    cursor = tx.cursor
                     await cursor.execute(
                         sql.SQL(
                             """
@@ -625,7 +617,7 @@ class Metrics(Plugin):
                     )
                     stored = await cursor.fetchall()
                     if len(stored) != len(definitions):
-                        raise RuntimeError(
+                        raise RetryTransaction(
                             "Metric catalog changed during flush; retry required"
                         )
                     ids = {}
@@ -724,6 +716,16 @@ class Metrics(Plugin):
                             ),
                             rows,
                         )
+
+                if context is not None:
+                    await context.database(save)
+                else:
+                    async with (
+                        chancy.pool.connection() as conn,
+                        conn.transaction(),
+                        conn.cursor(row_factory=dict_row) as cursor,
+                    ):
+                        await save(TransactionContext(cursor, chancy))
                 for key, value in snapshot.items():
                     if self._buckets.get(key) is value:
                         self._dirty.discard(key)
@@ -795,12 +797,12 @@ class Metrics(Plugin):
         metric_prefix=None,
         worker_id=None,
         *,
-        resolution="5min",
+        resolution: Resolution = "5min",
         start=None,
         end=None,
         range_seconds=None,
         limit=None,
-    ):
+    ) -> MetricsResponse:
         """
         Get metrics matching the given prefix and time range.
 
@@ -879,7 +881,7 @@ class Metrics(Plugin):
 
     async def _query_metrics(
         self, chancy, prefix, worker_id, resolution, start, end
-    ):
+    ) -> MetricsResponse:
         async with (
             chancy.pool.connection() as conn,
             conn.cursor(row_factory=dict_row) as cursor,
@@ -1038,14 +1040,8 @@ class Metrics(Plugin):
             )
             return [row["key"] for row in await cursor.fetchall()]
 
-    async def cleanup(self, chancy):
-        """
-        Clean up old metrics data.
-
-        Called automatically by the Pruner plugin, or may be manually invoked.
-
-        Expired data is excluded from queries even before cleanup runs.
-        """
+    async def cleanup(self, chancy, cursor: AsyncCursor[DictRow]) -> int | None:
+        """Remove expired metrics and unused metric definitions."""
         now = utcnow()
         conditions = []
         for name, seconds in RESOLUTIONS.items():
@@ -1058,133 +1054,114 @@ class Metrics(Plugin):
                     sql.Literal(bucket_time(cutoff, seconds * CHUNK_SIZE)),
                 )
             )
-        async with (
-            chancy.pool.connection() as conn,
-            conn.cursor(row_factory=dict_row) as cursor,
-        ):
-            await cursor.execute(
-                sql.SQL(
-                    """
-                    WITH expired AS (
-                        SELECT ctid
-                        FROM {metrics}
-                        WHERE {conditions}
-                        LIMIT 10000
-                        FOR UPDATE SKIP LOCKED
-                    )
-                    DELETE FROM {metrics}
-                    WHERE ctid IN (SELECT ctid FROM expired)
-                    """
-                ).format(
-                    metrics=sql.Identifier(f"{chancy.prefix}metrics"),
-                    conditions=sql.SQL(" OR ").join(conditions),
-                )
-            )
-            removed = cursor.rowcount
-            # Lock catalog entries before checking for orphans again. Writers
-            # take a key-share lock before inserting buckets, preventing a
-            # pruning transaction from deleting a concurrently reused key.
-            await cursor.execute(
-                sql.SQL(
-                    """
-                    SELECT d.id
-                    FROM {definitions} d
-                    WHERE NOT EXISTS (
-                        SELECT 1
-                        FROM {metrics} m
-                        WHERE m.metric_id = d.id
-                    )
-                    ORDER BY d.id
-                    LIMIT 1000
+        await cursor.execute(
+            sql.SQL(
+                """
+                WITH expired AS (
+                    SELECT ctid
+                    FROM {metrics}
+                    WHERE {conditions}
+                    LIMIT 10000
                     FOR UPDATE SKIP LOCKED
+                )
+                DELETE FROM {metrics}
+                WHERE ctid IN (SELECT ctid FROM expired)
+                """
+            ).format(
+                metrics=sql.Identifier(f"{chancy.prefix}metrics"),
+                conditions=sql.SQL(" OR ").join(conditions),
+            )
+        )
+        removed = cursor.rowcount
+        # Lock catalog entries before checking for orphans again. Writers
+        # take a key-share lock before inserting buckets, preventing a
+        # pruning transaction from deleting a concurrently reused key.
+        await cursor.execute(
+            sql.SQL(
+                """
+                SELECT d.id
+                FROM {definitions} d
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {metrics} m
+                    WHERE m.metric_id = d.id
+                )
+                ORDER BY d.id
+                LIMIT 1000
+                FOR UPDATE SKIP LOCKED
+                """
+            ).format(
+                definitions=sql.Identifier(
+                    f"{chancy.prefix}metric_definitions"
+                ),
+                metrics=sql.Identifier(f"{chancy.prefix}metrics"),
+            )
+        )
+        orphan_ids = [row["id"] for row in await cursor.fetchall()]
+        if orphan_ids:
+            await cursor.execute(
+                sql.SQL(
+                    """
+                    DELETE FROM {definitions} d
+                    WHERE id = ANY(%s)
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM {metrics} m
+                            WHERE m.metric_id = d.id
+                        )
                     """
                 ).format(
                     definitions=sql.Identifier(
                         f"{chancy.prefix}metric_definitions"
                     ),
                     metrics=sql.Identifier(f"{chancy.prefix}metrics"),
-                )
+                ),
+                [orphan_ids],
             )
-            orphan_ids = [row["id"] for row in await cursor.fetchall()]
-            if orphan_ids:
-                await cursor.execute(
-                    sql.SQL(
-                        """
-                        DELETE FROM {definitions} d
-                        WHERE id = ANY(%s)
-                            AND NOT EXISTS (
-                                SELECT 1
-                                FROM {metrics} m
-                                WHERE m.metric_id = d.id
-                            )
-                        """
-                    ).format(
-                        definitions=sql.Identifier(
-                            f"{chancy.prefix}metric_definitions"
-                        ),
-                        metrics=sql.Identifier(f"{chancy.prefix}metrics"),
-                    ),
-                    [orphan_ids],
-                )
         self._read_cache.clear()
         return removed or None
 
-    async def _collect_table_sizes(self, worker, chancy):
-        """
-        Collect size metrics for database tables.
+    async def _collect_table_sizes(self, ctx):
+        tables = {
+            "jobs",
+            "queues",
+            "workers",
+            "leader",
+            "queue_rate_limits",
+        }
+        for plugin in ctx.chancy.plugins.values():
+            tables.update(plugin.get_tables())
 
-        This runs as a separate task and collects table sizes at the configured collection interval,
-        but only when this worker is the leader to avoid duplicate metrics.
-        """
-        while True:
-            await asyncio.sleep(self.collection_interval)
-            if not worker.is_leader.is_set():
-                continue
-            tables = {
-                "jobs",
-                "queues",
-                "workers",
-                "leader",
-                "queue_rate_limits",
-            }
-            for plugin in chancy.plugins.values():
-                tables.update(plugin.get_tables())
-            try:
-                async with (
-                    chancy.pool.connection() as conn,
-                    conn.cursor(row_factory=dict_row) as cursor,
-                ):
-                    await cursor.execute(
-                        """
-                        SELECT
-                            name,
-                            pg_total_relation_size(relation) AS total_size_bytes,
-                            pg_relation_size(relation) AS table_size_bytes,
-                            pg_indexes_size(relation) AS index_size_bytes
-                        FROM unnest(%s::text[], %s::regclass[]) AS t(name, relation)
-                        """,
-                        [
-                            sorted(tables),
-                            [
-                                sql.Identifier(
-                                    f"{chancy.prefix}{name}"
-                                ).as_string()
-                                for name in sorted(tables)
-                            ],
-                        ],
-                    )
-                    for row in await cursor.fetchall():
-                        for size in (
-                            "total_size_bytes",
-                            "table_size_bytes",
-                            "index_size_bytes",
-                        ):
-                            self._record(
-                                f"table:{row['name']}:{size}",
-                                row[size],
-                                "gauge",
-                                "bytes",
-                                worker=worker,
-                            )
-            except Exception:
-                chancy.log.exception("Could not collect table size metrics")
+        async def collect(tx):
+            await tx.cursor.execute(
+                """
+                SELECT
+                    name,
+                    pg_total_relation_size(relation) AS total_size_bytes,
+                    pg_relation_size(relation) AS table_size_bytes,
+                    pg_indexes_size(relation) AS index_size_bytes
+                FROM unnest(%s::text[], %s::regclass[]) AS t(name, relation)
+                """,
+                [
+                    sorted(tables),
+                    [
+                        sql.Identifier(f"{ctx.chancy.prefix}{name}").as_string()
+                        for name in sorted(tables)
+                    ],
+                ],
+            )
+            return await tx.cursor.fetchall()
+
+        for row in await ctx.database(collect):
+            for size in (
+                "total_size_bytes",
+                "table_size_bytes",
+                "index_size_bytes",
+            ):
+                self._record(
+                    f"table:{row['name']}:{size}",
+                    row[size],
+                    "gauge",
+                    "bytes",
+                    worker=ctx.worker,
+                )

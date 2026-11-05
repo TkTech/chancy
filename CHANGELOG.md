@@ -1,6 +1,162 @@
 Changelog
 =========
 
+0.27.0
+----------
+
+🚨 This release changes the plugin and leadership APIs. Update custom plugins
+and application code that configures leadership or uses `worker.is_leader`.
+No database migration is needed.
+
+This release is primarily a cleanup release, with a focus on improving the
+durability of the system under adverse or unusual conditions. We now use
+Toxiproxy to simulate network failures during testing, which has helped us find
+and fix some issues that were previously hard to reproduce.
+
+✨ API Changes
+
+- Plugins now register background work and resources in `setup(session)`.
+  Replace `run(worker, chancy)` and `on_worker_started` with setup that registers
+  `session.periodic(...)` or `session.service(...)`. Use `interval=` for periodic
+  scheduling and the returned operation's `wake_up()` for early runs. Register
+  event handlers with `session.subscribe(...)`. Plugins using only unchanged job
+  hooks need no lifecycle migration. See the
+  [plugin migration guide](docs/chancy.session.rst).
+- `cleanup` now accepts `(chancy, cursor)` and must use the supplied transaction
+  without committing it. Cleanup operations run independently and must not rely
+  on another plugin's cleanup order.
+- Use `OperationContext.database(...)` for retryable plugin transactions. Its
+  callbacks and cleanup hooks must be safe to repeat, even when an earlier
+  attempt committed but its response was lost.
+- Leadership is now a core Worker capability, enabled even with no plugins.
+  Remove `Leadership(...)` from plugin lists and `chancy.leadership` from plugin
+  dependency lists. Configure `leadership_poll_interval` and `leadership_timeout`
+  on Worker instead. Set `leadership_eligible=False` to opt out. Custom election
+  plugins, `ImmediateLeadership`, and the `chancy.plugins.leadership` module are
+  removed.
+- `worker.is_leader` is now a read-only boolean. Replace `.is_set()` calls with
+  the property and `.wait()` calls with `worker.wait_for_leadership()`. Checking
+  the property does not protect later writes. Replace `wait_for_leader()` with
+  `authority=Authority.LEADER` operations and use `ctx.database(...)` within
+  them to verify and lock the lease in the same transaction.
+- `stop()` and `wait_for_shutdown()` now report background and cleanup failures
+  after teardown. Multiple failures are raised together in an exception group,
+  and concurrent or later waiters receive the retained failures.
+
+For example, this plugin reports pending jobs on each worker every 60 seconds.
+
+Before (0.26):
+
+```python
+from psycopg import sql
+from psycopg.rows import dict_row
+
+from chancy.plugin import Plugin
+
+
+class PendingJobs(Plugin):
+    @staticmethod
+    def get_identifier():
+        return "myapp.pending_jobs"
+
+    async def run(self, worker, chancy):
+        while await self.sleep(60):
+            async with (
+                chancy.pool.connection() as conn,
+                conn.cursor(row_factory=dict_row) as cursor,
+            ):
+                await cursor.execute(
+                    sql.SQL(
+                        "SELECT count(*) AS count FROM {} "
+                        "WHERE state = 'pending'"
+                    ).format(sql.Identifier(f"{chancy.prefix}jobs"))
+                )
+                row = await cursor.fetchone()
+            chancy.log.info("Pending jobs: %s", row["count"])
+```
+
+After (0.27):
+
+```python
+from psycopg import sql
+
+from chancy.plugin import Plugin
+
+
+class PendingJobs(Plugin):
+    @staticmethod
+    def get_identifier():
+        return "myapp.pending_jobs"
+
+    async def setup(self, session):
+        session.periodic("report", self.report, interval=60)
+
+    async def report(self, ctx):
+        async def count_pending(tx):
+            await tx.cursor.execute(
+                sql.SQL(
+                    "SELECT count(*) AS count FROM {} WHERE state = 'pending'"
+                ).format(sql.Identifier(f"{ctx.chancy.prefix}jobs"))
+            )
+            row = await tx.cursor.fetchone()
+            return row["count"]
+
+        count = await ctx.database(count_pending)
+        ctx.log.info("Pending jobs: %s", count)
+```
+
+✨ Improvements
+
+- Improved type annotations for jobs, cron schedules, workflows, and executors.
+  Installed packages now include a `py.typed` marker for type checkers.
+- Terminal background failures now initiate worker shutdown even when nothing
+  is awaiting `wait_for_shutdown()`. Unexpected maintenance-task exits and
+  exhausted database retries follow the same shutdown path.
+- Database transactions in `Authority.LEADER` operations now limit idle time to
+  release locks after a client goes silent. Configure
+  `Worker.leadership_idle_timeout` separately from the lease lifetime. The default
+  is 120 seconds, and `None` uses the database policy. Active SQL is unaffected,
+  and stricter database timeouts are preserved. Plugin transactions that exceed
+  the idle limit are terminated and retried according to the worker's retry
+  settings.
+- `shutdown_timeout` now covers the entire shutdown, including job draining,
+  task cleanup, final database writes, and plugin hooks. At the deadline,
+  `stop()` requests cancellation and reports `TimeoutError` without waiting
+  longer for cleanup. A later call can finish incomplete shutdown without
+  repeating completed hooks and returns `True` when it succeeds. Late errors
+  from the expired attempt are logged without making a successful retry fail.
+- Plugins can raise `chancy.retry.RetryTransaction` to retry a `ctx.database(...)`
+  callback in a fresh transaction without giving up leadership.
+
+🐛 Fixes
+
+- Synchronous pushes and manually constructed workflow steps now accept
+  decorated jobs consistently.
+- Queues with rate limits now reject missing or nonpositive rate-limit windows
+  when constructed, instead of failing when a worker polls them.
+- Workers now resolve uncertain job claims after a lost commit response, so
+  a connection failure cannot leave those jobs stranded on a healthy worker.
+  Claim confirmation waits for locked rows without exhausting database retries.
+  Fresh fetching pauses for that queue on that worker until confirmation
+  finishes. Running jobs and other queues continue normally.
+- Transient polling errors now retry without restarting the executor, which
+  previously cancelled running asyncio jobs.
+- Transient database errors no longer discard a valid leadership lease. The
+  last confirmed deadline still applies until renewal succeeds.
+- The health endpoint now returns HTTP 503 when the worker has a terminal
+  failure or is shutting down, with a `{"status": "unhealthy"}` response body.
+  Applications can check the same status through `worker.healthy`.
+- Failing notification handlers no longer stop the listener or prevent delivery
+  to other handlers. Plugin session subscriptions also isolate handler errors.
+- Metrics now retry transient database failures without stopping collection.
+- Retrying an uncertain reprioritization commit no longer applies the priority
+  increase twice.
+- Job updates continue flushing while executors drain during shutdown. Failed
+  flushes preserve pending updates and their order for the next attempt.
+- Expired leases no longer appear as leaders in worker listings.
+- Task cancellation no longer interrupts cleanup with repeated cancellation
+  requests or raises the done-callback `KeyError` reported in #105.
+
 0.26.0
 ------
 

@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.26.0"
+version = "0.27.0"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -61,10 +61,18 @@ dev = [
     "pre-commit>=4.3.0",
     "ruff==0.16.2",
     "pytest-xdist>=3.8.0",
+    "pytest-timeout>=2.3.1",
     "sphinx-copybutton>=0.5.2",
 ]
 screenshots = [
     "playwright>=1.55",
+]
+typing = [
+    "django>=6.0 ; python_full_version >= '3.12'",
+    "django-stubs>=6.1.2",
+    "pyrefly==1.4.1",
+    "rich>=15.0.0",
+    "types-croniter>=6.0.0",
 ]
 
 [project.scripts]
@@ -95,3 +103,11 @@ django_find_project = false
 
 [tool.ruff]
 line-length = 80
+
+[tool.pyrefly]
+project-includes = ["chancy", "tests"]
+python-version = "3.11"
+search-path = [".", "tests"]
+
+[tool.pyrefly.errors]
+unused-ignore = "error"

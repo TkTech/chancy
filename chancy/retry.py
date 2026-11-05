@@ -3,6 +3,11 @@ import logging
 from collections.abc import Callable
 
 from psycopg import InterfaceError, OperationalError
+from psycopg.errors import IdleInTransactionSessionTimeout
+
+
+class RetryTransaction(Exception):
+    """A recoverable conflict requiring a fresh transaction, not a new lease."""
 
 
 def _raise_if_cancelling() -> None:
@@ -22,7 +27,12 @@ def _raise_if_cancelling() -> None:
 class DatabaseRetry:
     """Backoff state for one database maintenance loop."""
 
-    errors = (OperationalError, InterfaceError)
+    errors = (
+        OperationalError,
+        InterfaceError,
+        IdleInTransactionSessionTimeout,
+        RetryTransaction,
+    )
 
     def __init__(
         self,

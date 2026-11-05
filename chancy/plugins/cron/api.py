@@ -2,6 +2,7 @@ from starlette.authentication import requires
 from starlette.responses import Response
 
 from chancy.plugins.api import ApiPlugin
+from chancy.plugins.api.plugin import RouteT
 from chancy.plugins.cron import Cron
 from chancy.utils import json_dumps
 
@@ -14,7 +15,7 @@ class CronApiPlugin(ApiPlugin):
     def name(self):
         return "cron"
 
-    def routes(self):
+    def routes(self) -> list[RouteT]:
         return [
             {
                 "path": "/api/v1/crons",

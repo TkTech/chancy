@@ -11,6 +11,18 @@ async def unique_job():
     pass
 
 
+@pytest.mark.asyncio
+async def test_sync_push_accepts_decorated_jobs(chancy: Chancy):
+    await chancy.declare(Queue("default"))
+    with Chancy(chancy.dsn, prefix=chancy.prefix) as sync_chancy:
+        reference = sync_chancy.sync_push(unique_job)
+        batches = list(sync_chancy.sync_push_many([unique_job, unique_job.job]))
+
+    jobs = await chancy.get_jobs([reference, *batches[0]])
+    assert len(jobs) == 3
+    assert all(job.func == unique_job.job.func for job in jobs)
+
+
 async def _push_all(chancy: Chancy, jobs):
     return [ref async for refs in chancy.push_many(jobs) for ref in refs]
 
@@ -37,7 +49,8 @@ async def test_regression_89(
     ]
     references = await _push_all(chancy, jobs)
     existing = await chancy.get_jobs(references)
-    first, second = sorted(existing, key=lambda j: j.unique_key)
+    assert all(job.unique_key is not None for job in existing)
+    first, second = sorted(existing, key=lambda j: j.unique_key or "")
     if operation == "flush":
         for update in (second, first):
             await worker_no_start.queue_update(
@@ -74,7 +87,9 @@ async def test_regression_89(
                     """,
                     [conn.info.backend_pid],
                 )
-                if (await cursor.fetchone())[0]:
+                row = await cursor.fetchone()
+                assert row is not None
+                if row[0]:
                     break
                 if task.done():
                     task.result()

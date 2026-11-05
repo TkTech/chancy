@@ -9,6 +9,12 @@ high = Queue("high", concurrency=1)
 default_concurrency = Queue("default_concurrency")
 
 
+@pytest.mark.parametrize("window", [None, 0, -1])
+def test_rate_limit_requires_a_positive_window(window):
+    with pytest.raises(ValueError, match="positive rate_limit_window"):
+        Queue("limited", rate_limit=10, rate_limit_window=window)
+
+
 @job()
 def job_to_run():
     return
@@ -36,7 +42,9 @@ async def test_multiple_queues(chancy: Chancy, worker: Worker):
     ref_high = await chancy.push(job_to_run.job.with_queue("high"))
 
     job_low = await chancy.wait_for_job(ref_low)
+    assert job_low is not None
     job_high = await chancy.wait_for_job(ref_high)
+    assert job_high is not None
 
     assert job_low.state == QueuedJob.State.SUCCEEDED
     assert job_high.state == QueuedJob.State.SUCCEEDED
@@ -94,6 +102,7 @@ async def test_default_concurrency(
     jobs = []
     for ref in job_refs:
         j = await chancy.wait_for_job(ref)
+        assert j is not None
         jobs.append(j)
 
     for j in jobs:
@@ -154,6 +163,7 @@ async def test_queue_auto_resume(chancy: Chancy, worker: Worker):
 
     ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
     assert j.state == QueuedJob.State.SUCCEEDED
 
     # Same thing, but with a timedelta
@@ -164,4 +174,5 @@ async def test_queue_auto_resume(chancy: Chancy, worker: Worker):
 
     ref = await chancy.push(job_to_run.job.with_queue("auto_resume_queue"))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
     assert j.state == QueuedJob.State.SUCCEEDED

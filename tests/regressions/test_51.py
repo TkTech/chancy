@@ -16,12 +16,12 @@ class RunCounter(Plugin):
         super().__init__()
         self.runs = 0
 
-    def on_job_completed(
+    async def on_job_completed(
         self,
         *,
         worker: "Worker",
         job: QueuedJob,
-        exc: Exception | None = None,
+        exc: BaseException | None = None,
         result: Any | None = None,
     ) -> QueuedJob:
         self.runs += 1

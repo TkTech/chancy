@@ -1,7 +1,9 @@
 import asyncio
 import functools
 import os
+import sys
 from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any
 
 from chancy.executors.base import ConcurrentExecutor, Executor
 from chancy.job import QueuedJob
@@ -47,9 +49,9 @@ class ThreadedExecutor(ConcurrentExecutor):
         super().__init__(worker, queue)
         self.pool = ThreadPoolExecutor(max_workers=queue.concurrency)
 
-    async def push(self, job: QueuedJob) -> Future:
+    async def push(self, job: QueuedJob) -> Future[tuple[QueuedJob, Any]]:
         job = await self.on_job_starting(job)
-        future: Future = self.pool.submit(self.job_wrapper, job)
+        future = self.pool.submit(self.job_wrapper, job)
         self.jobs[future] = job
         future.add_done_callback(
             functools.partial(
@@ -72,6 +74,6 @@ class ThreadedExecutor(ConcurrentExecutor):
         ThreadPoolExecutor.
         """
         # Only available in 3.13+
-        if hasattr(os, "process_cpu_count"):
+        if sys.version_info >= (3, 13):
             return min(32, (os.process_cpu_count() or 1) + 4)
         return min(32, (os.cpu_count() or 1) + 4)

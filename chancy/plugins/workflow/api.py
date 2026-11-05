@@ -7,6 +7,7 @@ from starlette.authentication import requires
 from starlette.responses import Response
 
 from chancy.plugins.api import ApiPlugin
+from chancy.plugins.api.plugin import RouteT
 from chancy.plugins.workflow import WorkflowPlugin
 from chancy.utils import json_dumps
 
@@ -19,7 +20,7 @@ class WorkflowApiPlugin(ApiPlugin):
     def name(self):
         return "workflow"
 
-    def routes(self):
+    def routes(self) -> list[RouteT]:
         return [
             {
                 "path": "/api/v1/workflows",

@@ -218,19 +218,21 @@ async def test_worker_survives_repeated_process_crashes(
             "process_recovery",
             concurrency=1,
             executor=Chancy.Executor.Process,
-            polling_interval=0.05,
+            polling_interval=1,
         )
     )
     ref = await chancy.push(
         Job.from_func(crash, queue="process_recovery", max_attempts=2)
     )
-    failed = await chancy.wait_for_job(ref, timeout=30, interval=0.05)
+    failed = await chancy.wait_for_job(ref, timeout=30, interval=1)
+    assert failed is not None
     assert failed.state == QueuedJob.State.FAILED
     assert failed.attempts == failed.max_attempts == 2
     assert len(failed.errors) == 2
 
     ref = await chancy.push(Job.from_func(succeed, queue="process_recovery"))
-    completed = await chancy.wait_for_job(ref, timeout=30, interval=0.05)
+    completed = await chancy.wait_for_job(ref, timeout=30, interval=1)
+    assert completed is not None
     assert completed.state == QueuedJob.State.SUCCEEDED
     assert completed.attempts == 1
     assert not worker.shutdown_event.is_set()

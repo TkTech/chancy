@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from contextlib import asynccontextmanager
 
@@ -8,8 +9,64 @@ from psycopg import sql
 from chancy import Worker
 from chancy.plugins.metrics import Metrics
 from chancy.plugins.metrics import metrics as module
+from chancy.session import OperationContext, PluginSession
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_catalog_pruning_race_retries_in_fresh_transaction(
+    chancy, monkeypatch
+):
+    from psycopg import sql
+
+    metrics = Metrics()
+    worker = Worker(chancy, backoff_initial=0)
+    await worker._leadership.renew()
+    session = PluginSession(metrics, worker)
+    await metrics.setup(session)
+    ctx = OperationContext(session, session.operations["flush"])
+    table = sql.Identifier(f"{chancy.prefix}metric_definitions")
+    async with chancy.pool.connection() as conn:
+        await conn.execute(
+            sql.SQL(
+                "INSERT INTO {} (key, metric_type, unit) VALUES ('race', 'counter', 'count')"
+            ).format(table)
+        )
+    await worker.increment_counter("race", 3)
+    execute = psycopg.AsyncCursor.execute
+    pruned = False
+    attempts = 0
+
+    async def interleave(cursor, query, *args, **kwargs):
+        nonlocal pruned, attempts
+        result = await execute(cursor, query, *args, **kwargs)
+        rendered = (
+            query.as_string()
+            if isinstance(query, sql.Composable)
+            else str(query)
+        )
+        if "ON CONFLICT (key) DO NOTHING" in rendered:
+            attempts += 1
+            if not pruned:
+                pruned = True
+                async with (
+                    chancy.pool.connection() as conn,
+                    conn.cursor(row_factory=module.dict_row) as other,
+                ):
+                    await asyncio.wait_for(metrics.cleanup(chancy, other), 2)
+        return result
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(psycopg.AsyncCursor, "execute", interleave)
+            await metrics._flush(ctx)
+        assert pruned and attempts == 2
+        assert worker.is_leader
+        assert not metrics._dirty
+        result = await metrics.get_metrics(chancy, "race")
+        assert result["series"]["race"].summary == 3
+    finally:
+        await session.close()
 
 
 @pytest.fixture
@@ -72,7 +129,9 @@ async def test_latest_gauge_and_weighted_histogram_within_bucket(chancy, clock):
     await second.flush(chancy)
     response = await first.get_metrics(chancy)
     assert response["series"]["size"].summary == 90
-    assert response["series"]["time"].summary["avg"] == 8
+    summary = response["series"]["time"].summary
+    assert isinstance(summary, dict)
+    assert summary["avg"] == 8
     response = await first.get_metrics(chancy, worker_id="z")
     assert response["series"]["size"].summary == 100
 
@@ -145,7 +204,11 @@ async def test_chunks_survive_repeated_flushes_and_expire(chancy, clock):
     assert (await metrics.get_metrics(chancy, "ticks"))["series"][
         "ticks"
     ].summary is None
-    assert await metrics.cleanup(chancy)
+    async with (
+        chancy.pool.connection() as conn,
+        conn.cursor(row_factory=module.dict_row) as cursor,
+    ):
+        assert await metrics.cleanup(chancy, cursor)
     assert await metrics.list_metrics(chancy) == []
     metrics._prune_buffer()
     assert not metrics._buckets
@@ -154,7 +217,7 @@ async def test_chunks_survive_repeated_flushes_and_expire(chancy, clock):
 async def test_invalid_observations_do_not_poison_buffer():
     metrics = Metrics(max_buffered_points=4)
     for value in (float("nan"), float("inf"), True, "bad", 10**1000):
-        await metrics.increment_counter("bad", value)
+        await metrics.increment_counter("bad", value)  # pyrefly: ignore[bad-argument-type]
     for key in ("\x00", "\ud800"):
         await metrics.increment_counter(key, 1)
     await metrics.increment_counter("bad-unit", 1, unit="\x00")
@@ -255,24 +318,38 @@ async def test_periodic_flush_failure_retries_without_stopping_worker(
     import asyncio
 
     metrics = chancy.plugins["chancy.metrics"]
-    metrics.sync_interval = 0.01
+    metrics.sync_interval = 1
     flush = metrics.flush
     recorded = asyncio.Event()
     succeeded = asyncio.Event()
     attempts = 0
 
-    async def flaky_flush(app):
-        nonlocal attempts
-        # Startup flushes must not satisfy the test before "retry" is recorded.
+    async def flaky_flush(app, *, context=None):
         await recorded.wait()
-        attempts += 1
-        if attempts == 1:
-            raise psycopg.OperationalError("temporary connection failure")
-        await flush(app)
+        if context is None:
+            return await flush(app)
+        database = context.database
+
+        async def flaky_database(callback):
+            async def flaky_save(tx):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    raise psycopg.OperationalError(
+                        "temporary connection failure"
+                    )
+                return await callback(tx)
+
+            return await database(flaky_save)
+
+        context.database = flaky_database
+        await flush(app, context=context)
         succeeded.set()
 
     monkeypatch.setattr(metrics, "flush", flaky_flush)
-    async with Worker(chancy, register_signal_handlers=False) as worker:
+    async with Worker(
+        chancy, register_signal_handlers=False, backoff_initial=0
+    ) as worker:
         try:
             await worker.increment_counter("retry", 5)
         finally:
@@ -310,6 +387,9 @@ async def test_custom_metrics_from_final_job_update_are_flushed(chancy):
         async def on_job_updated(self, *, worker, job):
             await worker.increment_counter("custom:final_update", 1)
 
+        async def on_worker_stopped(self, *, worker):
+            await worker.increment_counter("custom:after_flush", 1)
+
     chancy.plugins[CustomMetrics.get_identifier()] = CustomMetrics()
     await chancy.declare(Queue("paused", state=Queue.State.PAUSED))
     ref = await chancy.push(Job(func="example.task", queue="paused"))
@@ -323,6 +403,7 @@ async def test_custom_metrics_from_final_job_update_are_flushed(chancy):
     metrics = chancy.plugins["chancy.metrics"]
     response = await metrics.get_metrics(chancy, "custom")
     assert response["series"]["custom:final_update"].summary == 1
+    assert "custom:after_flush" not in response["series"]
     assert worker not in metrics._workers
     await worker.increment_counter("custom:after_stop", 1)
     assert not metrics._dirty
@@ -357,9 +438,9 @@ async def test_failed_shutdown_flush_keeps_observations_for_retry(
     metrics = chancy.plugins["chancy.metrics"]
     worker = Worker(chancy, register_signal_handlers=False)
     await worker.start()
+    flush = metrics.flush
     try:
         await worker.increment_counter("shutdown", 1)
-        flush = metrics.flush
 
         async def fail(app):
             raise psycopg.OperationalError(

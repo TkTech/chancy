@@ -186,6 +186,7 @@ Chancy tables and indexes.
    chancy
    design
    faq
+   develop
    similar
 
 

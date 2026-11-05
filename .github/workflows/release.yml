@@ -5,10 +5,6 @@ on:
     types:
       - published
   pull_request:
-  push:
-    branches:
-      - main
-      - dev
 
 jobs:
   build:
@@ -30,6 +26,9 @@ jobs:
       run: |
         uvx --from ruff==0.16.2 ruff check
         uvx --from ruff==0.16.2 ruff format --check
+
+    - name: Checking Python types
+      run: uv run --all-extras --group typing pyrefly check
 
     - name: Set up Node
       uses: actions/setup-node@v7.1.0
@@ -75,6 +74,62 @@ jobs:
         if-no-files-found: error
         retention-days: 1
 
+  durability:
+    name: "Durability - Py${{ matrix.python }} - PG${{ matrix.postgres }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.11"
+            postgres: "14"
+          - python: "3.14"
+            postgres: "18"
+    env:
+      POSTGRES_VERSION: ${{ matrix.postgres }}
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv sync --all-extras
+
+      - name: Start durability services
+        run: docker compose -f docker-compose.durability.yml up -d --wait
+
+      - name: Test durability
+        run: >-
+          uv run --no-sync pytest tests/durability --run-durability -n 0 -v
+          --log-level=INFO --log-file=durability-tests.log
+          --junitxml=durability-results.xml
+
+      - name: Collect service logs
+        if: always()
+        run: >-
+          docker compose -f docker-compose.durability.yml logs --no-color
+          > durability-services.log
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: durability-py${{ matrix.python }}-pg${{ matrix.postgres }}
+          path: |
+            durability-results.xml
+            durability-tests.log
+            durability-services.log
+
+      - name: Stop durability services
+        if: always()
+        run: docker compose -f docker-compose.durability.yml down -v
+
   test:
     name: "${{ matrix.os }} - Py${{ matrix.python-version }} - Django${{ matrix.django }} - PG${{ matrix.pg }}"
     needs: [build]
@@ -85,7 +140,7 @@ jobs:
       fail-fast: true
       matrix:
         python-version: ["3.11", "3.14"]
-        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        os: ["ubuntu-24.04", "macos-26", "windows-2022"]
         # Django 5.2 supports both Python endpoints and PostgreSQL 14+.
         django: ["5.2"]
         pg: ["14", "18"]
@@ -282,7 +337,7 @@ jobs:
 
   release:
     name: Release to PyPI
-    needs: [build, docs]
+    needs: [build, docs, durability]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     permissions:

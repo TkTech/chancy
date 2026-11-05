@@ -3,7 +3,7 @@ Utilities for creating dynamic rules that can be used when configuring the
 conditions of a Plugin.
 """
 
-from typing import Any
+from typing import Any, LiteralString
 
 from psycopg import sql
 
@@ -17,10 +17,11 @@ class Rule(SQLAble):
     def __init__(self, field: str):
         self.field = field
 
-    def __eq__(self, other: object) -> "Condition":
+    # Comparisons construct SQL expressions, not Python booleans.
+    def __eq__(self, other: object) -> "Condition":  # pyrefly: ignore[bad-override]
         return Condition(self.to_sql(), "=", other)
 
-    def __ne__(self, other: object) -> "Condition":
+    def __ne__(self, other: object) -> "Condition":  # pyrefly: ignore[bad-override]
         return Condition(self.to_sql(), "!=", other)
 
     def __lt__(self, other: Any) -> "Condition":
@@ -58,9 +59,9 @@ class Rule(SQLAble):
 
 
 class Condition(SQLAble):
-    def __init__(self, field: sql.Composable, op: str, value: Any):
+    def __init__(self, field: sql.Composable, op: LiteralString, value: Any):
         self.field = field
-        self.op = op
+        self.op: LiteralString = op
         self.value = value
 
     def __or__(self, other: "Condition") -> "OrCondition":

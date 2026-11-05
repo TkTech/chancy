@@ -95,6 +95,7 @@ async def test_basic_job_sync(
 
     ref = await chancy.push(job_to_run.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
 
     assert j.state == j.State.SUCCEEDED
 
@@ -110,6 +111,7 @@ async def test_basic_job_async(
 
     ref = await chancy.push(async_job_to_run.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
 
     assert j.state == j.State.SUCCEEDED
 
@@ -125,6 +127,7 @@ async def test_wait_for_job_timeout(
 
     ref = await chancy.push(job_to_run.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=20)
+    assert j is not None
 
     assert j.state == j.State.SUCCEEDED
 
@@ -150,7 +153,7 @@ async def test_wait_for_jobs_ignores_purged_jobs(
     await chancy.purge_jobs([purged_ref])
 
     completed = await chancy.wait_for_jobs(
-        [existing_ref, purged_ref], interval=0.01, timeout=1
+        [existing_ref, purged_ref], interval=1, timeout=1
     )
 
     assert [job.id for job in completed] == [existing_ref.identifier]
@@ -175,6 +178,7 @@ async def test_cooperative_time_limit_sync(
     )
 
     completed = await chancy.wait_for_job(ref, timeout=30)
+    assert completed is not None
 
     assert completed.state == QueuedJob.State.FAILED
     assert "TimeoutError: Job timed out." in completed.errors[-1]["traceback"]
@@ -199,6 +203,7 @@ async def test_cooperative_time_limit_async(
     )
 
     completed = await chancy.wait_for_job(ref, timeout=30)
+    assert completed is not None
 
     assert completed.state == QueuedJob.State.FAILED
     assert "TimeoutError: Job timed out." in completed.errors[-1]["traceback"]
@@ -223,6 +228,7 @@ async def test_cooperative_time_limit_checked_after_return(
     )
 
     completed = await chancy.wait_for_job(ref, timeout=30)
+    assert completed is not None
 
     assert completed.state == QueuedJob.State.FAILED
     assert "TimeoutError: Job timed out." in completed.errors[-1]["traceback"]
@@ -252,6 +258,7 @@ async def test_cooperative_time_limit_requires_context(
     )
 
     completed = await chancy.wait_for_job(ref, timeout=30)
+    assert completed is not None
 
     assert completed.state == QueuedJob.State.FAILED
     assert (
@@ -279,6 +286,7 @@ async def test_automatic_time_limit(
     )
 
     completed = await chancy.wait_for_job(ref, timeout=30)
+    assert completed is not None
 
     assert completed.state == QueuedJob.State.FAILED
     assert "TimeoutError" in completed.errors[-1]["traceback"]
@@ -295,6 +303,7 @@ async def test_job_instance_kwarg(
 
     ref = await chancy.push(job_with_instance.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
 
     assert j.state == j.State.SUCCEEDED
     assert j.meta.get("received_instance") is True
@@ -312,6 +321,7 @@ async def test_async_job_instance_kwarg(
 
     ref = await chancy.push(async_job_with_instance.job.with_queue("low"))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
 
     assert j.state == j.State.SUCCEEDED
     assert j.meta.get("received_instance") is True
@@ -346,6 +356,7 @@ async def test_failing_job(chancy: Chancy, worker: Worker):
     )
     ref = await chancy.push(Job.from_func(job_that_fails))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
     assert j.state == QueuedJob.State.FAILED
 
 
@@ -360,6 +371,7 @@ async def test_sync_push(chancy: Chancy, worker: Worker):
         ref = chancy.sync_push(job_to_run.job.with_queue("low"))
 
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
     assert j.state == QueuedJob.State.SUCCEEDED
 
 
@@ -376,18 +388,15 @@ async def test_job_ordering(chancy: Chancy, worker: Worker):
 
     await chancy.declare(Queue("low", concurrency=1))
 
-    completed = []
+    completed_at = []
     for ref in refs:
         j = await chancy.wait_for_job(ref, timeout=30)
+        assert j is not None
         assert j.state == QueuedJob.State.SUCCEEDED
-        completed.append(j)
+        assert j.completed_at is not None
+        completed_at.append(j.completed_at)
 
-    # Ensure each job has a completed_at ordered by the order they were
-    # pushed.
-    by_completed_at = sorted(completed, key=lambda x: x.completed_at)
-    by_uuid7 = sorted(completed, key=lambda x: x.id)
-
-    assert by_completed_at == by_uuid7
+    assert completed_at == sorted(completed_at)
 
 
 @pytest.mark.asyncio
@@ -456,14 +465,17 @@ async def test_executor_job_cancellation(
     j = await chancy.wait_for_job(
         ref, timeout=30, states={QueuedJob.State.RUNNING}
     )
+    assert j is not None
     assert j.state == j.State.RUNNING
 
     await chancy.cancel_job(ref)
 
     executor = worker._executors.get("cancel_test")
+    assert executor is not None
     async with asyncio.timeout(10):
         while executor.is_job_running(ref):
             await asyncio.sleep(0.1)
 
     j = await chancy.wait_for_job(ref, timeout=10)
+    assert j is not None
     assert j.state == j.State.FAILED

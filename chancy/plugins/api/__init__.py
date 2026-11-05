@@ -197,7 +197,7 @@ class Api(Plugin):
                         WebSocketRoute(
                             route["path"],
                             _r(route["endpoint"]),
-                            name=route["name"],
+                            name=route.get("name"),
                         )
                     )
                 else:
@@ -205,8 +205,8 @@ class Api(Plugin):
                         Route(
                             route["path"],
                             _r(route["endpoint"]),
-                            methods=route["methods"],
-                            name=route["name"],
+                            methods=route.get("methods"),
+                            name=route.get("name"),
                         )
                     )
 
@@ -242,10 +242,14 @@ class Api(Plugin):
             ],
         )
 
-    async def run(self, worker: Worker, chancy: Chancy):
+    async def setup(self, session):
+        session.service("server", self._serve)
+
+    async def _serve(self, ctx):
         """
         Start the standalone web server.
         """
+        worker, chancy = ctx.worker, ctx.chancy
         app = self.build_starlette_app(worker, chancy)
 
         server = uvicorn.Server(

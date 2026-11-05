@@ -688,6 +688,11 @@ class Trigger(Plugin):
         prefix: str,
     ):
         """Create PostgreSQL triggers for the specified operations."""
+        statements = {
+            "INSERT": sql.SQL("INSERT"),
+            "UPDATE": sql.SQL("UPDATE"),
+            "DELETE": sql.SQL("DELETE"),
+        }
         for operation in operations:
             op_trigger_name = f"{trigger_name}_{operation.lower()}"
 
@@ -698,7 +703,7 @@ class Trigger(Plugin):
                     FOR EACH STATEMENT EXECUTE FUNCTION {function_name}()
                 """).format(
                     trigger_name=sql.Identifier(op_trigger_name),
-                    operation=sql.SQL(operation.upper()),
+                    operation=statements[operation.upper()],
                     schema=sql.Identifier(schema_name),
                     table=sql.Identifier(table_name),
                     function_name=sql.Identifier(f"{prefix}trigger_handler"),

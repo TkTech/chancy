@@ -1,7 +1,6 @@
 from contextlib import suppress
 
 from django.contrib.auth import aauthenticate
-from django.contrib.auth.models import User
 from starlette.authentication import AuthCredentials, BaseUser, SimpleUser
 from starlette.requests import HTTPConnection, Request
 
@@ -12,10 +11,8 @@ class DjangoAuthBackend(AuthBackend):
     async def login(
         self, request: Request, username: str, password: str
     ) -> bool:
-        user: User | None = await aauthenticate(
-            username=username, password=password
-        )
-        if user is not None and user.is_superuser:
+        user = await aauthenticate(username=username, password=password)
+        if user is not None and getattr(user, "is_superuser", False):
             with suppress(AssertionError):
                 request.session["username"] = username
             return True

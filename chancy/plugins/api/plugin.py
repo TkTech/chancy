@@ -9,9 +9,9 @@ class RouteT(typing.TypedDict):
 
     path: str
     endpoint: typing.Callable
-    methods: list[str] | None
-    name: str | None
-    is_websocket: bool | None
+    methods: typing.NotRequired[list[str] | None]
+    name: typing.NotRequired[str | None]
+    is_websocket: typing.NotRequired[bool | None]
 
 
 class ApiPlugin(abc.ABC):

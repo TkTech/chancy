@@ -313,6 +313,7 @@ async def test_schedules_with_different_timezones_run(chancy, worker):
         assert schedule["timezone"] == tz.key
         next_run = schedule["next_run"].astimezone(tz)
         assert (next_run.hour, next_run.minute) == (9, 0)
+        assert schedule["last_run"] is not None
         assert schedule["next_run"] > schedule["last_run"]
 
     # 09:00 in each zone is a different instant.
@@ -377,9 +378,9 @@ async def test_invalid_schedules_are_skipped(chancy, worker):
             pytest.fail("The cron plugin did not run the valid schedule.")
         last_run = schedules["good"]["last_run"]
 
-    assert schedules["bad_timezone"]["last_run"] is None
-    assert schedules["bad_cron"]["last_run"] is None
-    assert schedules["no_occurrence"]["last_run"] is None
+        assert schedules["bad_timezone"]["last_run"] is None
+        assert schedules["bad_cron"]["last_run"] is None
+        assert schedules["no_occurrence"]["last_run"] is None
 
     async with chancy.pool.connection() as conn:
         cursor = await conn.execute(

@@ -5,7 +5,6 @@ import pytest
 from psycopg import sql
 
 from chancy import Chancy, Job, Queue, Worker
-from chancy.plugins.leadership import ImmediateLeadership
 from chancy.plugins.reprioritize import Reprioritize
 from chancy.rule import JobRules
 
@@ -19,7 +18,6 @@ def simple_job():
     [
         {
             "plugins": [
-                ImmediateLeadership(),
                 Reprioritize(
                     JobRules.Age() > 0,
                     check_interval=1,
@@ -46,11 +44,13 @@ async def test_basic_reprioritization(chancy: Chancy, worker: Worker):
     )
 
     initial_job = await chancy.get_job(ref)
+    assert initial_job is not None
     initial_priority = initial_job.priority
 
     await asyncio.sleep(2)
 
     updated_job = await chancy.get_job(ref)
+    assert updated_job is not None
 
     # Priority should have increased (making it more important)
     assert updated_job.priority > initial_priority

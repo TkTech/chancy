@@ -81,7 +81,7 @@ def test_unsupported_function_type_is_rejected(
         executor.prepare_job_for_execution(job)
 
 
-class InjectingMixin:
+class InjectingMixin(Executor):
     @classmethod
     def get_function_and_kwargs(cls, job):
         func, kwargs = super().get_function_and_kwargs(job)
@@ -155,6 +155,7 @@ async def test_injected_kwargs_reach_jobs_on_every_executor(
     await chancy.declare(Queue("injected", executor=injecting_executor))
     ref = await chancy.push(Job.from_func(job_func, queue="injected"))
     finished = await chancy.wait_for_job(ref, timeout=30)
+    assert finished is not None
 
     assert finished.state == QueuedJob.State.SUCCEEDED
     assert finished.meta["injected"] == f"by Injecting{executor_class.__name__}"

@@ -2,6 +2,7 @@ import asyncio
 import importlib.metadata
 import json
 import time
+from typing import TypedDict
 
 from psycopg import sql
 from psycopg.rows import dict_row
@@ -11,13 +12,18 @@ from starlette.responses import Response
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from chancy.job import Reference
-from chancy.plugins.api.plugin import ApiPlugin
+from chancy.plugins.api.plugin import ApiPlugin, RouteT
 from chancy.queue import Queue
 from chancy.rule import JobRules
 from chancy.utils import json_dumps
 
-# Simple in-memory cache for expensive queries
-_functions_cache = {"data": None, "timestamp": 0}
+
+class _FunctionsCache(TypedDict):
+    data: list[str] | None
+    timestamp: float
+
+
+_functions_cache: _FunctionsCache = {"data": None, "timestamp": 0}
 _FUNCTIONS_CACHE_TTL = 60  # 60 seconds
 
 
@@ -174,7 +180,7 @@ class CoreApiPlugin(ApiPlugin):
     def name(self):
         return "base"
 
-    def routes(self):
+    def routes(self) -> list[RouteT]:
         return [
             {
                 "path": "/health",
@@ -286,10 +292,11 @@ class CoreApiPlugin(ApiPlugin):
         Health check endpoint - returns 200 if the worker is healthy.
         Does not require authentication.
         """
+        healthy = worker.healthy
         return Response(
-            json_dumps({"status": "healthy"}),
+            json_dumps({"status": "healthy" if healthy else "unhealthy"}),
             media_type="application/json",
-            status_code=200,
+            status_code=200 if healthy else 503,
         )
 
     @staticmethod
