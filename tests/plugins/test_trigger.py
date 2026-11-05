@@ -113,6 +113,7 @@ async def test_trigger_creates_job_on_change(chancy: Chancy, test_table):
 
         ref = Reference(jobs[0][0])
         j = await chancy.get_job(ref)
+        assert j is not None
         assert j.meta["trigger"]["operation"] == "INSERT"
         assert j.meta["trigger"]["table_name"] == test_table
         assert j.meta["trigger"]["schema_name"] == "public"
@@ -196,6 +197,7 @@ async def test_trigger_update_operation(chancy: Chancy, test_table):
 
         ref = Reference(jobs[0][0])
         j = await chancy.get_job(ref)
+        assert j is not None
         assert j.meta["trigger"]["operation"] == "UPDATE"
 
 
@@ -250,6 +252,7 @@ async def test_trigger_delete_operation(chancy: Chancy, test_table):
 
         ref = Reference(jobs[0][0])
         j = await chancy.get_job(ref)
+        assert j is not None
         assert j.meta["trigger"]["operation"] == "DELETE"
 
 
@@ -319,6 +322,7 @@ async def test_trigger_multiple_operations(chancy: Chancy, worker, test_table):
         for job_row in jobs:
             ref = Reference(job_row[0])
             j = await chancy.wait_for_job(ref, timeout=30)
+            assert j is not None
             assert j.state == QueuedJob.State.SUCCEEDED
 
 

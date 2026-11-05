@@ -26,8 +26,8 @@ async def test_early_batch_crossing_deadline_does_not_defer_poll(
     plugin = WorkflowPlugin(polling_interval=1)
     session = PluginSession(plugin, worker)
     entered, release, polled = asyncio.Event(), asyncio.Event(), asyncio.Event()
-    ended = None
-    poll_time = None
+    ended: float | None = None
+    poll_time: float | None = None
 
     async def pending(*args, **kwargs):
         nonlocal ended
@@ -56,6 +56,7 @@ async def test_early_batch_crossing_deadline_does_not_defer_poll(
         await asyncio.sleep(1.1)  # Cross the deadline inside notification work.
         release.set()
         await asyncio.wait_for(polled.wait(), 1)
+        assert poll_time is not None and ended is not None
         assert poll_time - ended < 0.1
     finally:
         release.set()
@@ -260,6 +261,7 @@ async def test_notified_workflows_are_loaded_in_batches(
 
     # Notifications for deleted or terminal workflows are harmless.
     terminal = await WorkflowPlugin.fetch_workflow(chancy, ids[0])
+    assert terminal is not None
     terminal.state = Workflow.State.COMPLETED
     await WorkflowPlugin.push(chancy, terminal)
     notify(scheduler, worker_no_start, ids[0])
@@ -454,7 +456,11 @@ async def test_active_index_migration_preserves_existing_workflows(
     # Resume the pre-migration workflow, including its existing job reference.
     for step in ("first", "second"):
         workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
-        job = await chancy.get_job(Reference(workflow.steps[step].job_id))
+        assert workflow is not None
+        job_id = workflow.steps[step].job_id
+        assert job_id is not None
+        job = await chancy.get_job(Reference(job_id))
+        assert job is not None
         await worker_no_start.queue_update(
             replace(job, state=QueuedJob.State.SUCCEEDED)
         )
@@ -479,8 +485,11 @@ async def test_flush_sends_one_notification_batch_for_terminal_workflows(
     await process_batch(scheduler, chancy, worker_no_start, poll=True)
     for i, workflow_id in enumerate(ids):
         workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
+        assert workflow is not None
         for step in workflow.steps.values():
+            assert step.job_id is not None
             job = await chancy.get_job(Reference(step.job_id))
+            assert job is not None
             state = (
                 QueuedJob.State.SUCCEEDED,
                 QueuedJob.State.FAILED,
@@ -521,8 +530,12 @@ async def test_failed_batch_hook_rolls_back_jobs_and_retains_updates(
     )
     await process_batch(scheduler, chancy, worker_no_start, poll=True)
     workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
-    ref = Reference(workflow.steps["step"].job_id)
+    assert workflow is not None
+    job_id = workflow.steps["step"].job_id
+    assert job_id is not None
+    ref = Reference(job_id)
     original = await chancy.get_job(ref)
+    assert original is not None
     update = replace(original, state=QueuedJob.State.SUCCEEDED)
     await worker_no_start.queue_update(update)
     hook = scheduler.on_jobs_updated_in_transaction

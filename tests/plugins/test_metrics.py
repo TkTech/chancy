@@ -129,7 +129,9 @@ async def test_latest_gauge_and_weighted_histogram_within_bucket(chancy, clock):
     await second.flush(chancy)
     response = await first.get_metrics(chancy)
     assert response["series"]["size"].summary == 90
-    assert response["series"]["time"].summary["avg"] == 8
+    summary = response["series"]["time"].summary
+    assert isinstance(summary, dict)
+    assert summary["avg"] == 8
     response = await first.get_metrics(chancy, worker_id="z")
     assert response["series"]["size"].summary == 100
 
@@ -215,7 +217,7 @@ async def test_chunks_survive_repeated_flushes_and_expire(chancy, clock):
 async def test_invalid_observations_do_not_poison_buffer():
     metrics = Metrics(max_buffered_points=4)
     for value in (float("nan"), float("inf"), True, "bad", 10**1000):
-        await metrics.increment_counter("bad", value)
+        await metrics.increment_counter("bad", value)  # pyrefly: ignore[bad-argument-type]
     for key in ("\x00", "\ud800"):
         await metrics.increment_counter(key, 1)
     await metrics.increment_counter("bad-unit", 1, unit="\x00")
@@ -436,9 +438,9 @@ async def test_failed_shutdown_flush_keeps_observations_for_retry(
     metrics = chancy.plugins["chancy.metrics"]
     worker = Worker(chancy, register_signal_handlers=False)
     await worker.start()
+    flush = metrics.flush
     try:
         await worker.increment_counter("shutdown", 1)
-        flush = metrics.flush
 
         async def fail(app):
             raise psycopg.OperationalError(

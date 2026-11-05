@@ -107,6 +107,8 @@ class PendingJobs(Plugin):
 
 ✨ Improvements
 
+- Improved type annotations for jobs, cron schedules, workflows, and executors.
+  Installed packages now include a `py.typed` marker for type checkers.
 - Terminal background failures now initiate worker shutdown even when nothing
   is awaiting `wait_for_shutdown()`. Unexpected maintenance-task exits and
   exhausted database retries follow the same shutdown path.
@@ -128,6 +130,10 @@ class PendingJobs(Plugin):
 
 🐛 Fixes
 
+- Synchronous pushes and manually constructed workflow steps now accept
+  decorated jobs consistently.
+- Queues with rate limits now reject missing or nonpositive rate-limit windows
+  when constructed, instead of failing when a worker polls them.
 - Workers now resolve uncertain job claims after a lost commit response, so
   a connection failure cannot leave those jobs stranded on a healthy worker.
   Claim confirmation waits for locked rows without exhausting database retries.

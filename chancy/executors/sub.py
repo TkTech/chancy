@@ -3,14 +3,14 @@ import functools
 import os
 import sys
 from concurrent.futures import Future
+from typing import Any
 
 from chancy.queue import Queue
 from chancy.worker import Worker
 
-try:
-    # Only available in 3.14+
+if sys.version_info >= (3, 14):
     from concurrent.futures import InterpreterPoolExecutor
-except ImportError:
+else:
     # Available only in 3.13 with a backport.
     try:
         from interpreters_backport.concurrent.futures.interpreter import (
@@ -90,9 +90,9 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         # parent process or tests will fail.
         sys.path = parent_sys_path
 
-    async def push(self, job: QueuedJob) -> Future:
+    async def push(self, job: QueuedJob) -> Future[tuple[QueuedJob, Any]]:
         job = await self.on_job_starting(job)
-        future: Future = self.pool.submit(self.job_wrapper, job)
+        future = self.pool.submit(self.job_wrapper, job)
         self.jobs[future] = job
         future.add_done_callback(
             functools.partial(
@@ -115,6 +115,6 @@ class SubInterpreterExecutor(ConcurrentExecutor):
         ThreadPoolExecutor.
         """
         # Only available in 3.13+
-        if hasattr(os, "process_cpu_count"):
+        if sys.version_info >= (3, 13):
             return min(32, (os.process_cpu_count() or 1) + 4)
         return min(32, (os.cpu_count() or 1) + 4)

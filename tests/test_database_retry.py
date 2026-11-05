@@ -18,8 +18,8 @@ async def test_database_retry_limits_reset_and_independent_state(
     worker = Worker(chancy_just_app, backoff_max_retries=2)
     attempts = []
 
-    def delay(attempt):
-        attempts.append(attempt)
+    def delay(consecutive_failures):
+        attempts.append(consecutive_failures)
         return 0
 
     worker._calculate_backoff = delay

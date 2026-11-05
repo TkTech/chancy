@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import signal
+import sys
 from concurrent.futures import Future
 from dataclasses import replace
 from unittest.mock import AsyncMock, Mock
@@ -26,6 +27,7 @@ async def wait_until_cancelled():
 
 
 def receive_process_signal(*, requests=None, context: QueuedJob):
+    assert sys.platform != "win32"
     if requests is not None:
         requests[context.claim_id] = True
     os.kill(os.getpid(), signal.SIGUSR1)
@@ -64,8 +66,8 @@ async def test_recovery_fences_late_updates_and_hooks(
 
     # Reuse the worker ID too: ownership must identify the execution, not
     # merely its worker. The stale update is unsafe even before a new claim.
-    if reclaim:
-        current = await claim(chancy, worker_no_start, queue)
+    current = await claim(chancy, worker_no_start, queue) if reclaim else None
+    if current is not None:
         assert current.claim_id not in (None, old.claim_id)
     expected = await chancy.get_job(ref)
     assert expected.max_attempts == old.max_attempts + 1
@@ -86,11 +88,12 @@ async def test_recovery_fences_late_updates_and_hooks(
     committed.assert_not_awaited()
     assert not worker_no_start._pending_updates
 
-    if reclaim:
+    if current is not None:
         update = replace(current, state=QueuedJob.State.SUCCEEDED, attempts=1)
         await worker_no_start.queue_update(update)
         await worker_no_start.flush()
         assert await chancy.get_job(ref) == update
+        assert transactional.await_args is not None
         assert transactional.await_args.kwargs["jobs"] == (update,)
         committed.assert_awaited_once_with(worker=worker_no_start, job=update)
 
@@ -122,6 +125,7 @@ async def test_mixed_batch_filters_stale_updates_and_preserves_hook_order(
     for update in (updates[0], old, updates[1], updates[2]):
         await worker_no_start.queue_update(update)
     await worker_no_start.flush()
+    assert transactional.await_args is not None
     assert transactional.await_args.kwargs["jobs"] == tuple(updates)
     assert [call.kwargs["job"] for call in committed.await_args_list] == updates
     assert (await chancy.get_job(refs[0])).meta == {"revision": 2}
@@ -304,6 +308,7 @@ async def test_recovery_cancels_only_the_old_execution(
     executor.jobs = {newer: new, abandoned: old}
     kill = Mock()
     if executor_class is ProcessExecutor:
+        assert isinstance(abandoned, Future)
         abandoned.set_running_or_notify_cancel()
         executor.pids_for_job = {new.claim_id: 101, old.claim_id: 102}
         executor.pending_cancellations = {}
@@ -409,6 +414,7 @@ async def test_cancellation_cancels_all_matching_executions(
         if not executor.supports(executor.Capability.CANCELLATION):
             pytest.skip("Process cancellation requires SIGUSR1")
         for future in futures:
+            assert isinstance(future, Future)
             future.set_running_or_notify_cancel()
         executor.pids_for_job = {
             old.claim_id: 101,
@@ -441,6 +447,8 @@ async def test_process_recovery_cancellation_during_child_startup():
     )
     new = replace(old, claim_id=uuid4())
     executor = object.__new__(ProcessExecutor)
+    assert new.claim_id is not None
+    assert old.claim_id is not None
     future = Future()
     future.set_running_or_notify_cancel()
     executor.jobs = {future: old}
@@ -458,7 +466,9 @@ async def test_process_recovery_cancellation_during_child_startup():
 
 @pytest.mark.asyncio
 async def test_process_cancellation_signals_preserve_pool(chancy_just_app):
-    if not ProcessExecutor.supports(ProcessExecutor.Capability.CANCELLATION):
+    if sys.platform == "win32" or not ProcessExecutor.supports(
+        ProcessExecutor.Capability.CANCELLATION
+    ):
         pytest.skip("Process cancellation requires SIGUSR1")
     worker = Worker(chancy_just_app, register_signal_handlers=False)
     executor = ProcessExecutor(worker, Queue("default", concurrency=1))
@@ -497,8 +507,8 @@ async def test_process_cancellation_signals_preserve_pool(chancy_just_app):
                 receive_process_signal, requests=executor.pending_cancellations
             )
         assert (await run(os.getpid))[1] == pid
-        assert executor.pids_for_job.copy() == {}
-        assert executor.pending_cancellations.copy() == {old_claim: True}
+        assert dict(executor.pids_for_job) == {}
+        assert dict(executor.pending_cancellations) == {old_claim: True}
     finally:
         await executor.stop()
 

@@ -14,7 +14,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from chancy import Chancy, Job, Queue, Worker
 from chancy.plugins.api import Api, SimpleAuthBackend, _SPAStaticFiles
-from chancy.plugins.api.plugin import ApiPlugin
+from chancy.plugins.api.plugin import ApiPlugin, RouteT
 from chancy.plugins.workflow import Workflow, WorkflowPlugin
 from chancy.plugins.workflow.api import WorkflowApiPlugin
 
@@ -258,6 +258,7 @@ def test_mounted_authentication_and_websocket(api, chancy_just_app, prefix):
         ):
             pass
         with client.websocket_connect(base + f"/ws?token={token}") as ws:
+            assert client.portal is not None
             client.portal.call(worker.hub.emit, "test.event", {"value": 1})
             assert ws.receive_json() == {
                 "event": "test.event",
@@ -271,7 +272,7 @@ def test_app_factory_binds_each_app_and_discovers_plugins(api, monkeypatch):
         def name(self):
             return "context"
 
-        def routes(self):
+        def routes(self) -> list[RouteT]:
             async def context(request, *, chancy, worker):
                 return JSONResponse([chancy.prefix, worker.worker_id])
 
@@ -540,7 +541,7 @@ async def test_history_pagination_across_mutations(
         )
         client.headers["Authorization"] = f"Bearer {login.json()['token']}"
         # Both endpoints cap oversized pages at 100.
-        params = {"limit": 999}
+        params: dict[str, str | int] = {"limit": 999}
         if pagination:
             params["pagination"] = "true"
         if filtered:

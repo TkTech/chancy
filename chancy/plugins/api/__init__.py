@@ -197,7 +197,7 @@ class Api(Plugin):
                         WebSocketRoute(
                             route["path"],
                             _r(route["endpoint"]),
-                            name=route["name"],
+                            name=route.get("name"),
                         )
                     )
                 else:
@@ -205,8 +205,8 @@ class Api(Plugin):
                         Route(
                             route["path"],
                             _r(route["endpoint"]),
-                            methods=route["methods"],
-                            name=route["name"],
+                            methods=route.get("methods"),
+                            name=route.get("name"),
                         )
                     )
 

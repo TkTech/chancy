@@ -122,7 +122,7 @@ async def test_cancellation_uses_handles_and_closes_admission():
     await manager.cancel(failed)
     assert not live.done()
     with pytest.raises(TypeError, match="handle"):
-        await manager.cancel("same")
+        await manager.cancel("same")  # pyrefly: ignore[bad-argument-type]
     await manager.cancel(live)
     assert live.cancelled()
     await manager.cancel_all()

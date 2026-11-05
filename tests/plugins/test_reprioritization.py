@@ -44,11 +44,13 @@ async def test_basic_reprioritization(chancy: Chancy, worker: Worker):
     )
 
     initial_job = await chancy.get_job(ref)
+    assert initial_job is not None
     initial_priority = initial_job.priority
 
     await asyncio.sleep(2)
 
     updated_job = await chancy.get_job(ref)
+    assert updated_job is not None
 
     # Priority should have increased (making it more important)
     assert updated_job.priority > initial_priority

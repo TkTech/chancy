@@ -67,6 +67,13 @@ dev = [
 screenshots = [
     "playwright>=1.55",
 ]
+typing = [
+    "django>=6.0 ; python_full_version >= '3.12'",
+    "django-stubs>=6.1.2",
+    "pyrefly==1.4.1",
+    "rich>=15.0.0",
+    "types-croniter>=6.0.0",
+]
 
 [project.scripts]
 chancy = "chancy.cli.cli:main"
@@ -96,3 +103,11 @@ django_find_project = false
 
 [tool.ruff]
 line-length = 80
+
+[tool.pyrefly]
+project-includes = ["chancy", "tests"]
+python-version = "3.11"
+search-path = [".", "tests"]
+
+[tool.pyrefly.errors]
+unused-ignore = "error"

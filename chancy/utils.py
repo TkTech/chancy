@@ -10,10 +10,12 @@ import logging
 import secrets
 import time
 import uuid
-from collections.abc import Callable, Coroutine, Iterable
+from collections.abc import Callable, Coroutine, Iterable, Iterator
 from dataclasses import asdict, is_dataclass
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict, TypeVar
 from urllib.parse import quote_plus, urlencode, urlunparse
+
+T = TypeVar("T")
 
 
 class DatabaseConnection(TypedDict):
@@ -79,7 +81,7 @@ def timed_block():
     class Timer:
         def __init__(self):
             self.start = time.monotonic()
-            self.stop = None
+            self.stop: float | None = None
 
         @property
         def elapsed(self):
@@ -105,7 +107,8 @@ def importable_name(obj):
     """
     if obj.__class__.__module__ == "__main__":
         module = inspect.getmodule(obj)
-        return f"{module.__spec__.name}.{obj.__qualname__}"
+        if module is not None and module.__spec__ is not None:
+            return f"{module.__spec__.name}.{obj.__qualname__}"
 
     return f"{obj.__module__}.{obj.__qualname__}"
 
@@ -167,19 +170,19 @@ def json_dumps(obj, **kwargs):
             return o.isoformat()
         elif isinstance(o, enum.Enum):
             return o.value
-        elif is_dataclass(o):
+        elif is_dataclass(o) and not isinstance(o, type):
             return asdict(o)
         elif isinstance(o, (set, frozenset)):
             return list(o)
 
         raise TypeError(
-            f"Object of type {o.__class__.__name__} is not JSON serializable"
+            f"Object of type {type(o).__name__} is not JSON serializable"
         )
 
     return json.dumps(obj, default=_dump, **kwargs)
 
 
-def chunked(iterable, size):
+def chunked(iterable: Iterable[T], size: int) -> Iterator[list[T]]:
     """
     Yield chunks of `size` from `iterable`.
 
@@ -232,20 +235,20 @@ class TaskManager:
         """All failures observed so far, in completion order."""
         return tuple(error.exception for error in self._errors)
 
-    def add(self, name: str, task: Coroutine) -> asyncio.Task:
+    def add(self, name: str, task: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
         """
         Add a task to the manager.
         """
         if self._closed:
             task.close()
             raise RuntimeError("Task manager is closed")
-        task: asyncio.Task = asyncio.create_task(task, name=name)
-        task.add_done_callback(self._task_done)
+        created = asyncio.create_task(task, name=name)
+        created.add_done_callback(self._task_done)
 
-        self._tasks.add(task)
+        self._tasks.add(created)
         self._changed.set()
 
-        return task
+        return created
 
     def _task_done(self, task):
         requested = task in self._cancel_requested

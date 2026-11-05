@@ -13,6 +13,7 @@ from chancy.plugins.workflow import (
     Sequence,
     Workflow,
     WorkflowPlugin,
+    WorkflowStep,
 )
 from chancy.utils import chancy_uuid
 
@@ -36,6 +37,21 @@ async def async_success():
 @job()
 async def async_failure():
     raise ValueError("Failed job")
+
+
+@pytest.mark.asyncio
+async def test_workflow_step_accepts_a_decorated_job(
+    chancy: Chancy, worker: Worker
+):
+    await chancy.declare(Queue("default"))
+    workflow = Workflow("decorated_step")
+    workflow += WorkflowStep(step_id="step", job=sync_success)
+    workflow_id = await WorkflowPlugin.push(chancy, workflow)
+    completed = await WorkflowPlugin.wait_for_workflow(
+        chancy, workflow_id, timeout=30
+    )
+    assert completed.state == Workflow.State.COMPLETED
+    assert completed.steps["step"].state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -72,7 +88,7 @@ async def test_sequential_workflow(chancy: Chancy, worker):
     assert result.state == Workflow.State.COMPLETED
     assert len(result.steps) == 3
     for step in result.steps.values():
-        assert step.state == step.state.SUCCEEDED
+        assert step.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -114,7 +130,7 @@ async def test_parallel_workflow(chancy: Chancy, worker):
     assert result.state == Workflow.State.COMPLETED
     assert len(result.steps) == 5
     for step in result.steps.values():
-        assert step.state == step.state.SUCCEEDED
+        assert step.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -147,8 +163,8 @@ async def test_workflow_failure(chancy: Chancy, worker):
     )
 
     assert result.state == Workflow.State.FAILED
-    assert result.steps["step1"].state == result.steps["step1"].state.SUCCEEDED
-    assert result.steps["step2"].state == result.steps["step2"].state.FAILED
+    assert result.steps["step1"].state == QueuedJob.State.SUCCEEDED
+    assert result.steps["step2"].state == QueuedJob.State.FAILED
     # Step 3 was never queued due to the failure of a previous step.
     assert result.steps["step3"].state is None
 
@@ -187,7 +203,7 @@ async def test_sequence(chancy: Chancy, worker):
     assert result.state == Workflow.State.COMPLETED
     assert len(result.steps) == 3
     for step in result.steps.values():
-        assert step.state == step.state.SUCCEEDED
+        assert step.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -264,7 +280,7 @@ async def test_async_workflow(chancy: Chancy, worker):
     assert result.state == Workflow.State.COMPLETED
     assert len(result.steps) == 2
     for step in result.steps.values():
-        assert step.state == step.state.SUCCEEDED
+        assert step.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -305,7 +321,7 @@ async def test_workflow_with_modified_jobs(chancy: Chancy, worker):
     assert result.state == Workflow.State.COMPLETED
     assert len(result.steps) == 2
     for step in result.steps.values():
-        assert step.state == step.state.SUCCEEDED
+        assert step.state == QueuedJob.State.SUCCEEDED
 
 
 @pytest.mark.asyncio
@@ -497,7 +513,7 @@ async def _poll(plugin: WorkflowPlugin, chancy: Chancy, worker: Worker) -> int:
         return await plugin.poll(worker, chancy, cursor)
 
 
-async def _count_running(chancy: Chancy, ids: list[str]) -> int:
+async def _count_running(chancy: Chancy, ids: list[UUID]) -> int:
     workflows = await WorkflowPlugin.fetch_workflows(
         chancy, ids=ids, limit=len(ids)
     )
@@ -533,7 +549,11 @@ async def test_step_completion_notifies_leader(
     plugin = chancy.plugins[WorkflowPlugin.get_identifier()]
     await _poll(plugin, chancy, worker_no_start)
     workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
-    first = await chancy.get_job(Reference(workflow.steps["first"].job_id))
+    assert workflow is not None
+    job_id = workflow.steps["first"].job_id
+    assert job_id is not None
+    first = await chancy.get_job(Reference(job_id))
+    assert first is not None
     assert workflow.steps["second"].job_id is None
 
     # Start listening after creation so workflow.created cannot wake a poll.
@@ -553,6 +573,7 @@ async def test_step_completion_notifies_leader(
         await asyncio.wait_for(advanced.wait(), timeout=5)
 
         workflow = await WorkflowPlugin.fetch_workflow(chancy, workflow_id)
+        assert workflow is not None
         assert workflow.steps["first"].state == QueuedJob.State.SUCCEEDED
         assert workflow.steps["second"].job_id is not None
 
@@ -611,7 +632,7 @@ async def test_poll_continues_after_previous_batch(
     """
     await chancy.declare(Queue("default"))
 
-    async def push(name: str) -> str:
+    async def push(name: str) -> UUID:
         return await WorkflowPlugin.push(
             chancy, Workflow(name).add("step", sync_success)
         )
@@ -660,7 +681,11 @@ async def test_poll_revisits_workflows_during_continuous_arrivals(
     assert await _poll(plugin, chancy, worker_no_start) == 2
 
     workflow = await WorkflowPlugin.fetch_workflow(chancy, min(initial))
-    first = await chancy.get_job(Reference(workflow.steps["step"].job_id))
+    assert workflow is not None
+    job_id = workflow.steps["step"].job_id
+    assert job_id is not None
+    first = await chancy.get_job(Reference(job_id))
+    assert first is not None
     await worker_no_start.queue_update(
         replace(first, state=QueuedJob.State.SUCCEEDED)
     )
@@ -683,10 +708,12 @@ async def test_poll_revisits_workflows_during_continuous_arrivals(
         assert 0 < await _poll(plugin, chancy, worker_no_start) <= 2
 
     workflow = await WorkflowPlugin.fetch_workflow(chancy, min(initial))
+    assert workflow is not None
     assert workflow.state == Workflow.State.COMPLETED
     # A new sweep must also include arrivals, even while older jobs remain
     # running. Waiting for those jobs to finish would starve the new ones.
     workflow = await WorkflowPlugin.fetch_workflow(chancy, min(arrivals))
+    assert workflow is not None
     assert workflow.state == Workflow.State.RUNNING
 
 
@@ -720,6 +747,7 @@ async def test_poll_restarts_when_sweep_tail_finishes(
     assert await _poll(plugin, chancy, worker_no_start) == 2
 
     tail = await WorkflowPlugin.fetch_workflow(chancy, max(ids))
+    assert tail is not None
     tail.state = Workflow.State.COMPLETED
     await WorkflowPlugin.push(chancy, tail)
 

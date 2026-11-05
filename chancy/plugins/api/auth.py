@@ -42,19 +42,19 @@ class SimpleAuthBackend(AuthBackend):
         if username in self.users and self.users[username] == password:
             # In token-only mode, SessionMiddleware may be absent. Best-effort set.
             with suppress(AssertionError):
-                request.session["username"] = username  # type: ignore[attr-defined]
+                request.session["username"] = username
             return True
         return False
 
     async def logout(self, request: Request) -> None:
         with suppress(AssertionError):
-            request.session.pop("username", None)  # type: ignore[attr-defined]
+            request.session.pop("username", None)
 
     async def authenticate(
         self, conn: HTTPConnection
     ) -> tuple[AuthCredentials, BaseUser] | None:
         try:
-            username = conn.session.get("username")  # type: ignore[attr-defined]
+            username = conn.session.get("username")
         except AssertionError:
             return None
         if username is None:

@@ -6,10 +6,24 @@ import click
 import pytest
 
 from chancy import Chancy, Worker
+from chancy.cli.queue import push
 from chancy.cli.worker import web_command, worker_command
 from chancy.plugins.api import Api, SimpleAuthBackend
 from chancy.plugins.metrics import Metrics
 from chancy.session import PluginSession
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kwargs", ["[]", '"text"', "42", "null"])
+async def test_push_rejects_kwargs_that_are_not_an_object(
+    chancy_just_app, kwargs
+):
+    context = click.Context(push, obj={"app": chancy_just_app})
+    assert push.callback is not None
+    with pytest.raises(click.BadParameter, match="Expected a JSON object"):
+        await inspect.unwrap(push.callback)(
+            context, "example.job", "default", 0, None, 1, kwargs
+        )
 
 
 @pytest.mark.asyncio
@@ -41,6 +55,7 @@ async def test_shutdown_timeout_is_a_concise_cli_error(
 
     monkeypatch.setattr(Worker, "wait_for_shutdown", expire)
     command = web_command if dashboard else worker_command
+    assert command.callback is not None
     context = click.Context(command, obj={"app": app})
     arguments = ("localhost", 8000, False, ["*"]) if dashboard else (None, None)
     try:
@@ -76,10 +91,12 @@ async def test_dashboard_session_lifecycle(
     monkeypatch.setattr(
         Worker, "_maintain_updates", AsyncMock(side_effect=maintain)
     )
-    monkeypatch.setattr(Worker, "_maintain_queues", AsyncMock())
+    maintain_queues = AsyncMock()
+    monkeypatch.setattr(Worker, "_maintain_queues", maintain_queues)
     monkeypatch.setattr(Worker, "flush", AsyncMock())
     metrics = Metrics()
-    monkeypatch.setattr(metrics, "flush", AsyncMock())
+    flush = AsyncMock()
+    monkeypatch.setattr(metrics, "flush", flush)
     if with_metrics:
         app.plugins[metrics.get_identifier()] = metrics
     if configured_api:
@@ -110,6 +127,7 @@ async def test_dashboard_session_lifecycle(
     monkeypatch.setattr(Api, "setup", prepare)
     monkeypatch.setattr(Api, "_serve", serve)
     context = click.Context(web_command, obj={"app": app})
+    assert web_command.callback is not None
     for name in ("host", "port", "debug", "allow_origin"):
         context.set_parameter_source(name, click.core.ParameterSource.DEFAULT)
     task = asyncio.create_task(
@@ -130,9 +148,9 @@ async def test_dashboard_session_lifecycle(
     assert not sessions[0].worker.manager._tasks
     assert not metrics._workers
     assert not sessions[0].worker.hub._handlers.get("metrics.counter")
-    Worker._maintain_queues.assert_not_awaited()
+    maintain_queues.assert_not_awaited()
     if failure == "setup":
         assert not entered.is_set()
-        metrics.flush.assert_not_awaited()
+        flush.assert_not_awaited()
     elif with_metrics:
-        metrics.flush.assert_awaited_once_with(app)
+        flush.assert_awaited_once_with(app)

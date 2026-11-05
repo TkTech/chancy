@@ -101,6 +101,14 @@ class Queue:
     #: it can also increase load on the database and should be used with care.
     eager_polling: bool = False
 
+    def __post_init__(self):
+        if self.rate_limit and (
+            self.rate_limit_window is None or self.rate_limit_window <= 0
+        ):
+            raise ValueError(
+                "Rate-limited queues require a positive rate_limit_window"
+            )
+
     @classmethod
     def unpack(cls, data: dict) -> "Queue":
         """

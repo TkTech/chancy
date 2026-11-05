@@ -46,7 +46,7 @@ def test_leadership_is_read_only(chancy_just_app):
     worker = Worker(chancy_just_app)
     assert worker.is_leader is False
     with pytest.raises(AttributeError):
-        worker.is_leader = True
+        worker.is_leader = True  # pyrefly: ignore[read-only]
 
 
 @pytest.mark.parametrize("timeout", [0, -1, 1.5, float("nan"), float("inf")])

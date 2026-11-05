@@ -2,6 +2,7 @@ import asyncio
 import functools
 import multiprocessing
 import os
+import sys
 from multiprocessing.context import BaseContext
 
 try:
@@ -11,7 +12,7 @@ except ImportError:
     resource = None
 import signal
 from asyncio import CancelledError
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 from concurrent.futures import Future, ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any
@@ -60,7 +61,7 @@ class ProcessExecutor(ConcurrentExecutor):
         Executor.Capability.SYNC_JOBS | Executor.Capability.ASYNC_JOBS
     )
     # Child-local state; cleared before returning control to the process pool.
-    _current_execution: tuple[UUID, Any] | None = None
+    _current_execution: tuple[UUID, MutableMapping[UUID, bool]] | None = None
 
     @classmethod
     def get_capabilities(cls) -> Executor.Capability:
@@ -91,10 +92,12 @@ class ProcessExecutor(ConcurrentExecutor):
         self._maximum_jobs_per_worker = maximum_jobs_per_worker
 
         self.manager = ctx.Manager()
-        self.pids_for_job = self.manager.dict()
+        self.pids_for_job: MutableMapping[UUID, int] = self.manager.dict()
         # Execution-specific cancellation requests. SIGUSR1 only wakes the
         # child; this marker determines whether its current job is cancelled.
-        self.pending_cancellations = self.manager.dict()
+        self.pending_cancellations: MutableMapping[UUID, bool] = (
+            self.manager.dict()
+        )
         self.timeouts: dict[UUID, asyncio.Task] = {}
         self.pool = self._create_pool()
 
@@ -123,9 +126,9 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        if hasattr(signal, "SIGALRM"):
+        if sys.platform != "win32" and hasattr(signal, "SIGALRM"):
             signal.signal(signal.SIGALRM, cls.job_signal_handler)
-        if hasattr(signal, "SIGUSR1"):
+        if sys.platform != "win32" and hasattr(signal, "SIGUSR1"):
             signal.signal(signal.SIGUSR1, cls.job_signal_handler)
 
         if os.environ.get("DJANGO_SETTINGS_MODULE"):
@@ -136,7 +139,7 @@ class ProcessExecutor(ConcurrentExecutor):
 
             django.setup()
 
-    async def push(self, job: QueuedJob) -> Future:
+    async def push(self, job: QueuedJob) -> Future[tuple[QueuedJob, Any]]:
         job = await self.on_job_starting(job)
 
         args = (job, self.pids_for_job, self.pending_cancellations)
@@ -180,6 +183,7 @@ class ProcessExecutor(ConcurrentExecutor):
         return future
 
     async def _handle_timeout(self, execution_id: UUID, time_limit: int):
+        assert sys.platform != "win32"
         try:
             await asyncio.sleep(time_limit)
             pid = self.pids_for_job.get(execution_id)
@@ -190,7 +194,10 @@ class ProcessExecutor(ConcurrentExecutor):
 
     @classmethod
     def job_wrapper(
-        cls, job: QueuedJob, pids_for_job, pending_cancellations
+        cls,
+        job: QueuedJob,
+        pids_for_job: MutableMapping[UUID, int] | None = None,
+        pending_cancellations: MutableMapping[UUID, bool] | None = None,
     ) -> tuple[QueuedJob, Any]:
         """
         This is the function that is actually started by the process pool
@@ -206,32 +213,32 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
-        cleanup: list[Callable] = []
+        if pids_for_job is None:
+            pids_for_job = {}
+        if pending_cancellations is None:
+            pending_cancellations = {}
+        cleanup: list[Callable[[], None]] = []
         execution_id = job.claim_id or job.id
         try:
             pids_for_job[execution_id] = os.getpid()
             cls._current_execution = (execution_id, pending_cancellations)
             # Also honor requests received before PID registration.
-            if hasattr(signal, "SIGUSR1"):
+            if sys.platform != "win32" and hasattr(signal, "SIGUSR1"):
                 cls.job_signal_handler(signal.SIGUSR1, None)
             job, func, kwargs = cls.prepare_job_for_execution(job)
 
             for limit in job.limits:
-                match limit.type_:
-                    case Limit.Type.MEMORY:
-                        previous_soft, _ = resource.getrlimit(
-                            resource.RLIMIT_AS
+                if limit.type_ == Limit.Type.MEMORY:
+                    assert sys.platform != "win32" and resource is not None
+                    previous_soft, _ = resource.getrlimit(resource.RLIMIT_AS)
+                    resource.setrlimit(resource.RLIMIT_AS, (limit.value, -1))
+                    cleanup.append(
+                        functools.partial(
+                            resource.setrlimit,
+                            resource.RLIMIT_AS,
+                            (previous_soft, -1),
                         )
-                        resource.setrlimit(
-                            resource.RLIMIT_AS, (limit.value, -1)
-                        )
-                        cleanup.append(
-                            lambda previous_soft=previous_soft: (
-                                resource.setrlimit(
-                                    resource.RLIMIT_AS, (previous_soft, -1)
-                                )
-                            )
-                        )
+                    )
 
             result = cls.run_function(func, kwargs)
         finally:
@@ -257,6 +264,8 @@ class ProcessExecutor(ConcurrentExecutor):
             within a separate process and may not have access to the same
             resources as the main process.
         """
+        if sys.platform == "win32":
+            return
         if getattr(signal, "SIGUSR1", None) == signum:
             if cls._current_execution is None:
                 return
@@ -276,7 +285,7 @@ class ProcessExecutor(ConcurrentExecutor):
 
     async def _complete_job(
         self,
-        future: Future,
+        future: Future[tuple[QueuedJob, Any]],
         job: QueuedJob,
         exc: BaseException | None,
         result: Any,
@@ -314,7 +323,7 @@ class ProcessExecutor(ConcurrentExecutor):
         for task in self.timeouts.values():
             task.cancel()
 
-        if hasattr(signal, "SIGUSR1"):
+        if sys.platform != "win32" and hasattr(signal, "SIGUSR1"):
             for execution_id, pid in list(self.pids_for_job.items()):
                 self.pending_cancellations[execution_id] = True
                 try:
@@ -356,6 +365,7 @@ class ProcessExecutor(ConcurrentExecutor):
         self.pending_cancellations[execution_id] = True
         pid = self.pids_for_job.get(execution_id)
         if pid is not None:
+            assert sys.platform != "win32"
             try:
                 os.kill(pid, signal.SIGUSR1)
             except OSError:
@@ -373,6 +383,6 @@ class ProcessExecutor(ConcurrentExecutor):
         Default is the number of CPUs on the system.
         """
         # Only available in 3.13+
-        if hasattr(os, "process_cpu_count"):
+        if sys.version_info >= (3, 13):
             return os.process_cpu_count() or 1
         return os.cpu_count() or 1

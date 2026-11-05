@@ -6,8 +6,9 @@ import inspect
 import traceback
 import typing
 from abc import ABC
-from asyncio import Future
 from collections.abc import Callable
+from concurrent.futures import Executor as PoolExecutor
+from concurrent.futures import Future
 from datetime import UTC, datetime
 from functools import cached_property
 from typing import Any
@@ -59,9 +60,9 @@ class Executor(abc.ABC):
         return (cls.get_capabilities() & capability) == capability
 
     @abc.abstractmethod
-    async def push(self, job: QueuedJob):
+    async def push(self, job: QueuedJob) -> object:
         """
-        Push a job onto the job pool.
+        Push a job onto the job pool, returning an executor-specific handle.
         """
 
     async def on_job_starting(self, job: QueuedJob) -> QueuedJob:
@@ -359,7 +360,7 @@ class Executor(abc.ABC):
         return self.concurrency - len(self)
 
     @abc.abstractmethod
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Get the number of jobs currently within the executor.
         """
@@ -389,9 +390,11 @@ class ConcurrentExecutor(Executor, ABC):
     class with common functionality.
     """
 
+    pool: PoolExecutor
+
     def __init__(self, worker: "Worker", queue: chancy.queue.Queue):
         super().__init__(worker, queue)
-        self.jobs: dict[Future, QueuedJob] = {}
+        self.jobs: dict[Future[tuple[QueuedJob, Any]], QueuedJob] = {}
 
     def _shutdown_blocking(self):
         """Shut down the underlying pool without blocking the event loop."""
@@ -420,7 +423,9 @@ class ConcurrentExecutor(Executor, ABC):
         return list(self.jobs.values())
 
     def _on_job_completed(
-        self, future: Future, loop: asyncio.AbstractEventLoop
+        self,
+        future: Future[tuple[QueuedJob, Any]],
+        loop: asyncio.AbstractEventLoop,
     ):
         """Queue a job update before considering its future fully drained."""
         job = self.jobs.get(future)
@@ -446,7 +451,7 @@ class ConcurrentExecutor(Executor, ABC):
 
     async def _complete_job(
         self,
-        future: Future,
+        future: Future[tuple[QueuedJob, Any]],
         job: QueuedJob,
         exc: BaseException | None,
         result: Any,

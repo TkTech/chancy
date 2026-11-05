@@ -1,10 +1,10 @@
 import asyncio
 import enum
-from collections.abc import Sequence
+from collections.abc import Sequence as SequenceCollection
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import islice
-from typing import Self, TextIO
+from typing import Any, Self, TextIO
 from uuid import UUID
 
 from psycopg import AsyncCursor, sql
@@ -68,7 +68,7 @@ def _dfs_detect_cycle(
 @dataclass
 class WorkflowStep:
     #: The job to execute when this step is ready.
-    job: Job | IsAJob
+    job: Job | IsAJob[..., Any]
     #: The unique ID of the step.
     step_id: str
     #: A list of step IDs that this step depends on.
@@ -76,7 +76,7 @@ class WorkflowStep:
     #: The current state of the step.
     state: QueuedJob.State | None = QueuedJob.State.PENDING
     #: The unique ID of a running Job which is associated with this step.
-    job_id: str | None = None
+    job_id: UUID | str | None = None
 
 
 @dataclass
@@ -106,7 +106,7 @@ class Workflow:
     state: State = State.PENDING
 
     #: The unique ID of a specific run of the workflow.
-    id: str = field(default_factory=chancy_uuid)
+    id: UUID | str = field(default_factory=chancy_uuid)
     #: The time the workflow was created.
     created_at: datetime | None = None
     #: The time the workflow was last updated.
@@ -115,7 +115,7 @@ class Workflow:
     def add(
         self,
         step_id: str,
-        job: Job | IsAJob,
+        job: Job | IsAJob[..., Any],
         dependencies: list[str] | None = None,
     ) -> "Workflow":
         """
@@ -139,7 +139,7 @@ class Workflow:
 
     def add_group(
         self,
-        jobs: list[tuple[str, Job | IsAJob]],
+        jobs: list[tuple[str, Job | IsAJob[..., Any]]],
         dependencies: list[str] | None = None,
     ) -> "Workflow":
         """
@@ -229,7 +229,9 @@ class Workflow:
                 _dfs_detect_cycle(step_id, self.steps, color, path)
 
     @property
-    def steps_by_state(self) -> dict[QueuedJob.State, list[WorkflowStep]]:
+    def steps_by_state(
+        self,
+    ) -> dict[QueuedJob.State | None, list[WorkflowStep]]:
         steps_by_state = {}
         for step in self.steps.values():
             steps_by_state.setdefault(step.state, []).append(step)
@@ -663,6 +665,8 @@ class WorkflowPlugin(Plugin):
                 self._last_polled_id = self._poll_until_id = None
                 return 0
             after = until = None
+        else:
+            return 0
 
         processed = await self._process_workflows(
             cursor,
@@ -687,7 +691,7 @@ class WorkflowPlugin(Plugin):
         self,
         *,
         worker: "Worker",
-        jobs: Sequence[QueuedJob],
+        jobs: SequenceCollection[QueuedJob],
         cursor: AsyncCursor[DictRow],
     ):
         workflow_ids = dict.fromkeys(
@@ -705,7 +709,9 @@ class WorkflowPlugin(Plugin):
         )
 
     @classmethod
-    async def fetch_workflow(cls, chancy: Chancy, id_: str) -> Workflow | None:
+    async def fetch_workflow(
+        cls, chancy: Chancy, id_: UUID | str
+    ) -> Workflow | None:
         """
         Fetch a single workflow from the database.
 
@@ -718,7 +724,7 @@ class WorkflowPlugin(Plugin):
 
     @classmethod
     async def fetch_workflow_ex(
-        cls, cursor: AsyncCursor[DictRow], chancy: Chancy, id_: str
+        cls, cursor: AsyncCursor[DictRow], chancy: Chancy, id_: UUID | str
     ) -> Workflow | None:
         """
         Fetch a single workflow from the database.
@@ -740,7 +746,7 @@ class WorkflowPlugin(Plugin):
         chancy: Chancy,
         *,
         states: list[str] | None = None,
-        ids: list[str] | None = None,
+        ids: SequenceCollection[UUID | str] | None = None,
         limit: int = 100,
     ) -> list[Workflow]:
         """
@@ -771,7 +777,7 @@ class WorkflowPlugin(Plugin):
         chancy: Chancy,
         *,
         states: list[str] | None = None,
-        ids: list[str] | None = None,
+        ids: SequenceCollection[UUID | str] | None = None,
         limit: int = 100,
     ) -> list[Workflow]:
         """
@@ -859,7 +865,7 @@ class WorkflowPlugin(Plugin):
 
     @staticmethod
     async def process_workflow(
-        cursor: AsyncCursor,
+        cursor: AsyncCursor[DictRow],
         chancy: Chancy,
         workflow: Workflow,
         worker: "Worker",
@@ -905,12 +911,13 @@ class WorkflowPlugin(Plugin):
                 )
                 and step.job_id is None
             ):
+                job = step.job if isinstance(step.job, Job) else step.job.job
                 step.job_id = (
                     await chancy.push_ex(
                         cursor,
-                        step.job.with_meta(
+                        job.with_meta(
                             {
-                                **step.job.meta,
+                                **job.meta,
                                 "workflow_id": str(workflow.id),
                             }
                         ),
@@ -937,7 +944,7 @@ class WorkflowPlugin(Plugin):
         return starting_state != workflow.state or has_change
 
     @classmethod
-    async def push(cls, chancy: Chancy, workflow: Workflow) -> str:
+    async def push(cls, chancy: Chancy, workflow: Workflow) -> UUID:
         """
         Push new workflow to the database.
 
@@ -961,8 +968,8 @@ class WorkflowPlugin(Plugin):
         cursor: AsyncCursor[DictRow],
         chancy: Chancy,
         workflow: Workflow,
-        worker: "Worker" = None,
-    ) -> str:
+        worker: "Worker | None" = None,
+    ) -> UUID:
         """
         Push new workflow to the database.
 
@@ -989,8 +996,8 @@ class WorkflowPlugin(Plugin):
         cursor: AsyncCursor[DictRow],
         chancy: Chancy,
         workflow: Workflow,
-        worker: "Worker" = None,
-    ) -> str:
+        worker: "Worker | None" = None,
+    ) -> UUID:
         """Persist a validated submission or a scheduler state transition."""
         await cursor.execute(
             sql.SQL(
@@ -1018,12 +1025,15 @@ class WorkflowPlugin(Plugin):
         )
         result = await cursor.fetchone()
 
-        workflow.id = result["id"]
+        assert result is not None
+        workflow_id: UUID = result["id"]
+        workflow.id = workflow_id
         workflow.created_at = result["created_at"]
         workflow.updated_at = result["updated_at"]
         inserted = result["inserted"]
 
         for step_id, step in workflow.steps.items():
+            job = step.job if isinstance(step.job, Job) else step.job.job
             await cursor.execute(
                 sql.SQL(
                     """
@@ -1049,7 +1059,7 @@ class WorkflowPlugin(Plugin):
                 [
                     workflow.id,
                     step_id,
-                    json_dumps(step.job.pack()),
+                    json_dumps(job.pack()),
                     json_dumps(step.dependencies),
                     step.job_id,
                 ],
@@ -1064,7 +1074,7 @@ class WorkflowPlugin(Plugin):
             },
         )
 
-        return workflow.id
+        return workflow_id
 
     @staticmethod
     def generate_dot(workflow: Workflow, output: TextIO):
@@ -1091,7 +1101,11 @@ class WorkflowPlugin(Plugin):
 
         # Add nodes (steps)
         for step_id, step in workflow.steps.items():
-            color = colors.get(step.state, "lightgray")
+            color = (
+                colors.get(step.state, "lightgray")
+                if step.state is not None
+                else "lightgray"
+            )
             output.write(
                 f'  "{step_id}" [label="{step_id}\\n({step.state})",'
                 f" fillcolor={color}];\n"
@@ -1134,7 +1148,7 @@ class WorkflowPlugin(Plugin):
     async def wait_for_workflow(
         cls,
         chancy: Chancy,
-        workflow_id: str,
+        workflow_id: UUID | str,
         *,
         interval: int = 1,
         timeout: float | None = None,
@@ -1244,11 +1258,13 @@ class Sequence:
             asyncio.run(main())
     """
 
-    def __init__(self, name: str, jobs: list[Job | IsAJob] | None = None):
+    def __init__(
+        self, name: str, jobs: list[Job | IsAJob[..., Any]] | None = None
+    ):
         self.name = name
         self.jobs = jobs or []
 
-    def add(self, job: Job | IsAJob) -> Self:
+    def add(self, job: Job | IsAJob[..., Any]) -> Self:
         """
         Add a job to the sequence.
 
@@ -1266,7 +1282,7 @@ class Sequence:
         self.jobs.append(job)
         return self
 
-    async def push(self, chancy: Chancy) -> str:
+    async def push(self, chancy: Chancy) -> UUID:
         """
         Push a sequence to the database.
 

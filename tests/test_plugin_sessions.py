@@ -150,7 +150,7 @@ def test_registration_validation(chancy_just_app):
         with pytest.raises(ValueError):
             session.periodic("invalid", AsyncMock(), interval=interval)
     with pytest.raises(TypeError):
-        session.periodic("invalid", AsyncMock(), interval=1, authority="leader")
+        session.periodic("invalid", AsyncMock(), interval=1, authority="leader")  # pyrefly: ignore[bad-argument-type]
     session.periodic("one", AsyncMock(), interval=1)
     with pytest.raises(ValueError, match="Duplicate"):
         session.service("one", AsyncMock())
@@ -168,7 +168,7 @@ async def test_failure_is_logged_before_wait_and_still_propagates(
     session = PluginSession(SessionPlugin(), worker)
     error = ValueError("broken")
     if source == "plugin":
-        operation = session.service("broken", AsyncMock(side_effect=error))
+        session.service("broken", AsyncMock(side_effect=error))
         session.start()
         task_name = "test.session:broken"
     else:
@@ -188,7 +188,7 @@ async def test_failure_is_logged_before_wait_and_still_propagates(
             await worker.wait_for_shutdown()
         assert raised.value is error
         if source == "plugin":
-            assert operation.state == "failed"
+            assert session.operations["broken"].state == "failed"
         assert len([r for r in caplog.records if r.name == logger.name]) == 1
     finally:
         await worker.manager.cancel_all()
@@ -280,10 +280,10 @@ async def test_removed_plugin_methods_fail_before_setup(
 
 @pytest.mark.asyncio
 async def test_old_cleanup_signature_fails_before_setup(chancy_just_app):
-    class OldCleanup(SessionPlugin):
-        async def cleanup(self, chancy):
-            raise AssertionError("must not run")
+    async def cleanup(self, chancy):
+        raise AssertionError("must not run")
 
+    OldCleanup = type("OldCleanup", (SessionPlugin,), {"cleanup": cleanup})
     plugin = OldCleanup()
     plugin.setup = AsyncMock()
     chancy_just_app.plugins = {plugin.get_identifier(): plugin}
@@ -295,8 +295,10 @@ async def test_old_cleanup_signature_fails_before_setup(chancy_just_app):
 
 @pytest.mark.asyncio
 async def test_cleanup_ex_is_not_a_reserved_plugin_hook(chancy_just_app):
-    plugin = SessionPlugin()
-    plugin.cleanup_ex = Mock()
+    class CustomPlugin(SessionPlugin):
+        cleanup_ex = Mock()
+
+    plugin = CustomPlugin()
     plugin.setup = AsyncMock(side_effect=ValueError("setup reached"))
     chancy_just_app.plugins = {plugin.get_identifier(): plugin}
     chancy_just_app.is_up_to_date = AsyncMock(return_value=True)

@@ -5,7 +5,7 @@ from datetime import datetime
 from starlette.authentication import requires
 from starlette.responses import Response
 
-from chancy.plugins.api.plugin import ApiPlugin
+from chancy.plugins.api.plugin import ApiPlugin, RouteT
 from chancy.utils import json_dumps
 
 
@@ -17,7 +17,7 @@ class MetricsApiPlugin(ApiPlugin):
     def name(self):
         return "metrics"
 
-    def routes(self):
+    def routes(self) -> list[RouteT]:
         return [
             {
                 "path": "/api/v1/metrics",

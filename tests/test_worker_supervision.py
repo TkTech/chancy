@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from psycopg import OperationalError
+from starlette.requests import Request
 
 from chancy import Queue, Worker
 from chancy.plugin import Plugin
@@ -86,7 +87,7 @@ async def test_failure_stops_embedded_worker_before_reporting_to_waiters(
     assert unit_worker.shutdown_event.is_set()
     assert not unit_worker.healthy
     response = await CoreApiPlugin.health(
-        None, chancy=unit_worker.chancy, worker=unit_worker
+        Request({"type": "http"}), chancy=unit_worker.chancy, worker=unit_worker
     )
     assert response.status_code == 503
     waiters = [
@@ -420,6 +421,7 @@ async def test_late_resource_cleanup_failure_remains_reported(
         with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
             await unit_worker.stop()
         blocked.release.set()
+        assert session._close_task is not None
         await asyncio.gather(session._close_task, return_exceptions=True)
         for _ in range(2):
             with pytest.raises(ValueError) as caught:
@@ -736,12 +738,11 @@ async def test_stop_retry_does_not_replace_an_existing_waiters_failure(
         raise failure
 
     unit_worker.flush = first_attempt
-    retry = None
+    retry_started = asyncio.get_running_loop().create_future()
 
     def retry_stop(task):
-        nonlocal retry
         unit_worker.flush = AsyncMock()
-        retry = asyncio.create_task(unit_worker.stop())
+        retry_started.set_result(asyncio.create_task(unit_worker.stop()))
 
     unit_worker._begin_stop(1)
     unit_worker._stop_task.add_done_callback(retry_stop)
@@ -751,7 +752,7 @@ async def test_stop_retry_does_not_replace_an_existing_waiters_failure(
     with pytest.raises(ValueError) as caught:
         await original
     assert caught.value is failure
-    assert retry is not None
+    retry = await retry_started
     assert await retry is True
 
 

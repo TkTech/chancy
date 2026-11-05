@@ -636,7 +636,7 @@ class Worker:
                     self._executors[queue.name] = executor
 
                     concurrency = queue.concurrency
-                    if queue.concurrency is None:
+                    if concurrency is None:
                         concurrency = executor.get_default_concurrency()
 
                     await self.hub.emit(
@@ -1145,6 +1145,7 @@ class Worker:
                 # check if there's any remaining capacity in the current
                 # window.
                 if queue.rate_limit:
+                    assert queue.rate_limit_window is not None
                     now = int(time.time())
                     window_start = now - (now % queue.rate_limit_window)
 
@@ -1173,6 +1174,7 @@ class Worker:
                     )
 
                     result = await cursor.fetchone()
+                    assert result is not None
                     current_count = result["count"]
 
                     # If we've hit the rate limit, return early with no jobs

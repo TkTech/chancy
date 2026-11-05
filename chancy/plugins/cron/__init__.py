@@ -1,6 +1,7 @@
 import json
 from copy import copy
 from datetime import UTC, datetime, timedelta
+from typing import Any, TypedDict
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from croniter import CroniterBadDateError, croniter
@@ -15,6 +16,15 @@ from chancy.session import OperationContext, PluginSession
 DEFAULT_TIMEZONE = ZoneInfo("Etc/UTC")
 
 
+class Schedule(TypedDict):
+    unique_key: str
+    job: Job
+    cron: str
+    timezone: str
+    last_run: datetime | None
+    next_run: datetime
+
+
 def _is_repeated_wall_time(dt: datetime) -> bool:
     """
     Whether `dt` is the second occurrence of a wall time that happens twice
@@ -22,8 +32,11 @@ def _is_repeated_wall_time(dt: datetime) -> bool:
     October in Europe/Paris.
     """
     first_offset = dt.replace(fold=0).utcoffset()
+    second_offset = dt.replace(fold=1).utcoffset()
     return (
-        first_offset > dt.replace(fold=1).utcoffset()
+        first_offset is not None
+        and second_offset is not None
+        and first_offset > second_offset
         and dt.utcoffset() != first_offset
     )
 
@@ -352,7 +365,7 @@ class Cron(Plugin):
     @classmethod
     async def get_schedules(
         cls, chancy: Chancy, *, unique_keys: list[str] | None = None
-    ) -> dict[str, dict]:
+    ) -> dict[str, Schedule]:
         """
         Get scheduled cron jobs by their unique keys.
 
@@ -364,7 +377,7 @@ class Cron(Plugin):
             all_schedules = await Cron.get_schedules(chancy)
 
             # Get a specific job
-            job_schedule = await Cron.get_schedules(chancy, ["hello_world_cron"])
+            job_schedule = await Cron.get_schedules(chancy, unique_keys=["hello_world_cron"])
 
         :param chancy: The Chancy application.
         :param unique_keys: Optional list of unique keys to filter by.
@@ -441,7 +454,7 @@ class Cron(Plugin):
         cls,
         chancy: Chancy,
         cron: str,
-        *jobs: Job | IsAJob,
+        *jobs: Job | IsAJob[..., Any],
         timezone: ZoneInfo = DEFAULT_TIMEZONE,
     ):
         """
@@ -460,8 +473,10 @@ class Cron(Plugin):
         :param timezone: The timezone in which to evaluate the cron
                          expression. Defaults to UTC.
         """
-        jobs = [job if isinstance(job, Job) else job.job for job in jobs]
-        for job in jobs:
+        scheduled_jobs = [
+            job if isinstance(job, Job) else job.job for job in jobs
+        ]
+        for job in scheduled_jobs:
             if not job.unique_key:
                 raise ValueError(
                     "Scheduling jobs for execution on a cron-like schedule"
@@ -507,6 +522,6 @@ class Cron(Plugin):
                         "timezone": timezone.key,
                         "next_run": next_run,
                     }
-                    for job in jobs
+                    for job in scheduled_jobs
                 ],
             )

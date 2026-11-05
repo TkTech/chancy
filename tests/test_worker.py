@@ -1,6 +1,7 @@
 import asyncio
 import time
 from unittest.mock import Mock
+from uuid import UUID
 
 import pytest
 from psycopg import AsyncCursor, OperationalError, sql
@@ -38,12 +39,15 @@ async def test_flush_persists_pending_updates(
     await chancy.declare(Queue("default"))
     ref = await chancy.push(job_to_run.job)
     queued_job = await chancy.get_job(ref)
+    assert queued_job is not None
 
     for revision in (1, 2):
         update = queued_job.with_meta({"revision": revision})
         assert await worker_no_start.queue_update(update)
         await worker_no_start.flush()
-        assert (await chancy.get_job(ref)).meta == update.meta
+        saved = await chancy.get_job(ref)
+        assert saved is not None
+        assert saved.meta == update.meta
 
 
 @pytest.mark.asyncio
@@ -56,10 +60,12 @@ async def test_batch_hooks_preserve_post_commit_hook_semantics(
         await chancy.push(job_to_run.job.with_unique_key(key))
         for key in ("b", "a")
     ]
-    updates = [
-        (await chancy.get_job(ref)).with_meta({"saved": True}) for ref in refs
-    ]
-    calls = []
+    updates = []
+    for ref in refs:
+        queued = await chancy.get_job(ref)
+        assert queued is not None
+        updates.append(queued.with_meta({"saved": True}))
+    calls: list[tuple[str] | tuple[str, UUID]] = []
 
     class LegacyRecorder(Plugin):
         @staticmethod
@@ -69,7 +75,9 @@ async def test_batch_hooks_preserve_post_commit_hook_semantics(
         async def on_job_updated(self, *, worker, job):
             # A different connection must already see the committed updates.
             for ref in refs:
-                assert (await chancy.get_job(ref)).meta == {"saved": True}
+                saved = await chancy.get_job(ref)
+                assert saved is not None
+                assert saved.meta == {"saved": True}
             calls.append((type(self).__name__, job.id))
 
     class BatchRecorder(LegacyRecorder):
@@ -85,7 +93,9 @@ async def test_batch_hooks_preserve_post_commit_hook_semantics(
                 for row in await cursor.fetchall()
             )
             for ref in refs:
-                assert (await chancy.get_job(ref)).meta == {}
+                saved = await chancy.get_job(ref)
+                assert saved is not None
+                assert saved.meta == {}
             calls.append(("batch",))
 
     chancy.plugins["batch_recorder"] = BatchRecorder()
@@ -109,7 +119,9 @@ async def test_flush_preserves_updates_after_database_error(
     """An update survives a failed flush and is persisted on retry."""
     await chancy.declare(Queue("default"))
     ref = await chancy.push(job_to_run.job)
-    update = (await chancy.get_job(ref)).with_meta({"flushed": True})
+    queued = await chancy.get_job(ref)
+    assert queued is not None
+    update = queued.with_meta({"flushed": True})
     await worker_no_start.queue_update(update)
 
     with monkeypatch.context() as patch:
@@ -122,7 +134,9 @@ async def test_flush_preserves_updates_after_database_error(
             await worker_no_start.flush()
 
     await worker_no_start.flush()
-    assert (await chancy.get_job(ref)).meta == update.meta
+    saved = await chancy.get_job(ref)
+    assert saved is not None
+    assert saved.meta == update.meta
 
 
 @pytest.mark.asyncio
@@ -135,10 +149,11 @@ async def test_flush_preserves_update_order_on_retry(
     ref = await chancy.push(job_to_run.job.with_unique_key("b"))
     other_ref = await chancy.push(job_to_run.job.with_unique_key("a"))
     queued_job = await chancy.get_job(ref)
+    assert queued_job is not None
     await worker_no_start.queue_update(queued_job.with_meta({"revision": 1}))
-    await worker_no_start.queue_update(
-        (await chancy.get_job(other_ref)).with_meta({"revision": 1})
-    )
+    other_job = await chancy.get_job(other_ref)
+    assert other_job is not None
+    await worker_no_start.queue_update(other_job.with_meta({"revision": 1}))
 
     async def interrupt_write(*args, **kwargs):
         await worker_no_start.queue_update(
@@ -152,8 +167,12 @@ async def test_flush_preserves_update_order_on_retry(
             await worker_no_start.flush()
 
     await worker_no_start.flush()
-    assert (await chancy.get_job(ref)).meta == {"revision": 2}
-    assert (await chancy.get_job(other_ref)).meta == {"revision": 1}
+    saved = await chancy.get_job(ref)
+    other_saved = await chancy.get_job(other_ref)
+    assert saved is not None
+    assert other_saved is not None
+    assert saved.meta == {"revision": 2}
+    assert other_saved.meta == {"revision": 1}
 
 
 @pytest.mark.asyncio
@@ -188,11 +207,13 @@ async def test_queue_update(chancy: Chancy, worker: Worker):
 
     # The first job should still complete successfully
     job1 = await chancy.wait_for_job(ref1, timeout=10)
+    assert job1 is not None
     assert job1.state == QueuedJob.State.SUCCEEDED
 
     # Push another job to the queue with the new configuration
     ref2 = await chancy.push(job_to_run.job.with_queue("test_update"))
     job2 = await chancy.wait_for_job(ref2, timeout=10)
+    assert job2 is not None
     assert job2.state == QueuedJob.State.SUCCEEDED
 
     # Check the executor has been updated in the worker
@@ -218,6 +239,7 @@ async def test_queue_removal(chancy: Chancy, worker: Worker):
     # Push a job and let it complete
     ref = await chancy.push(job_to_run.job.with_queue("test_removal"))
     j = await chancy.wait_for_job(ref, timeout=30)
+    assert j is not None
     assert j.state == QueuedJob.State.SUCCEEDED
 
     # Verify the executor exists
@@ -415,5 +437,6 @@ async def test_immediate_processing(chancy: Chancy, worker: Worker):
     # but enough headroom for slow CI runners (process spawn, update
     # batching, scheduling).
     result = await chancy.wait_for_job(j, interval=1, timeout=15)
+    assert result is not None
 
     assert result.state == QueuedJob.State.SUCCEEDED

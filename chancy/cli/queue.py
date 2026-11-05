@@ -53,7 +53,7 @@ async def push(
     job: str,
     queue: str,
     priority: int,
-    unique_key: str,
+    unique_key: str | None,
     max_attempts: int,
     kwargs: str | None = None,
 ):
@@ -67,8 +67,11 @@ async def push(
     """
     chancy: Chancy = ctx.obj["app"]
 
-    if kwargs is not None:
-        kwargs = json.loads(kwargs)
+    job_kwargs = json.loads(kwargs) if kwargs is not None else {}
+    if not isinstance(job_kwargs, dict):
+        raise click.BadParameter(
+            "Expected a JSON object", param_hint="--kwargs"
+        )
 
     async with chancy:
         await chancy.push(
@@ -78,7 +81,7 @@ async def push(
                 priority=priority,
                 unique_key=unique_key,
                 max_attempts=max_attempts,
-                kwargs=kwargs,
+                kwargs=job_kwargs,
             )
         )
 
@@ -142,11 +145,11 @@ async def declare_queue(
     ctx: click.Context,
     name: str,
     concurrency: int | None,
-    executor: str | None,
+    executor: str,
     rate_limit: int | None,
     rate_limit_window: int | None,
-    polling_interval: int | None,
-    tags: list[str] | None,
+    polling_interval: int,
+    tags: tuple[str, ...],
 ):
     """
     Declare a new queue.

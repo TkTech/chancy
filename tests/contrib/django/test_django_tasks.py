@@ -200,6 +200,26 @@ async def test_get_result(chancy, worker, django_tasks_settings):
 
 @pytest.mark.django_db
 @pytest.mark.asyncio
+async def test_get_result_rejects_non_django_jobs(
+    chancy, django_tasks_settings
+):
+    from django.tasks.exceptions import TaskResultDoesNotExist
+
+    from chancy import Job, Queue
+    from chancy.contrib.django.backend import ChancyBackend
+
+    await chancy.declare(Queue("default"))
+    reference = await chancy.push(Job.from_func(simple_task))
+    backend = ChancyBackend(
+        "default",
+        {"OPTIONS": django_tasks_settings.TASKS["default"]["OPTIONS"]},
+    )
+    with pytest.raises(TaskResultDoesNotExist):
+        await backend.aget_result(str(reference.identifier))
+
+
+@pytest.mark.django_db
+@pytest.mark.asyncio
 async def test_task_with_context(chancy, worker, django_tasks_settings):
     """Test that tasks with takes_context=True receive a TaskContext."""
     from django.tasks import task

@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import httpx
@@ -29,7 +29,7 @@ class Proxy:
         response.raise_for_status()
 
     @asynccontextmanager
-    async def disconnected(self) -> AsyncIterator[None]:
+    async def disconnected(self) -> AsyncGenerator[None, None]:
         await self.enable(False)
         try:
             yield
@@ -39,7 +39,7 @@ class Proxy:
     @asynccontextmanager
     async def toxic(
         self, kind: str, *, stream: str = "downstream", **attributes: float
-    ) -> AsyncIterator[None]:
+    ) -> AsyncGenerator[None, None]:
         name = f"{kind}_{stream}"
         response = await self.client.post(
             f"{self.path}/toxics",

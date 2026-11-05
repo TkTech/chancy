@@ -7,9 +7,11 @@ from typing import (
     Any,
     ParamSpec,
     Protocol,
+    Self,
     TypedDict,
     TypeVar,
-    Union,
+    Unpack,
+    cast,
 )
 from uuid import UUID
 
@@ -62,7 +64,7 @@ class Reference:
     def __repr__(self):
         return f"<Reference({self.identifier!r})>"
 
-    def __eq__(self, other: Union[str, UUID, "Reference"]) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, Reference):
             return self.identifier == other.identifier
         elif isinstance(other, str):
@@ -95,6 +97,17 @@ class Limit:
 
     def serialize(self) -> dict:
         return {"t": self.type_.value, "v": self.value}
+
+
+class JobOptions(TypedDict, total=False):
+    queue: str
+    kwargs: dict[str, Any] | None
+    priority: int
+    max_attempts: int
+    scheduled_at: datetime
+    limits: list[Limit]
+    unique_key: str | None
+    meta: dict[str, Any]
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -132,7 +145,9 @@ class Job:
     meta: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @classmethod
-    def from_func(cls, func, **kwargs):
+    def from_func(
+        cls, func: Callable[..., Any], **kwargs: Unpack[JobOptions]
+    ) -> Self:
         """
         Create a job from a function, attempting to determine the function's
         importable name automatically.
@@ -146,28 +161,28 @@ class Job:
         """
         return cls(func=importable_name(func), **kwargs)
 
-    def with_priority(self, priority: int) -> "Job":
+    def with_priority(self, priority: int) -> Self:
         return dataclasses.replace(self, priority=priority)
 
-    def with_max_attempts(self, max_attempts: int) -> "Job":
+    def with_max_attempts(self, max_attempts: int) -> Self:
         return dataclasses.replace(self, max_attempts=max_attempts)
 
-    def with_scheduled_at(self, scheduled_at: datetime) -> "Job":
+    def with_scheduled_at(self, scheduled_at: datetime) -> Self:
         return dataclasses.replace(self, scheduled_at=scheduled_at)
 
-    def with_limits(self, limits: list[Limit]) -> "Job":
+    def with_limits(self, limits: list[Limit]) -> Self:
         return dataclasses.replace(self, limits=limits)
 
-    def with_kwargs(self, **kwargs) -> "Job":
+    def with_kwargs(self, **kwargs: Any) -> Self:
         return dataclasses.replace(self, kwargs=kwargs)
 
-    def with_unique_key(self, unique_key: str) -> "Job":
+    def with_unique_key(self, unique_key: str) -> Self:
         return dataclasses.replace(self, unique_key=unique_key)
 
-    def with_queue(self, queue: str) -> "Job":
+    def with_queue(self, queue: str) -> Self:
         return dataclasses.replace(self, queue=queue)
 
-    def with_meta(self, meta: dict[str, Any]) -> "Job":
+    def with_meta(self, meta: dict[str, Any]) -> Self:
         return dataclasses.replace(self, meta=meta)
 
     def pack(self) -> dict:
@@ -313,7 +328,7 @@ class IsAJob(Protocol[P, R]):
 
 
 def job(
-    **options,
+    **options: Unpack[JobOptions],
 ) -> Callable[[Callable[P, R]], IsAJob[P, R]]:
     """
     A decorator that wraps a function and turns it into a job.
@@ -341,7 +356,8 @@ def job(
     """
 
     def decorator(func: Callable[P, R]) -> IsAJob[P, R]:
-        func.job = Job.from_func(func, **options)
-        return func
+        decorated = cast(IsAJob[P, R], func)
+        decorated.job = Job.from_func(func, **options)
+        return decorated
 
     return decorator

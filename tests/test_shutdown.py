@@ -5,13 +5,14 @@ import threading
 import time
 from concurrent.futures import Future
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
 from psycopg import OperationalError
 
 from chancy import Chancy, Queue, QueuedJob, Reference, Worker, job
+from chancy.executors.base import Executor
 from chancy.executors.thread import ThreadedExecutor
 from tests.helpers import wait_until
 
@@ -181,7 +182,7 @@ async def test_shutdown_timeout_still_tears_down_worker_tasks(
     updates_task_cancelled = asyncio.Event()
 
     async def maintain_blocked_queue():
-        worker._executors["blocked"] = object()
+        worker._executors["blocked"] = Mock(spec=Executor)
         try:
             await asyncio.Future()
         finally:
@@ -212,10 +213,13 @@ async def test_shutdown_timeout_still_tears_down_worker_tasks(
 
 @pytest.mark.asyncio
 async def test_threaded_executor_shutdown_does_not_block_event_loop(
+    chancy_just_app,
     monkeypatch,
 ):
     """Synchronous pool teardown must not run on the event-loop thread."""
-    executor = ThreadedExecutor(object(), Queue("shutdown", concurrency=1))
+    executor = ThreadedExecutor(
+        Worker(chancy_just_app), Queue("shutdown", concurrency=1)
+    )
     shutdown = executor.pool.shutdown
     event_loop_progressed = asyncio.Event()
 
@@ -233,9 +237,13 @@ async def test_threaded_executor_shutdown_does_not_block_event_loop(
 
 
 @pytest.mark.asyncio
-async def test_forced_threaded_executor_shutdown_does_not_wait(monkeypatch):
+async def test_forced_threaded_executor_shutdown_does_not_wait(
+    chancy_just_app, monkeypatch
+):
     """Forced teardown abandons running threads without a background waiter."""
-    executor = ThreadedExecutor(object(), Queue("shutdown", concurrency=1))
+    executor = ThreadedExecutor(
+        Worker(chancy_just_app), Queue("shutdown", concurrency=1)
+    )
     shutdown = executor.pool.shutdown
     calls = []
 
@@ -254,10 +262,13 @@ async def test_forced_threaded_executor_shutdown_does_not_wait(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_executor_tracks_job_until_completion_update_is_queued(
+    chancy_just_app,
     monkeypatch,
 ):
     """A finished future remains in the drain until its update is queued."""
-    executor = ThreadedExecutor(object(), Queue("shutdown", concurrency=1))
+    executor = ThreadedExecutor(
+        Worker(chancy_just_app), Queue("shutdown", concurrency=1)
+    )
     shutdown = executor.pool.shutdown
     completion_started = asyncio.Event()
     release_completion = asyncio.Event()
@@ -329,6 +340,7 @@ async def test_worker_flushes_completed_job_updates_before_stopping(
         assert await asyncio.to_thread(_job_started.wait, 5)
 
         running_job = await chancy.get_job(ref)
+        assert running_job is not None
         assert running_job.state == QueuedJob.State.RUNNING
 
         stop_task = asyncio.create_task(worker.stop(timeout=2))
@@ -339,6 +351,7 @@ async def test_worker_flushes_completed_job_updates_before_stopping(
         assert await stop_task is True
 
         completed_job = await chancy.get_job(ref)
+        assert completed_job is not None
         assert completed_job.state == QueuedJob.State.SUCCEEDED
     finally:
         _job_release.set()
@@ -352,8 +365,10 @@ async def test_shutdown_persists_updates_while_jobs_drain(
     """A draining job can observe another job's saved completion."""
     await chancy.declare(Queue("default", tags={"^never$"}))
     dependency = await chancy.push(_cancel_during_shutdown.job)
+    dependency_job = await chancy.get_job(dependency)
+    assert dependency_job is not None
     completed = dataclasses.replace(
-        await chancy.get_job(dependency), state=QueuedJob.State.SUCCEEDED
+        dependency_job, state=QueuedJob.State.SUCCEEDED
     )
     await chancy.declare(
         Queue("waiting", executor=Chancy.Executor.Async, polling_interval=1)
@@ -376,6 +391,7 @@ async def test_shutdown_persists_updates_while_jobs_drain(
 
         assert await stop_task is True
         result = await chancy.get_job(waiting)
+        assert result is not None
         assert result.state == QueuedJob.State.SUCCEEDED
 
 
@@ -411,6 +427,7 @@ async def test_worker_abandons_thread_completion_after_timeout(chancy: Chancy):
     try:
         await wait_until(lambda: queue_name in worker.executors, timeout=10)
         executor = worker.executors[queue_name]
+        assert isinstance(executor, ThreadedExecutor)
         ref = await chancy.push(
             _finish_after_shutdown.job.with_queue(queue_name)
         )
@@ -425,6 +442,7 @@ async def test_worker_abandons_thread_completion_after_timeout(chancy: Chancy):
         assert worker.outgoing.empty()
 
         abandoned_job = await chancy.get_job(ref)
+        assert abandoned_job is not None
         assert abandoned_job.state == QueuedJob.State.RUNNING
     finally:
         _zombie_release.set()
@@ -474,6 +492,7 @@ async def test_worker_abandons_async_completion_after_timeout(chancy: Chancy):
         assert worker.outgoing.empty()
 
         abandoned_job = await chancy.get_job(ref)
+        assert abandoned_job is not None
         assert abandoned_job.state == QueuedJob.State.RUNNING
     finally:
         await worker.stop()

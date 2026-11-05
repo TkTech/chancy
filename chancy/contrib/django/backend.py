@@ -60,8 +60,9 @@ ASYNC_WRAPPER_FUNC = (
 )
 
 
+# Django freezes TaskResult, but django-stubs 6.1.2 omits frozen=True.
 @dataclass(frozen=True, kw_only=True)
-class ChancyTaskResult(TaskResult):
+class ChancyTaskResult(TaskResult):  # pyrefly: ignore[invalid-inheritance]
     """
     A TaskResult subclass that allows setting attempts and return_value directly.
     """
@@ -101,8 +102,9 @@ def _build_task_result_from_queued_job(
         for err in job.errors
     ]
 
-    args = job.kwargs.get("_args", [])
-    task_kwargs = job.kwargs.get("_kwargs", {})
+    kwargs = job.kwargs or {}
+    args = kwargs.get("_args", [])
+    task_kwargs = kwargs.get("_kwargs", {})
 
     return ChancyTaskResult(
         task=task,
@@ -136,12 +138,6 @@ class ChancyBackend(BaseTaskBackend):
         super().__init__(alias, params)
         self.options = dict(self.options)
         self._default_queue: str = self.options.pop("queue", "default")
-
-    @cached_property
-    def task_class(self):
-        from django.tasks import Task
-
-        return Task
 
     @cached_property
     def chancy(self) -> Chancy:
@@ -246,7 +242,7 @@ class ChancyBackend(BaseTaskBackend):
         async with self.chancy:
             job = await self.chancy.get_job(Reference(result_id))
 
-        if job is None:
+        if job is None or job.kwargs is None or "_task_path" not in job.kwargs:
             raise TaskResultDoesNotExist(result_id)
 
         func = import_string(job.kwargs["_task_path"])

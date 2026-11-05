@@ -3,9 +3,18 @@ import datetime
 import enum
 import functools
 import logging
-from collections.abc import AsyncGenerator, Iterable, Iterator
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Iterable,
+    Iterator,
+    Sequence,
+)
 from functools import cache, cached_property
-from typing import Any
+from typing import Any, Concatenate, ParamSpec, TypeVar, cast
 
 from psycopg import AsyncCursor, Cursor, sql
 from psycopg.rows import DictRow, dict_row
@@ -24,6 +33,9 @@ from chancy.utils import (
     json_dumps,
     lock_order_key,
 )
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 @cache
@@ -132,7 +144,9 @@ class Chancy:
         SubInterpreter = "chancy.executors.sub.SubInterpreterExecutor"
 
     @staticmethod
-    def _ensure_pool_is_open(f):
+    def _ensure_pool_is_open(
+        f: Callable[Concatenate["Chancy", P], Awaitable[R]],
+    ) -> Callable[Concatenate["Chancy", P], Coroutine[Any, Any, R]]:
         """
         A decorator which ensures the connection pool is open before calling
         the wrapped function.
@@ -142,14 +156,18 @@ class Chancy:
         """
 
         @functools.wraps(f)
-        async def wrapper(self, *args, **kwargs):
+        async def wrapper(
+            self: "Chancy", *args: P.args, **kwargs: P.kwargs
+        ) -> R:
             await self.pool.open()
             return await f(self, *args, **kwargs)
 
         return wrapper
 
     @staticmethod
-    def _ensure_sync_pool_is_open(f):
+    def _ensure_sync_pool_is_open(
+        f: Callable[Concatenate["Chancy", P], R],
+    ) -> Callable[Concatenate["Chancy", P], R]:
         """
         A decorator which ensures the connection pool is open before calling
         the wrapped function.
@@ -159,14 +177,16 @@ class Chancy:
         """
 
         @functools.wraps(f)
-        def wrapper(self, *args, **kwargs):
+        def wrapper(self: "Chancy", *args: P.args, **kwargs: P.kwargs) -> R:
             self.sync_pool.open()
             return f(self, *args, **kwargs)
 
         return wrapper
 
     @staticmethod
-    def _ensure_pool_is_open_async_iter(f):
+    def _ensure_pool_is_open_async_iter(
+        f: Callable[Concatenate["Chancy", P], AsyncIterator[R]],
+    ) -> Callable[Concatenate["Chancy", P], AsyncGenerator[R, None]]:
         """
         A decorator which ensures the connection pool is open before calling
         the wrapped function.
@@ -176,7 +196,9 @@ class Chancy:
         """
 
         @functools.wraps(f)
-        async def wrapper(self, *args, **kwargs):
+        async def wrapper(
+            self: "Chancy", *args: P.args, **kwargs: P.kwargs
+        ) -> AsyncGenerator[R, None]:
             await self.pool.open()
             async for record in f(self, *args, **kwargs):
                 yield record
@@ -466,14 +488,8 @@ class Chancy:
         )
 
         result = await cursor.fetchone()
-        return Queue(
-            **{
-                **result,
-                "name": queue.name,
-                "tags": set(result["tags"]),
-                "state": Queue.State(result["state"]),
-            }
-        )
+        assert result is not None
+        return Queue.unpack({**result, "name": queue.name})
 
     def sync_declare_ex(
         self,
@@ -508,14 +524,8 @@ class Chancy:
         )
 
         result = cursor.fetchone()
-        return Queue(
-            **{
-                **result,
-                "name": queue.name,
-                "tags": set(result["tags"]),
-                "state": Queue.State(result["state"]),
-            }
-        )
+        assert result is not None
+        return Queue.unpack({**result, "name": queue.name})
 
     @_ensure_pool_is_open
     async def push(self, job: Job | IsAJob[..., Any]) -> Reference:
@@ -553,7 +563,7 @@ class Chancy:
 
     @_ensure_pool_is_open
     async def push_ex(
-        self, cursor: AsyncCursor, job: Job | IsAJob[..., Any]
+        self, cursor: AsyncCursor[DictRow], job: Job | IsAJob[..., Any]
     ) -> Reference:
         """
         Push a job onto the queue using a specific cursor.
@@ -569,7 +579,7 @@ class Chancy:
         return (await self.push_many_ex(cursor, [job]))[0]
 
     @_ensure_sync_pool_is_open
-    def sync_push(self, job: Job) -> Reference:
+    def sync_push(self, job: Job | IsAJob[..., Any]) -> Reference:
         """
         Synchronously push a job onto the queue.
 
@@ -602,7 +612,7 @@ class Chancy:
 
     @_ensure_pool_is_open_async_iter
     async def push_many(
-        self, jobs: list[Job], *, batch_size: int = 1000
+        self, jobs: Sequence[Job | IsAJob[..., Any]], *, batch_size: int = 1000
     ) -> AsyncGenerator[list[Reference], None]:
         """
         Push multiple jobs onto the queue.
@@ -640,7 +650,7 @@ class Chancy:
 
     @_ensure_sync_pool_is_open
     def sync_push_many(
-        self, jobs: list[Job | IsAJob[..., Any]], *, batch_size: int = 1000
+        self, jobs: Sequence[Job | IsAJob[..., Any]], *, batch_size: int = 1000
     ) -> Iterator[list[Reference]]:
         """
         Synchronously push multiple jobs onto the queue.
@@ -669,7 +679,9 @@ class Chancy:
                     yield self.sync_push_many_ex(cursor, chunk)
 
     async def push_many_ex(
-        self, cursor: AsyncCursor[DictRow], jobs: list[Job | IsAJob[..., Any]]
+        self,
+        cursor: AsyncCursor[DictRow],
+        jobs: Sequence[Job | IsAJob[..., Any]],
     ) -> list[Reference]:
         """
         Push multiple jobs onto the queue using a specific cursor.
@@ -701,6 +713,7 @@ class Chancy:
                 self._get_job_params(job),
             )
             record = await cursor.fetchone()
+            assert record is not None
             references[index] = Reference(record["id"])
 
         if self.notifications:
@@ -710,10 +723,11 @@ class Chancy:
             }:
                 await self.notify(cursor, "queue.pushed", {"q": queue})
 
-        return references
+        # _in_lock_order visits every input index exactly once.
+        return cast(list[Reference], references)
 
     def sync_push_many_ex(
-        self, cursor: Cursor, jobs: list[Job]
+        self, cursor: Cursor[DictRow], jobs: Sequence[Job | IsAJob[..., Any]]
     ) -> list[Reference]:
         """
         Synchronously push multiple jobs onto the queue using a specific cursor.
@@ -738,12 +752,17 @@ class Chancy:
                 self._get_job_params(job),
             )
             record = cursor.fetchone()
+            assert record is not None
             references[index] = Reference(record["id"])
 
-        for queue in {job.queue for job in jobs}:
-            self.sync_notify(cursor, "queue.pushed", {"q": queue})
+        if self.notifications:
+            for queue in {
+                job.queue if isinstance(job, Job) else job.job.queue
+                for job in jobs
+            }:
+                self.sync_notify(cursor, "queue.pushed", {"q": queue})
 
-        return references
+        return cast(list[Reference], references)
 
     @_ensure_pool_is_open
     async def get_job(self, ref: Reference) -> QueuedJob | None:
@@ -1115,7 +1134,7 @@ class Chancy:
             return [record async for record in cursor]
 
     async def notify(
-        self, cursor: AsyncCursor[DictRow], event: str, payload: dict[str, Any]
+        self, cursor: AsyncCursor[Any], event: str, payload: dict[str, Any]
     ):
         """
         Send a notification via Postgres NOTIFY/LISTEN to all other listening
@@ -1132,7 +1151,7 @@ class Chancy:
 
     async def notify_many(
         self,
-        cursor: AsyncCursor[DictRow],
+        cursor: AsyncCursor[Any],
         events: Iterable[tuple[str, dict[str, Any]]],
     ):
         """
@@ -1159,7 +1178,9 @@ class Chancy:
             [f"{self.prefix}events", payloads],
         )
 
-    def sync_notify(self, cursor: Cursor, event: str, payload: dict[str, Any]):
+    def sync_notify(
+        self, cursor: Cursor[Any], event: str, payload: dict[str, Any]
+    ):
         """
         Send a notification via Postgres NOTIFY/LISTEN to all other listening
         workers.
@@ -1532,7 +1553,7 @@ class Chancy:
 
     @staticmethod
     def _in_lock_order(
-        jobs: list[Job | IsAJob[..., Any]],
+        jobs: Sequence[Job | IsAJob[..., Any]],
     ) -> list[tuple[int, Job | IsAJob[..., Any]]]:
         """
         Pair each job with its original index and order the pairs by

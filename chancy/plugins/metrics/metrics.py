@@ -10,7 +10,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 from uuid import UUID, uuid4
 
 from psycopg import AsyncCursor, sql
@@ -113,6 +113,14 @@ class Metric:
             "min": min(value["min"] for value in values),
             "max": max(value["max"] for value in values),
         }
+
+
+class MetricsResponse(TypedDict):
+    start: datetime.datetime
+    end: datetime.datetime
+    resolution: Resolution
+    generated_at: datetime.datetime
+    series: dict[str, Metric]
 
 
 @dataclass(frozen=True)
@@ -787,12 +795,12 @@ class Metrics(Plugin):
         metric_prefix=None,
         worker_id=None,
         *,
-        resolution="5min",
+        resolution: Resolution = "5min",
         start=None,
         end=None,
         range_seconds=None,
         limit=None,
-    ):
+    ) -> MetricsResponse:
         """
         Get metrics matching the given prefix and time range.
 
@@ -871,7 +879,7 @@ class Metrics(Plugin):
 
     async def _query_metrics(
         self, chancy, prefix, worker_id, resolution, start, end
-    ):
+    ) -> MetricsResponse:
         async with (
             chancy.pool.connection() as conn,
             conn.cursor(row_factory=dict_row) as cursor,
