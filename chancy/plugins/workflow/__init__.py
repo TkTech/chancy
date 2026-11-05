@@ -407,12 +407,10 @@ class WorkflowPlugin(Plugin):
                 return
             if self.max_workflows_per_run <= 0:
                 return
-            after, until = self._last_polled_id, self._poll_until_id
             attempts = 0
 
             async def batch(tx):
                 nonlocal attempts
-                self._last_polled_id, self._poll_until_id = after, until
                 changes = []
                 if due or attempts:
                     if attempts:

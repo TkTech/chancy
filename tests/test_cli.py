@@ -6,9 +6,54 @@ import click
 import pytest
 
 from chancy import Chancy, Worker
-from chancy.cli.worker import web_command
+from chancy.cli.worker import web_command, worker_command
 from chancy.plugins.api import Api, SimpleAuthBackend
 from chancy.plugins.metrics import Metrics
+from chancy.session import PluginSession
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dashboard", [False, True])
+async def test_shutdown_timeout_is_a_concise_cli_error(
+    chancy_just_app, monkeypatch, caplog, dashboard
+):
+    app = chancy_just_app
+    app.notifications = False
+    app.plugins = {
+        Api.get_identifier(): Api(authentication_backend=SimpleAuthBackend({}))
+    }
+    monkeypatch.setattr(Chancy, "__aenter__", AsyncMock(return_value=app))
+    monkeypatch.setattr(Chancy, "__aexit__", AsyncMock(return_value=False))
+    monkeypatch.setattr(Worker, "start", AsyncMock())
+    monkeypatch.setattr(Worker, "flush", AsyncMock())
+    monkeypatch.setattr(PluginSession, "start", Mock())
+    monkeypatch.setattr(
+        Worker, "_maintain_updates", lambda self: asyncio.sleep(3600)
+    )
+    wait = Worker.wait_for_shutdown
+    workers = []
+
+    async def expire(worker):
+        if worker._stop_task is None:
+            workers.append(worker)
+            worker._begin_stop(0)
+        return await wait(worker)
+
+    monkeypatch.setattr(Worker, "wait_for_shutdown", expire)
+    command = web_command if dashboard else worker_command
+    context = click.Context(command, obj={"app": app})
+    arguments = ("localhost", 8000, False, ["*"]) if dashboard else (None, None)
+    try:
+        with pytest.raises(
+            click.ClickException, match="Worker shutdown timed out"
+        ) as caught:
+            await inspect.unwrap(command.callback)(context, *arguments)
+        assert caught.value.exit_code == 1
+        assert len(workers) == 1
+        assert not any(record.exc_info for record in caplog.records)
+    finally:
+        for worker in workers:
+            await worker.stop()
 
 
 @pytest.mark.asyncio

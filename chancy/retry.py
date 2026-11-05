@@ -3,6 +3,7 @@ import logging
 from collections.abc import Callable
 
 from psycopg import InterfaceError, OperationalError
+from psycopg.errors import IdleInTransactionSessionTimeout
 
 
 class RetryTransaction(Exception):
@@ -26,7 +27,12 @@ def _raise_if_cancelling() -> None:
 class DatabaseRetry:
     """Backoff state for one database maintenance loop."""
 
-    errors = (OperationalError, InterfaceError, RetryTransaction)
+    errors = (
+        OperationalError,
+        InterfaceError,
+        IdleInTransactionSessionTimeout,
+        RetryTransaction,
+    )
 
     def __init__(
         self,

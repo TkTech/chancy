@@ -38,6 +38,7 @@ class Plugin(abc.ABC):
         from chancy import Chancy, Worker
         from chancy.plugin import Plugin
 
+
         class PendingJobs(Plugin):
             @staticmethod
             def get_identifier():
@@ -53,10 +54,12 @@ class Plugin(abc.ABC):
                             "SELECT count(*) AS count FROM {} WHERE state = 'pending'"
                         ).format(sql.Identifier(f"{ctx.chancy.prefix}jobs"))
                     )
-                    return (await tx.cursor.fetchone())["count"]
+                    row = await tx.cursor.fetchone()
+                    return row["count"]
 
                 count = await ctx.database(count_pending)
                 ctx.log.info("Pending jobs: %s", count)
+
 
         async def main():
             async with Chancy(
@@ -66,6 +69,7 @@ class Plugin(abc.ABC):
                 await chancy.migrate()
                 async with Worker(chancy) as worker:
                     await worker.wait_for_shutdown()
+
 
         if __name__ == "__main__":
             asyncio.run(main())

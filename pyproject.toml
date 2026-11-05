@@ -1,6 +1,6 @@
 [project]
 name = "chancy"
-version = "0.26.0"
+version = "0.27.0"
 description = "A simple and flexible job queue for Python"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -61,6 +61,7 @@ dev = [
     "pre-commit>=4.3.0",
     "ruff==0.16.2",
     "pytest-xdist>=3.8.0",
+    "pytest-timeout>=2.3.1",
     "sphinx-copybutton>=0.5.2",
 ]
 screenshots = [

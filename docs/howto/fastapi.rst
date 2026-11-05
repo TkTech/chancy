@@ -7,7 +7,6 @@ application by using FastAPI's lifespan events:
 
 .. code-block:: python
 
-  import asyncio
   import contextlib
   from typing import AsyncIterator
 
@@ -22,15 +21,16 @@ application by using FastAPI's lifespan events:
       FastAPI lifespan handler that starts and stops the Chancy worker.
       This ensures the worker starts when FastAPI starts and shuts down properly.
       """
-      # Run the database migrations (don't do this in production)
-      await chancy.migrate()
+      async with chancy:
+          # Run the database migrations (don't do this in production)
+          await chancy.migrate()
 
-      # Declare any queues we need.
-      await chancy.declare(Queue("default"))
+          # Declare any queues we need.
+          await chancy.declare(Queue("default"))
 
-      # Start the worker in the background and return control to FastAPI
-      async with Worker(chancy) as worker:
-        yield
+          # Start the worker in the background and return control to FastAPI
+          async with Worker(chancy, register_signal_handlers=False):
+              yield
 
 
   app = FastAPI(lifespan=lifespan)
@@ -45,6 +45,10 @@ application by using FastAPI's lifespan events:
   async def read_root():
       await chancy.push(send_an_email)
       return {"Hello": "World"}
+
+Let the parent ASGI server handle process signals by passing
+``register_signal_handlers=False`` to the embedded worker. Its lifespan
+context will stop the worker when the server shuts down.
 
 This can be useful for small applications and simple deployments
 (like containers meant for UnRAID) where you don't want to manage multiple
@@ -81,10 +85,6 @@ application. Install ``chancy[web]`` alongside FastAPI, then use
 
     app = FastAPI(lifespan=lifespan)
     app.mount("/chancy", dashboard.build_starlette_app(worker, chancy))
-
-Let the parent ASGI server handle process signals by passing
-``register_signal_handlers=False`` to the embedded worker. Its lifespan
-context will stop the worker when the server shuts down.
 
 Background worker failures initiate worker shutdown even without a call to
 ``wait_for_shutdown()``. They do not cancel the FastAPI lifespan task or stop

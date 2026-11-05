@@ -75,6 +75,62 @@ jobs:
         if-no-files-found: error
         retention-days: 1
 
+  durability:
+    name: "Durability - Py${{ matrix.python }} - PG${{ matrix.postgres }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.11"
+            postgres: "14"
+          - python: "3.14"
+            postgres: "18"
+    env:
+      POSTGRES_VERSION: ${{ matrix.postgres }}
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv sync --all-extras
+
+      - name: Start durability services
+        run: docker compose -f docker-compose.durability.yml up -d --wait
+
+      - name: Test durability
+        run: >-
+          uv run --no-sync pytest tests/durability --run-durability -n 0 -v
+          --log-level=INFO --log-file=durability-tests.log
+          --junitxml=durability-results.xml
+
+      - name: Collect service logs
+        if: always()
+        run: >-
+          docker compose -f docker-compose.durability.yml logs --no-color
+          > durability-services.log
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: durability-py${{ matrix.python }}-pg${{ matrix.postgres }}
+          path: |
+            durability-results.xml
+            durability-tests.log
+            durability-services.log
+
+      - name: Stop durability services
+        if: always()
+        run: docker compose -f docker-compose.durability.yml down -v
+
   test:
     name: "${{ matrix.os }} - Py${{ matrix.python-version }} - Django${{ matrix.django }} - PG${{ matrix.pg }}"
     needs: [build]
@@ -282,7 +338,7 @@ jobs:
 
   release:
     name: Release to PyPI
-    needs: [build, docs]
+    needs: [build, docs, durability]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     permissions:

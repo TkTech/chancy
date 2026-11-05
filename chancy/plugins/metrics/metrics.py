@@ -284,20 +284,15 @@ class Metrics(Plugin):
         return "chancy.plugins.metrics.api.MetricsApiPlugin"
 
     async def on_worker_stopped(self, *, worker):
-        # Keep subscriptions alive through final on_job_updated callbacks.
-        # A failed flush retains both the subscriptions and dirty snapshots.
+        # A failed flush keeps the worker recording observations for a retry.
         await self.flush(worker.chancy)
-        registration = self._workers.pop(worker, None)
-        if registration:
-            _, handler = registration
-            for kind in ("counter", "gauge", "histogram"):
-                worker.hub.remove(f"metrics.{kind}", handler)
+        self._workers.pop(worker, None)
         self._prune_buffer()
 
     async def setup(self, session):
         worker = session.worker
         handler = partial(self._handle_event, worker=worker)
-        self._workers[worker] = uuid4(), handler
+        self._workers[worker] = uuid4()
         session.callback(self._workers.pop, worker, None)
         for kind in ("counter", "gauge", "histogram"):
             session.subscribe(f"metrics.{kind}", handler)
@@ -355,8 +350,7 @@ class Metrics(Plugin):
             self._warn(f"Dropped metric with conflicting type or unit: {key}")
             return
         now = utcnow()
-        session = self._workers.get(worker)
-        session_id = session[0] if session else self.session_id
+        session_id = self._workers.get(worker, self.session_id)
         worker_id = worker.worker_id if worker is not None else self.worker_id
         keys = [
             (key, seconds, bucket_time(now, seconds), session_id, worker_id)
@@ -440,7 +434,9 @@ class Metrics(Plugin):
         """
         self._record(metric_key, value, "histogram", unit)
 
-    async def _handle_event(self, event, *, worker=None):
+    async def _handle_event(self, event, *, worker):
+        if worker not in self._workers:
+            return
         self._record(
             event.body.get("key"),
             event.body.get("value"),
@@ -485,9 +481,7 @@ class Metrics(Plugin):
             seconds: self.retention(name)
             for name, seconds in RESOLUTIONS.items()
         }
-        active_sessions = {session for session, _ in self._workers.values()} | {
-            self.session_id
-        }
+        active_sessions = set(self._workers.values()) | {self.session_id}
         for key in list(self._buckets):
             _, seconds, timestamp, session_id, _ = key
             expired = (

@@ -22,8 +22,7 @@ interrupted repeatedly.
 ``chancy.retry.RetryTransaction`` conflicts in fresh transactions. Callbacks
 must be safe to repeat, including after an uncertain commit. Other callback
 errors are terminal; arbitrary external side effects are not automatically
-replayed. Deadlocks, serialization failures and explicit transaction conflicts
-do not invalidate the worker's leadership flag.
+replayed.
 
 Subscriptions registered through ``session.subscribe()`` are observers. A
 handler exception is logged and delivery continues to other handlers;
@@ -71,15 +70,25 @@ row ``id = 1`` in ``{prefix}leader``. Its ``worker_id`` must match the worker an
 lock prevents takeover until the transaction ends, while allowing renewal. This
 protects database effects within the transaction, not calls to external services.
 
-Transient database failures retry with the worker's backoff settings. Connection
-failures clear local leadership; transaction conflicts, statement timeouts, and
-lock timeouts do not. Local leadership also expires independently of renewal,
-including when renewal is blocked on a connection or a row lock. Permanent errors or exhausted retries initiate the
-same supervised shutdown as any other core maintenance failure.
+Protected transactions use ``leadership_idle_timeout`` (default 120 seconds) to
+release locks when a client goes silent. This limits idle gaps between SQL
+commands, not active queries or total transaction duration. Keep external I/O
+and lengthy application work outside the transaction. A stricter database
+``idle_in_transaction_session_timeout`` is preserved, and the setting is local
+to the transaction. Set ``leadership_idle_timeout=None`` to leave the database
+policy unchanged, including on compatible servers without this setting; idle
+transactions can then delay takeover according to that policy.
+
+Transient database failures retry with the worker's backoff settings without
+clearing or extending the last confirmed lease. Only a successful renewal
+extends its deadline. Local leadership expires independently of renewal,
+including when renewal is blocked on a connection or a row lock. Confirmed
+ownership loss and shutdown also clear leadership. Permanent errors or
+exhausted retries initiate supervised shutdown.
 
 Election checks still broadcast ``leadership.gained``, ``leadership.renewed``,
-and ``leadership.lost`` when applicable. Local expiry and connection loss can
-occur without a notification; events are observations, not write authorization.
+and ``leadership.lost`` when applicable. Local expiry can occur without a
+notification; events are observations, not write authorization.
 
 Stopping clears local leadership immediately. The database lease remains until
 expiry, so takeover can take up to the remaining lease lifetime plus a polling
@@ -97,25 +106,36 @@ core lease table is reused; this change needs no schema migration.
 Shutdown and failure reporting
 ------------------------------
 
-The worker first stops fetching jobs and drains executors for
-``shutdown_timeout`` seconds, keeping update processing available during the
-drain. It then closes task admission, requests cancellation once per task, and
-waits up to ``teardown_timeout`` seconds (default 30) for background cleanup.
-Final job updates and plugin hooks run after those tasks stop.
+``shutdown_timeout`` (default 30 seconds) is one deadline for the entire
+shutdown. The worker stops fetching jobs and drains executors while continuing
+to save completions. It then cancels background tasks, saves remaining updates,
+and runs final plugin hooks. Every stage uses the same deadline.
 
-If task teardown times out, unfinished tasks remain tracked and their plugin
-resources stay open. Keep the application open and retry ``stop()`` after the
-tasks finish; Python cannot force a coroutine to obey cancellation. The task
-deadline does not bound final database persistence. Failed persistence can be
-retried without repeating completed task teardown or successful plugin hooks.
-Terminal session cleanup errors are retained without rerunning finalization.
+At the deadline, shutdown requests cancellation and reports ``TimeoutError``
+without waiting for cancellation to finish. Unfinished tasks remain tracked,
+and resources they still use remain open. A later ``stop()`` can finish cleanup
+with a new deadline without overlapping an earlier attempt or repeating
+completed hooks. Updates from jobs abandoned at the deadline are ignored so
+another worker can recover them. Asyncio deadlines require a responsive event
+loop and cannot interrupt blocking synchronous code.
 
 ``stop()`` and ``wait_for_shutdown()`` report background and cleanup failures
-after teardown. A single failure is raised directly; multiple failures are
-reported in an exception group. Concurrent and later waiters observe the
-retained outcome. Cancelling a waiter does not cancel the shared shutdown task.
+after teardown or when the deadline expires. A single failure is raised
+directly; multiple failures are reported in an exception group. Concurrent and
+later waiters observe the retained outcome. Concurrent callers share the first
+caller's deadline.
+Cancelling a waiter does not cancel the shared shutdown task. Leaving the worker
+context does not retry an expired shutdown. Only an explicit later ``stop()``
+starts another attempt.
+An explicit retry returns ``True`` when shutdown completes. Errors raised while
+an expired attempt unwinds are logged without making a successful retry fail.
+Background task failures and final resource-cleanup failures remain reported.
 The task manager logs terminal background failures once; callers can handle
 the propagated exceptions without logging them again.
+
+The ``worker.shutdown_timeout`` event is delivered if cleanup later finishes
+after an attempt timed out while draining jobs. It is not delivered at the
+deadline, since event handlers must not extend shutdown.
 
 ``TaskManager.cancel()`` accepts a task handle, not a name. Task names are
 labels and need not be unique. Iteration and ``len()`` describe live tasks;

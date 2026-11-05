@@ -11,6 +11,19 @@ from chancy.executors.base import Executor
 from chancy.utils import import_string
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-durability",
+        action="store_true",
+        help="Run durability tests against the disposable Toxiproxy stack.",
+    )
+
+
+def pytest_ignore_collect(collection_path, config):
+    if collection_path.name == "durability":
+        return not config.getoption("--run-durability")
+
+
 def executor_params(
     required: Executor.Capability = Executor.Capability.NONE,
     *,

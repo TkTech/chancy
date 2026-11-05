@@ -6,7 +6,7 @@ from functools import partial
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from psycopg import OperationalError, sql
+from psycopg import InterfaceError, OperationalError, sql
 from psycopg.errors import (
     DeadlockDetected,
     LockNotAvailable,
@@ -466,9 +466,45 @@ async def test_database_retries_rollback_and_returns_only_committed_results(
 
 
 @pytest.mark.asyncio
+async def test_idle_transaction_timeout_retries_on_a_fresh_connection(chancy):
+    worker = Worker(
+        chancy,
+        leadership_idle_timeout=1,
+        backoff_initial=0,
+        backoff_max_retries=1,
+    )
+    await worker._leadership.renew()
+    ctx = await context(worker, authority=Authority.LEADER)
+    ref = await chancy.push(Job(func="unused"))
+    backends = []
+
+    async def write(tx):
+        backends.append(tx.cursor.connection.info.backend_pid)
+        assert worker.is_leader
+        await tx.cursor.execute(
+            sql.SQL(
+                "UPDATE {} SET priority = priority + 1 WHERE id = %s"
+            ).format(sql.Identifier(f"{chancy.prefix}jobs")),
+            [ref.identifier],
+        )
+        if len(backends) == 1:
+            await asyncio.sleep(2)
+        await tx.cursor.execute("SELECT 42 AS value")
+        return (await tx.cursor.fetchone())["value"]
+
+    assert await asyncio.wait_for(ctx.database(write), timeout=10) == 42
+    assert len(backends) == 2
+    assert backends[0] != backends[1]
+    assert (await chancy.get_job(ref)).priority == 1
+    assert worker.is_leader
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "error_type",
     [
+        OperationalError,
+        InterfaceError,
         DeadlockDetected,
         SerializationFailure,
         LockNotAvailable,
@@ -476,10 +512,14 @@ async def test_database_retries_rollback_and_returns_only_committed_results(
         RetryTransaction,
     ],
 )
-async def test_statement_errors_preserve_leadership(chancy, error_type):
+@pytest.mark.parametrize("authority", [Authority.WORKER, Authority.LEADER])
+async def test_database_errors_preserve_leadership(
+    chancy, error_type, authority
+):
     worker = Worker(chancy, backoff_initial=0)
     await worker._leadership.renew()
-    ctx = await context(worker)
+    deadline = worker._leadership._deadline
+    ctx = await context(worker, authority=authority)
     calls = 0
 
     async def conflict(tx):
@@ -492,6 +532,7 @@ async def test_statement_errors_preserve_leadership(chancy, error_type):
     assert await ctx.database(conflict) == 42
     assert calls == 2
     assert worker.is_leader
+    assert worker._leadership._deadline == deadline
 
 
 @pytest.mark.asyncio
@@ -605,19 +646,20 @@ async def test_leadership_recovers_and_fences_old_worker(
         )
         try:
             await asyncio.wait_for(first.wait_for_leadership(), timeout=2)
+            deadline = first._leadership._deadline
             tasks.append(asyncio.create_task(second._leadership.maintain()))
-            connection = chancy.pool.connection
             failed = asyncio.Event()
 
             def disconnected(*args, **kwargs):
                 failed.set()
                 raise OperationalError("isolated worker")
 
-            monkeypatch.setattr(chancy.pool, "connection", disconnected)
-            await asyncio.wait_for(failed.wait(), timeout=2)
-            await asyncio.sleep(outage)
-            assert not first.is_leader
-            monkeypatch.setattr(chancy.pool, "connection", connection)
+            with monkeypatch.context() as patch:
+                patch.setattr(chancy.pool, "connection", disconnected)
+                await asyncio.wait_for(failed.wait(), timeout=2)
+                await asyncio.sleep(outage)
+                assert first.is_leader == (outage < 2)
+                assert first._leadership._deadline == deadline
             if outage < 2:
                 await asyncio.wait_for(first.wait_for_leadership(), timeout=2)
                 assert not second.is_leader
