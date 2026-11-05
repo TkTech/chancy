@@ -116,6 +116,8 @@ class Metric:
 
 
 class MetricsResponse(TypedDict):
+    """A metrics query's time window and observed series."""
+
     start: datetime.datetime
     end: datetime.datetime
     resolution: Resolution

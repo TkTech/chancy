@@ -42,6 +42,7 @@ nitpick_ignore = [
     ("py:class", "~P"),
     ("py:class", "chancy.job.R"),
     ("py:class", "chancy.session.T"),
+    ("py:class", "chancy.utils.T"),
     ("py:obj", "typing.~P"),
     # Implementation names exposed by annotations but absent from Python's
     # inventory, which documents their public aliases instead.
@@ -50,6 +51,7 @@ nitpick_ignore = [
     ("py:class", "asyncio.queues.Queue"),
     ("py:class", "asyncio.locks.Event"),
     ("py:class", "concurrent.futures._base.Future"),
+    ("py:class", "concurrent.futures._base.Executor"),
     ("py:class", "multiprocessing.context.BaseContext"),
     # Starlette types have no targets in the configured inventories.
     ("py:class", "starlette.applications.Starlette"),

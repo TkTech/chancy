@@ -116,3 +116,7 @@ Reference
 
 .. autoclass:: chancy.plugins.metrics.metrics.MetricPoint
    :members:
+
+.. autoclass:: chancy.plugins.metrics.metrics.MetricsResponse
+   :members:
+   :undoc-members:
