@@ -13,6 +13,7 @@ from psycopg import OperationalError
 
 from chancy import Chancy, Queue, QueuedJob, Reference, Worker, job
 from chancy.executors.thread import ThreadedExecutor
+from tests.helpers import wait_until
 
 _job_started = threading.Event()
 _job_release = threading.Event()
@@ -41,12 +42,6 @@ async def _cancel_during_shutdown():
 async def _wait_for_dependency(*, dsn: str, prefix: str, dependency: str):
     async with Chancy(dsn, prefix=prefix) as app:
         await app.wait_for_job(Reference(dependency), interval=0.01, timeout=10)
-
-
-async def _wait_until(predicate, *, timeout: float = 5) -> None:
-    async with asyncio.timeout(timeout):
-        while not predicate():
-            await asyncio.sleep(0.01)
 
 
 @pytest.mark.asyncio
@@ -110,25 +105,52 @@ async def test_stop_retries_failed_final_flush(
 
 
 @pytest.mark.asyncio
-async def test_stop_retry_preserves_forced_shutdown_result(
+async def test_stop_retry_reports_success_after_drain_timeout(
     chancy_just_app: Chancy,
     monkeypatch,
 ):
-    """Retrying persistence cannot turn a forced shutdown into a clean one."""
+    """A successful retry reports completion even if draining timed out."""
     worker = Worker(chancy_just_app, register_signal_handlers=False)
-    drain = AsyncMock(return_value=False)
+
+    async def blocked_drain():
+        await asyncio.Future()
+
+    drain = AsyncMock(side_effect=blocked_drain)
     monkeypatch.setattr(worker, "_drain", drain)
-    monkeypatch.setattr(
-        worker,
-        "flush",
-        AsyncMock(side_effect=[OperationalError("Transient failure"), None]),
-    )
+    monkeypatch.setattr(worker, "flush", AsyncMock())
+    events = []
+    worker.hub.on("worker.shutdown_timeout", events.append)
 
-    with pytest.raises(OperationalError):
-        await worker.stop()
+    with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+        await worker.stop(timeout=0.01)
+    assert not events
 
-    assert await worker.stop() is False
+    assert await worker.stop() is True
     drain.assert_awaited_once()
+    assert len(events) == 1
+
+
+@pytest.mark.asyncio
+async def test_stop_retry_preserves_immediate_timeout(
+    chancy_just_app: Chancy,
+    monkeypatch,
+):
+    worker = Worker(chancy_just_app, register_signal_handlers=False)
+    drain = AsyncMock(return_value=True)
+    monkeypatch.setattr(worker, "_drain", drain)
+    monkeypatch.setattr(worker, "flush", AsyncMock())
+    events = []
+    worker.hub.on("worker.stopped", events.append)
+    worker.hub.on("worker.shutdown_timeout", events.append)
+
+    with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+        await worker.stop(timeout=0)
+    assert not events
+    drain.assert_not_awaited()
+
+    assert await worker.stop() is True
+    assert [event.name for event in events] == ["worker.shutdown_timeout"]
+    drain.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -174,10 +196,12 @@ async def test_shutdown_timeout_still_tears_down_worker_tasks(
 
     worker.manager.add("queue_blocked", maintain_blocked_queue())
     worker.manager.add("updates", maintain_updates())
-    await _wait_until(lambda: "blocked" in worker.executors)
+    await wait_until(lambda: "blocked" in worker.executors, timeout=5)
 
     try:
-        assert await worker.stop(timeout=0.05) is False
+        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+            await worker.stop(timeout=0.05)
+        await worker.stop()
         assert queue_task_cancelled.is_set()
         assert updates_task_cancelled.is_set()
         assert not worker.executors
@@ -297,7 +321,7 @@ async def test_worker_flushes_completed_job_updates_before_stopping(
     await worker.start()
 
     try:
-        await _wait_until(lambda: queue_name in worker.executors, timeout=10)
+        await wait_until(lambda: queue_name in worker.executors, timeout=10)
         ref = await chancy.push(
             _finish_during_shutdown.job.with_queue(queue_name)
         )
@@ -308,7 +332,7 @@ async def test_worker_flushes_completed_job_updates_before_stopping(
         assert running_job.state == QueuedJob.State.RUNNING
 
         stop_task = asyncio.create_task(worker.stop(timeout=2))
-        await _wait_until(lambda: not worker)
+        await wait_until(lambda: not worker, timeout=5)
         assert worker.outgoing.empty()
 
         _job_release.set()
@@ -348,7 +372,7 @@ async def test_shutdown_persists_updates_while_jobs_drain(
         )
 
         stop_task = asyncio.create_task(worker.stop(timeout=2))
-        await _wait_until(lambda: not worker)
+        await wait_until(lambda: not worker, timeout=5)
         assert await worker.queue_update(completed)
 
         assert await stop_task is True
@@ -386,25 +410,26 @@ async def test_worker_abandons_thread_completion_after_timeout(chancy: Chancy):
     executor = None
 
     try:
-        await _wait_until(lambda: queue_name in worker.executors, timeout=10)
+        await wait_until(lambda: queue_name in worker.executors, timeout=10)
         executor = worker.executors[queue_name]
         ref = await chancy.push(
             _finish_after_shutdown.job.with_queue(queue_name)
         )
 
         assert await asyncio.to_thread(_zombie_started.wait, 5)
-        assert await worker.stop(timeout=0.05) is False
+        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+            await worker.stop(timeout=0.05)
         assert worker.outgoing.empty()
 
         _zombie_release.set()
-        await _wait_until(lambda: not executor.jobs)
+        await wait_until(lambda: not executor.jobs, timeout=5)
         assert worker.outgoing.empty()
 
         abandoned_job = await chancy.get_job(ref)
         assert abandoned_job.state == QueuedJob.State.RUNNING
     finally:
         _zombie_release.set()
-        await worker.stop(timeout=0.05)
+        await worker.stop()
 
 
 @pytest.mark.asyncio
@@ -434,7 +459,7 @@ async def test_worker_abandons_async_completion_after_timeout(chancy: Chancy):
     await worker.start()
 
     try:
-        await _wait_until(lambda: queue_name in worker.executors, timeout=10)
+        await wait_until(lambda: queue_name in worker.executors, timeout=10)
         ref = await chancy.push(
             _cancel_during_shutdown.job.with_queue(queue_name)
         )
@@ -445,10 +470,11 @@ async def test_worker_abandons_async_completion_after_timeout(chancy: Chancy):
             timeout=10,
         )
 
-        assert await worker.stop(timeout=0.05) is False
+        with pytest.raises(TimeoutError, match="Worker shutdown timed out"):
+            await worker.stop(timeout=0.05)
         assert worker.outgoing.empty()
 
         abandoned_job = await chancy.get_job(ref)
         assert abandoned_job.state == QueuedJob.State.RUNNING
     finally:
-        await worker.stop(timeout=0.05)
+        await worker.stop()

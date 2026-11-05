@@ -299,14 +299,23 @@ class TaskManager:
         self._closed = True
         await self.cancel_tasks(tuple(self._tasks), timeout=timeout)
 
-    async def cancel_tasks(
-        self, tasks: Iterable[asyncio.Task], *, timeout: float | None = None
-    ):
-        """Cancel owned tasks by handle; names are only diagnostic labels."""
+    def request_cancel_all(self) -> None:
+        """Close admission and request cancellation without waiting."""
+        self._closed = True
+        self._request_cancellation(self._tasks)
+
+    def _request_cancellation(self, tasks: Iterable[asyncio.Task]):
         tasks = set(tasks) & self._tasks
         for task in tasks - self._cancel_requested:
             self._cancel_requested.add(task)
             task.cancel("Cancelled by TaskManager")
+        return tasks
+
+    async def cancel_tasks(
+        self, tasks: Iterable[asyncio.Task], *, timeout: float | None = None
+    ):
+        """Cancel owned tasks by handle; names are only diagnostic labels."""
+        tasks = self._request_cancellation(tasks)
         if tasks:
             _, pending = await asyncio.wait(tasks, timeout=timeout)
             if pending:

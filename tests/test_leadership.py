@@ -49,6 +49,26 @@ def test_leadership_is_read_only(chancy_just_app):
         worker.is_leader = True
 
 
+@pytest.mark.parametrize("timeout", [0, -1, 1.5, float("nan"), float("inf")])
+def test_invalid_leadership_idle_timeout(chancy_just_app, timeout):
+    with pytest.raises(ValueError, match="leadership_idle_timeout"):
+        Worker(chancy_just_app, leadership_idle_timeout=timeout)
+
+
+@pytest.mark.asyncio
+async def test_guard_idle_timeout_allows_long_sql(chancy):
+    worker = Worker(chancy, leadership_idle_timeout=1)
+    await worker._leadership.renew()
+    async with (
+        chancy.pool.connection() as conn,
+        conn.transaction(),
+        conn.cursor(row_factory=dict_row) as cursor,
+    ):
+        await worker._leadership.guard(cursor)
+        await cursor.execute("SELECT pg_sleep(2), 42 AS value")
+        assert (await cursor.fetchone())["value"] == 42
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "chancy", [{"no_default_plugins": True}], indirect=True

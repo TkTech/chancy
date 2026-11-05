@@ -25,6 +25,11 @@ def job_that_sleeps():
     time.sleep(0.5)
 
 
+@job()
+async def job_that_waits():
+    await asyncio.Future()
+
+
 @pytest.mark.asyncio
 async def test_flush_persists_pending_updates(
     chancy: Chancy, worker_no_start: Worker
@@ -303,6 +308,52 @@ async def test_heartbeat_recovers_from_transient_error(
         target = calls + 1
         while calls < target:
             await asyncio.sleep(0.1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "worker",
+    [{"queue_change_poll_interval": 1, "backoff_initial": 0.01}],
+    indirect=True,
+)
+async def test_queue_retry_preserves_running_jobs(chancy, worker, monkeypatch):
+    await chancy.declare(
+        Queue(
+            "resilience",
+            executor=Chancy.Executor.Async,
+            concurrency=2,
+            polling_interval=1,
+        )
+    )
+    ref = await chancy.push(job_that_waits.job.with_queue("resilience"))
+    async with asyncio.timeout(5):
+        while True:
+            executor = worker.executors.get("resilience")
+            if executor is not None and len(executor):
+                break
+            await asyncio.sleep(0.01)
+
+    original = worker.fetch_jobs
+    failed = asyncio.Event()
+    recovered = asyncio.Event()
+
+    async def fetch(queue, conn, **kwargs):
+        if queue.name == "resilience" and not failed.is_set():
+            failed.set()
+            raise OperationalError("Connection interrupted")
+        result = await original(queue, conn, **kwargs)
+        if queue.name == "resilience":
+            recovered.set()
+        return result
+
+    monkeypatch.setattr(worker, "fetch_jobs", fetch)
+    try:
+        await asyncio.wait_for(recovered.wait(), 5)
+        assert failed.is_set()
+        assert worker.executors["resilience"] is executor
+        assert len(executor) == 1
+    finally:
+        await executor.cancel(ref)
 
 
 @pytest.mark.asyncio

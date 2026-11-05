@@ -385,6 +385,9 @@ async def test_custom_metrics_from_final_job_update_are_flushed(chancy):
         async def on_job_updated(self, *, worker, job):
             await worker.increment_counter("custom:final_update", 1)
 
+        async def on_worker_stopped(self, *, worker):
+            await worker.increment_counter("custom:after_flush", 1)
+
     chancy.plugins[CustomMetrics.get_identifier()] = CustomMetrics()
     await chancy.declare(Queue("paused", state=Queue.State.PAUSED))
     ref = await chancy.push(Job(func="example.task", queue="paused"))
@@ -398,6 +401,7 @@ async def test_custom_metrics_from_final_job_update_are_flushed(chancy):
     metrics = chancy.plugins["chancy.metrics"]
     response = await metrics.get_metrics(chancy, "custom")
     assert response["series"]["custom:final_update"].summary == 1
+    assert "custom:after_flush" not in response["series"]
     assert worker not in metrics._workers
     await worker.increment_counter("custom:after_stop", 1)
     assert not metrics._dirty

@@ -42,6 +42,8 @@ async def worker_command(
                 tags=set(tags) if tags else None,
             ) as worker:
                 await worker.wait_for_shutdown()
+        except TimeoutError as error:
+            raise click.ClickException(str(error)) from None
         except MigrationsNeededError:
             click.echo(
                 "The database is not up to date and is missing migrations.\n"
@@ -127,15 +129,21 @@ async def web_command(
             await worker._abort_start(error)
 
         try:
-            for session in worker._plugin_sessions:
-                session.start()
+            try:
+                for session in worker._plugin_sessions:
+                    session.start()
 
-            # Run dashboard infrastructure without processing queues.
-            if chancy.notifications:
-                worker._start_task(
-                    "notifications", worker._maintain_notifications()
-                )
-            worker._start_task("updates", worker._maintain_updates())
-            await worker.wait_for_shutdown()
-        finally:
-            await worker.stop()
+                # Run dashboard infrastructure without processing queues.
+                if chancy.notifications:
+                    worker._start_task(
+                        "notifications", worker._maintain_notifications()
+                    )
+                worker._start_task("updates", worker._maintain_updates())
+                await worker.wait_for_shutdown()
+            finally:
+                if worker._stop_task is None:
+                    await worker.stop()
+                else:
+                    await worker.wait_for_shutdown()
+        except TimeoutError as error:
+            raise click.ClickException(str(error)) from None

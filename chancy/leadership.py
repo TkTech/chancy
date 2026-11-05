@@ -6,16 +6,9 @@ import time
 from typing import TYPE_CHECKING
 
 from psycopg import AsyncCursor, sql
-from psycopg.errors import (
-    DeadlockDetected,
-    LockNotAvailable,
-    QueryCanceled,
-    SerializationFailure,
-)
 from psycopg.rows import DictRow, dict_row
 
 from chancy.errors import LeadershipLost
-from chancy.retry import RetryTransaction
 
 if TYPE_CHECKING:
     from chancy.worker import Worker
@@ -31,6 +24,7 @@ class LeadershipLease:
         eligible: bool,
         poll_interval: float,
         timeout: float,
+        idle_timeout: int | None,
     ):
         if (
             not math.isfinite(poll_interval)
@@ -46,6 +40,7 @@ class LeadershipLease:
         self.eligible = eligible
         self.poll_interval = poll_interval
         self.timeout = timeout
+        self.idle_timeout = idle_timeout
         self._elected = asyncio.Event()
         self._changed = asyncio.Event()
         self._deadline = 0.0
@@ -72,20 +67,6 @@ class LeadershipLease:
         self._elected.clear()
         self._deadline = 0.0
         self._changed.set()
-
-    def on_database_error(self, error: Exception) -> None:
-        # Statement failures do not imply connection loss.
-        if not isinstance(
-            error,
-            (
-                DeadlockDetected,
-                SerializationFailure,
-                LockNotAvailable,
-                QueryCanceled,
-                RetryTransaction,
-            ),
-        ):
-            self.clear()
 
     async def maintain(self) -> None:
         try:
@@ -163,7 +144,6 @@ class LeadershipLease:
                         )
                 break
             except retry.errors as exc:
-                self.on_database_error(exc)
                 await retry.wait(exc)
 
         if (
@@ -187,6 +167,24 @@ class LeadershipLease:
     async def guard(self, cursor: AsyncCursor[DictRow]) -> None:
         if not self.eligible or self.worker.shutdown_event.is_set():
             raise LeadershipLost()
+        if self.idle_timeout is not None:
+            await cursor.execute(
+                """
+                SELECT set_config(
+                    'idle_in_transaction_session_timeout',
+                    LEAST(NULLIF(setting::bigint, 0), %s)::text,
+                    true
+                )
+                FROM pg_settings
+                WHERE name = 'idle_in_transaction_session_timeout'
+                """,
+                [self.idle_timeout * 1000],
+            )
+            if await cursor.fetchone() is None:
+                raise RuntimeError(
+                    "Database does not expose idle_in_transaction_session_timeout; "
+                    "set leadership_idle_timeout=None to use its existing policy"
+                )
         # Hold the lease against takeover until this work commits.
         await cursor.execute(
             sql.SQL(

@@ -99,7 +99,6 @@ class OperationContext:
                     )
                 return result
             except retry.errors as exc:
-                self.worker._leadership.on_database_error(exc)
                 self._operation.state = "retrying"
                 self._operation.error = exc
                 await retry.wait(exc)

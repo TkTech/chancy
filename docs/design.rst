@@ -64,7 +64,7 @@ Leadership
 Instead of having a hardcoded "coordinator" process or requiring separate
 setup for periodic tasks like Celery's "beat" process, all of the workers
 in a Chancy application will periodically attempt to become the "leader".
-Certain plugins like :doc:`cron <chancy.plugins.cron>` and
+Certain plugins like :doc:`pruner <chancy.plugins.pruner>` and
 :doc:`workflows <chancy.plugins.workflow>` will only run on the worker that
 currently holds leadership to prevent race conditions.
 
