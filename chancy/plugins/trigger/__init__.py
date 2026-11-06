@@ -8,7 +8,7 @@ from psycopg import AsyncCursor, sql
 from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
-from chancy.job import IsAJob, Job
+from chancy.job import IsAJob, Job, SerializedJob
 from chancy.plugin import Plugin
 
 
@@ -155,7 +155,8 @@ class Trigger(Plugin):
         :param table_name: Name of the table to monitor.
         :param operations: List of operations to monitor. Must be one or more of:
                           'INSERT', 'UPDATE', 'DELETE'. Case-insensitive.
-        :param job_template: Job template to create when trigger fires.
+        :param job_template: Job template to create when trigger fires,
+            validated now and when its jobs run.
         :param schema_name: Schema containing the table (default: 'public').
         :param enabled: Whether the trigger should be enabled immediately (default: True).
         :return: The unique trigger identifier (UUID).
@@ -198,7 +199,8 @@ class Trigger(Plugin):
         :param chancy: The Chancy application instance.
         :param table_name: Name of the table to monitor.
         :param operations: List of operations to monitor ('INSERT', 'UPDATE', 'DELETE').
-        :param job_template: Job template to create when trigger fires.
+        :param job_template: Job template to create when trigger fires,
+            validated now and when its jobs run.
         :param schema_name: Schema containing the table (default: 'public').
         :param enabled: Whether the trigger should be enabled immediately (default: True).
         :return: The unique trigger identifier (UUID).
@@ -251,7 +253,7 @@ class Trigger(Plugin):
                 "schema_name": schema_name,
                 "trigger_name": trigger_name,
                 "operations": json.dumps(operations),
-                "job_template": json.dumps(job.pack()),
+                "job_template": json.dumps(chancy.serialize(job).pack()),
                 "enabled": enabled,
             },
         )
@@ -580,7 +582,7 @@ class Trigger(Plugin):
                 schema_name=row["schema_name"],
                 trigger_name=row["trigger_name"],
                 operations=row["operations"],
-                job_template=Job.unpack(row["job_template"]),
+                job_template=SerializedJob.unpack(row["job_template"]),
                 enabled=row["enabled"],
                 created_at=row["created_at"],
             )

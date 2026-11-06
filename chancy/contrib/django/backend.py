@@ -102,7 +102,7 @@ def _build_task_result_from_queued_job(
         for err in job.errors
     ]
 
-    kwargs = job.kwargs or {}
+    kwargs: dict[str, Any] = job.kwargs or {}
     args = kwargs.get("_args", [])
     task_kwargs = kwargs.get("_kwargs", {})
 
@@ -245,7 +245,8 @@ class ChancyBackend(BaseTaskBackend):
         if job is None or job.kwargs is None or "_task_path" not in job.kwargs:
             raise TaskResultDoesNotExist(result_id)
 
-        func = import_string(job.kwargs["_task_path"])
+        kwargs: dict[str, Any] = job.kwargs
+        func = import_string(kwargs["_task_path"])
         if isinstance(func, self.task_class):
             func = func.func
 
@@ -256,7 +257,7 @@ class ChancyBackend(BaseTaskBackend):
                 backend=self.alias,
                 queue_name=job.queue,
                 priority=job.priority,
-                takes_context=job.kwargs.get("_takes_context", False),
+                takes_context=kwargs.get("_takes_context", False),
                 run_after=None,
             ),
         )

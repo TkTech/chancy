@@ -12,7 +12,7 @@ from psycopg.rows import DictRow, dict_row
 
 from chancy.app import Chancy
 from chancy.hub import Event
-from chancy.job import IsAJob, Job, QueuedJob
+from chancy.job import IsAJob, Job, QueuedJob, SerializedJob
 from chancy.plugin import Plugin
 from chancy.rule import Rule, SQLAble
 from chancy.session import Authority, OperationContext, PluginSession
@@ -847,7 +847,7 @@ class WorkflowPlugin(Plugin):
                 created_at=row["created_at"],
                 steps={
                     step["step_id"]: WorkflowStep(
-                        job=Job.unpack(step["job_data"]),
+                        job=SerializedJob.unpack(step["job_data"]),
                         dependencies=step["dependencies"],
                         state=(
                             QueuedJob.State(step["state"])
@@ -987,9 +987,17 @@ class WorkflowPlugin(Plugin):
         :raises EmptyWorkflowError: If the workflow has no steps.
         :raises CircularDependencyError: If a circular dependency is detected.
         :raises InvalidDependencyError: If a dependency references a non-existent step.
+
+        Each step's job is validated before anything is stored.
         """
         workflow.validate()
-        return await cls._persist_workflow(cursor, chancy, workflow, worker)
+        jobs = {
+            step_id: chancy.serialize(step.job)
+            for step_id, step in workflow.steps.items()
+        }
+        return await cls._persist_workflow(
+            cursor, chancy, workflow, worker, jobs=jobs
+        )
 
     @staticmethod
     async def _persist_workflow(
@@ -997,8 +1005,13 @@ class WorkflowPlugin(Plugin):
         chancy: Chancy,
         workflow: Workflow,
         worker: "Worker | None" = None,
+        *,
+        jobs: dict[str, Job] | None = None,
     ) -> UUID:
-        """Persist a validated submission or a scheduler state transition."""
+        """
+        Persist a validated submission or a scheduler state transition, with
+        ``jobs`` in place of the steps' jobs when given.
+        """
         await cursor.execute(
             sql.SQL(
                 """
@@ -1033,7 +1046,10 @@ class WorkflowPlugin(Plugin):
         inserted = result["inserted"]
 
         for step_id, step in workflow.steps.items():
-            job = step.job if isinstance(step.job, Job) else step.job.job
+            if jobs is not None:
+                job = jobs[step_id]
+            else:
+                job = step.job if isinstance(step.job, Job) else step.job.job
             await cursor.execute(
                 sql.SQL(
                     """
